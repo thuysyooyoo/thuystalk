@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <title>Học Viện E-Learning & Bộ Mini Test Thực Chiến · ThuysTalk | Nguyễn Thị Ngọc Thúy</title>
+  <meta name="description" content="Học viện E-Learning miễn phí của Nguyễn Thị Ngọc Thúy (ThuysTalk) — Toàn bộ khóa học thực chiến XNK chính ngạch, Hải quan, Báo cáo quyết toán DNCX và Bộ Mini Test kiểm tra kiến thức." />
+
+  <!-- Google Fonts: Plus Jakarta Sans (400;500;600;700;800;900) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="styles/main.css" />
+</head>
+<body data-page="elearning">
+
+  <!-- Sticky Header -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="index.html" class="brand-logo">
+        <div class="brand-monogram">T<span>T</span></div>
+        <div class="brand-text">
+          <span class="brand-name">ThuysTalk</span>
+          <span class="brand-sub">Nguyễn Thị Ngọc Thúy</span>
+        </div>
+      </a>
+
+      <nav class="main-nav" aria-label="Main Navigation">
+        <a href="index.html" class="nav-link" id="navHome">Trang chủ</a>
+        <a href="index.html#chuyen-mon" class="nav-link" id="navExpertise">Chuyên môn</a>
+        <a href="index.html#ve-toi" class="nav-link" id="navAbout">Về tôi</a>
+        <a href="elearning.html" class="nav-link active" id="navElearning">E-Learning</a>
+        <a href="videos.html" class="nav-link" id="navVideo">Video ThuyTalk</a>
+        <a href="bai-viet.html" class="nav-link" id="navArticles">Bài viết</a>
+        <a href="tra-cuu.html" class="nav-link" id="navNotebook">Tra cứu AI Pháp lý</a>
+        <a href="index.html#tu-van" class="nav-link" id="navConsult">Tư vấn 1-1</a>
+      </nav>
+
+      <div class="header-actions">
+        <div class="lang-switch" role="group" aria-label="Language Switcher">
+          <button type="button" class="lang-btn active" data-lang="vi">VI</button>
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+        </div>
+        <a href="admin.html?tab=elearning" class="admin-toggle-btn" id="adminToggleBtn">
+          Quản trị hệ thống
+        </a>
+        <a href="index.html#tu-van" class="btn btn-primary btn-sm" id="headerCtaBtn">
+          Nhận tài liệu &amp; Tư vấn
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Subpage Hero -->
+  <section class="subpage-hero">
+    <div class="container">
+      <div class="subpage-breadcrumb">
+        <a href="index.html">Trang chủ ThuysTalk</a>
+        <span>/</span>
+        <span>Học Viện E-Learning &amp; Bộ Mini Test Thực Chiến</span>
+      </div>
+      <h1>Học Viện E-Learning Thực Chiến Xuất Nhập Khẩu, Hải Quan &amp; AI</h1>
+      <p>
+        Toàn bộ các khóa học chuyên sâu miễn phí, bài giảng minh họa trực quan, bài tập thực hành và bộ câu hỏi Mini Test chấm điểm tức thì. Đăng nhập Email học viên để lưu tiến độ học tập và nhận trọn bộ biểu mẫu gốc.
+      </p>
+    </div>
+  </section>
+
+  <!-- Full E-Learning Academy Section -->
+  <section class="elearning-section" id="hoc">
+    <div class="container">
+      <div class="section-header-bar">
+        <div>
+          <span class="eyebrow" id="elearnEyebrow">HỌC VIỆN E-LEARNING THUYTALK</span>
+          <h2 class="section-title" id="elearnTitle">
+            Danh Sách Đầy Đủ Khóa Học Thực Chiến &amp; Bộ Mini-Test
+          </h2>
+          <p class="section-desc" id="elearnDesc"></p>
+        </div>
+        <a href="admin.html?tab=elearning" class="btn btn-jade btn-sm">
+          + Thêm Bài Học &amp; Đẩy File Excel Mini Test (Admin)
+        </a>
+      </div>
+
+      <!-- Learner Email Login & Progress Sync Banner -->
+      <div class="learner-status-banner" id="learnerStatusBanner"></div>
+
+      <!-- All Courses Grid -->
+      <div class="courses-grid" id="coursesGrid"></div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top">
+        <a href="index.html" class="brand-logo">
+          <div class="brand-monogram">T<span>T</span></div>
+          <div class="brand-text">
+            <span class="brand-name">ThuysTalk</span>
+            <span class="brand-sub">Nguyễn Thị Ngọc Thúy · XNK, Hải Quan &amp; AI</span>
+          </div>
+        </a>
+        <div style="display:flex; gap:20px; flex-wrap:wrap; font-size:0.86rem; font-weight:700; color:var(--ink-600);">
+          <a href="index.html">Trang chủ</a>
+          <a href="elearning.html" style="color:var(--orange-600);">E-Learning</a>
+          <a href="videos.html">Video ThuyTalk</a>
+          <a href="bai-viet.html">Bài viết</a>
+          <a href="tra-cuu.html">Tra cứu AI Pháp lý</a>
+          <a href="admin.html" style="color:var(--jade-700); font-weight:800;">Quản trị hệ thống (CMS)</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Bản quyền 2026 Nguyễn Thị Ngọc Thúy (ThuysTalk).</span>
+        <span>Học viện E-Learning &amp; Bộ Mini Test Thực Chiến</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Modal 1: Classroom & Multi-Question Mini-Test -->
+  <div class="modal-backdrop" id="classroomModal" role="dialog" aria-modal="true">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 id="classroomModalTitle">Học viện E-Learning ThuysTalk</h3>
+        <button type="button" class="modal-close" data-close-modal="classroomModal" aria-label="Close">Đóng</button>
+      </div>
+      <div class="modal-body" id="classroomModalBody"></div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Article Reader -->
+  <div class="modal-backdrop" id="articleModal" role="dialog" aria-modal="true">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 id="articleModalTitle">Bài viết chuyên sâu ThuysTalk</h3>
+        <button type="button" class="modal-close" data-close-modal="articleModal" aria-label="Close">Đóng</button>
+      </div>
+      <div class="modal-body" id="articleModalBody"></div>
+    </div>
+  </div>
+
+  <div class="toast-notification" id="toastNotification" role="status" aria-live="polite"></div>
+
+  <!-- Firebase App, Firestore & Storage SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

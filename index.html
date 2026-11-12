@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <title>Nguyễn Thị Ngọc Thúy · ThuysTalk | Chuyên Gia Thực Chiến XNK, Hải Quan & AI</title>
+  <meta name="description" content="Trang nhân hiệu cá nhân độc lập của Nguyễn Thị Ngọc Thúy (ThuysTalk) — 9+ năm thực chiến Xuất nhập khẩu chính ngạch, Hải quan, E-Learning miễn phí, Tra cứu Pháp lý AI và Tư vấn chuyên sâu 1-1." />
+  <meta name="author" content="Nguyễn Thị Ngọc Thúy" />
+  <meta property="og:title" content="Nguyễn Thị Ngọc Thúy · ThuysTalk | XNK Chính Ngạch, Hải Quan & AI" />
+  <meta property="og:description" content="Học E-Learning miễn phí, làm Mini Test thực hành, tra cứu công văn hải quan qua Trợ lý AI Pháp lý ThuysTalk và đăng ký tư vấn 1-1 cùng Nguyễn Thị Ngọc Thúy." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="assets/images/hero-portrait.jpg" />
+
+  <!-- Google Fonts: Plus Jakarta Sans (400;500;600;700;800;900) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="styles/main.css" />
+
+  <!-- Structured Data (Schema.org Person & EducationalOrganization) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "name": "Nguyễn Thị Ngọc Thúy",
+    "alternateName": "ThuysTalk",
+    "jobTitle": "Chuyên gia Thực chiến Xuất Nhập Khẩu, Hải Quan & Ứng dụng AI",
+    "url": "https://thuystalk.netlify.app",
+    "sameAs": [
+      "https://www.youtube.com/@thuystalk",
+      "https://www.facebook.com/Th.xuatnhapkhau"
+    ],
+    "knowsAbout": [
+      "Xuất nhập khẩu chính ngạch",
+      "Thủ tục Hải quan Việt Nam",
+      "Tra cứu mã HS Code & C/O FTA",
+      "Báo cáo quyết toán DNCX Mẫu 15/BCQT-NVL",
+      "AI Agent & Tự động hóa quy trình Logistics"
+    ]
+  }
+  </script>
+</head>
+<body data-page="home">
+
+  <!-- ========================================================================
+       1. STICKY HEADER & NAVIGATION (100% Plus Jakarta Sans, Zero Icons)
+       ======================================================================== -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="index.html" class="brand-logo">
+        <div class="brand-monogram">T<span>T</span></div>
+        <div class="brand-text">
+          <span class="brand-name">ThuysTalk</span>
+          <span class="brand-sub">Nguyễn Thị Ngọc Thúy</span>
+        </div>
+      </a>
+
+      <nav class="main-nav" aria-label="Main Navigation">
+        <a href="index.html" class="nav-link active" id="navHome">Trang chủ</a>
+        <a href="#chuyen-mon" class="nav-link" id="navExpertise">Chuyên môn</a>
+        <a href="#ve-toi" class="nav-link" id="navAbout">Về tôi</a>
+        <a href="elearning.html" class="nav-link" id="navElearning">E-Learning</a>
+        <a href="videos.html" class="nav-link" id="navVideo">Video ThuyTalk</a>
+        <a href="bai-viet.html" class="nav-link" id="navArticles">Bài viết</a>
+        <a href="tra-cuu.html" class="nav-link" id="navNotebook">Tra cứu AI Pháp lý</a>
+        <a href="#tu-van" class="nav-link" id="navConsult">Tư vấn 1-1</a>
+      </nav>
+
+      <div class="header-actions">
+        <div class="lang-switch" role="group" aria-label="Language Switcher">
+          <button type="button" class="lang-btn active" data-lang="vi">VI</button>
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+        </div>
+        <a href="admin.html" class="admin-toggle-btn" id="adminToggleBtn" title="Mở trang Quản trị hệ thống nội bộ">
+          Quản trị hệ thống
+        </a>
+        <a href="#tu-van" class="btn btn-primary btn-sm" id="headerCtaBtn">
+          Nhận tài liệu & Tư vấn
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================================================
+       2. HERO SECTION (Jade & Orange Split Layout — Zero Icons)
+       ======================================================================== -->
+  <section class="hero-section" id="top">
+    <div class="container hero-grid">
+      <!-- Left Column: Intro, CTA & Socials -->
+      <div class="hero-content">
+        <div class="hero-greeting">
+          <span class="dot"></span>
+          <span id="heroGreetingText">XIN CHÀO, MÌNH LÀ</span>
+        </div>
+
+        <h1 class="hero-title">
+          <span id="heroFirstName">Nguyễn Thị Ngọc </span><span class="text-orange" id="heroHighlightName">Thúy</span>
+        </h1>
+
+        <h2 class="hero-role" id="heroRole">
+          Chuyên gia Thực chiến Xuất Nhập Khẩu – Logistics & Ứng dụng AI
+        </h2>
+
+        <p class="hero-bio" id="heroBio">
+          Hơn 9 năm tự tay thực hiện từng khâu trong chuỗi cung ứng quốc tế — từ đàm phán ngoại thương, áp mã HS, mở tờ khai hải quan đến tự động hóa quy trình bằng AI. Mình xây dựng ThuysTalk để chia sẻ kiến thức thực chiến miễn phí, gửi tặng biểu mẫu gốc và đồng hành cùng bạn kinh doanh chính ngạch an toàn, bền vững.
+        </p>
+
+        <div class="hero-cta-group">
+          <a href="elearning.html" class="btn btn-primary" id="heroBtnPrimary">
+            Vào học E-Learning miễn phí
+          </a>
+          <a href="tra-cuu.html" class="btn btn-outline" id="heroBtnSecondary">
+            Tra cứu Pháp lý & Mã HS
+          </a>
+        </div>
+
+        <div class="hero-socials">
+          <a href="https://www.youtube.com/@thuystalk" target="_blank" rel="noopener noreferrer" class="social-pill" title="YouTube @thuystalk">YT</a>
+          <a href="https://www.facebook.com/Th.xuatnhapkhau" target="_blank" rel="noopener noreferrer" class="social-pill" title="Facebook Nguyễn Thị Ngọc Thúy">FB</a>
+          <a href="https://zalo.me/g/igquxijleubpmg9hsykq" target="_blank" rel="noopener noreferrer" class="social-pill" title="Cộng đồng Zalo chia sẻ tài liệu XNK & AI">ZL</a>
+          <a href="https://bieuthue.erktransport.com/" target="_blank" rel="noopener noreferrer" class="social-tag-link" id="heroHsToolTag">
+            Công cụ Tra cứu Mã HS miễn phí
+          </a>
+        </div>
+      </div>
+
+      <!-- Right Column: Portrait Stage + Jade/Orange Tilted Geometry + Slogan -->
+      <div class="hero-visual-stage">
+        <div class="hero-geo-orange" aria-hidden="true"></div>
+        <div class="hero-geo-jade" aria-hidden="true"></div>
+
+        <div class="hero-portrait-frame editable-photo-wrap">
+          <img src="assets/images/hero-portrait.webp" id="heroPortraitImg" alt="Chân dung Nguyễn Thị Ngọc Thúy" />
+          <button type="button" class="photo-change-trigger" data-slot="heroPortrait">
+            Đổi ảnh Hero
+          </button>
+        </div>
+
+        <!-- Slogan Badge -->
+        <div class="hero-script-note">
+          <span class="script-text" id="heroScriptText">Thực chiến – Minh bạch – Bền vững</span>
+        </div>
+
+        <!-- Floating Bottom-Left Credential Pill -->
+        <div class="hero-floating-pill">
+          <div class="pill-num">9+</div>
+          <div>
+            <div class="pill-title" id="heroFloatingTitle">9+ Năm Thực Chiến</div>
+            <div class="pill-sub" id="heroFloatingSub">100% Chính ngạch · Hải quan · AI</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       3. EXPERTISE PILLARS SECTION (Typographic 01 - 04 Cards)
+       ======================================================================== -->
+  <section class="expertise-section" id="chuyen-mon">
+    <div class="container expertise-layout">
+      <div class="expertise-intro">
+        <span class="eyebrow" id="expEyebrow">LĨNH VỰC CHUYÊN MÔN & HƯỚNG DẪN</span>
+        <h2 class="section-title" id="expTitle">Kiến Thức Thực Chiến Bảo Vệ Dòng Tiền & Pháp Lý</h2>
+        <p class="section-desc" id="expDesc">
+          Không lý thuyết suông. Mọi chủ đề trên ThuysTalk đều đính kèm quy trình từng bước, văn bản pháp lý đối chiếu và biểu mẫu thực tế để bạn áp dụng ngay.
+        </p>
+        <div>
+          <a href="#hoc" class="btn btn-outline-orange btn-sm" id="expExploreBtn">
+            Khám phá khóa học miễn phí
+          </a>
+        </div>
+      </div>
+
+      <div class="expertise-cards-grid" id="expertiseCardsGrid">
+        <!-- Populated dynamically by js/app.js -->
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       4. ABOUT ME SECTION (9+ Years Experience & Independent Story)
+       ======================================================================== -->
+  <section class="about-section" id="ve-toi">
+    <div class="container about-grid">
+      <!-- Left: Framed Speaker Photo + 9+ Years Floating Badge + Customs Dialogue Mini Card -->
+      <div class="about-visual-wrap">
+        <div class="about-script-callout" id="aboutScriptCallout">
+          Làm đúng, làm đủ, làm rõ ràng
+        </div>
+
+        <div class="about-geo-backing" aria-hidden="true"></div>
+
+        <div class="about-main-photo editable-photo-wrap">
+          <img src="assets/images/about-speaker.webp" id="aboutSpeakerImg" alt="Nguyễn Thị Ngọc Thúy chia sẻ thực chiến" />
+          <button type="button" class="photo-change-trigger" data-slot="aboutSpeaker">
+            Đổi ảnh Về tôi
+          </button>
+        </div>
+
+        <!-- Floating 9+ Years Experience Badge -->
+        <div class="about-exp-badge">
+          <div class="badge-circle">9+</div>
+          <div>
+            <div class="exp-number" id="aboutExpYears">9+</div>
+            <div class="exp-label" id="aboutExpLabel">Năm kinh nghiệm thực chiến</div>
+          </div>
+        </div>
+
+        <!-- Secondary Card: Customs-Enterprise Dialogue Conference 2026 -->
+        <div class="about-secondary-card editable-photo-wrap">
+          <img src="assets/images/customs-conference.webp" id="customsAwardImg" alt="Hội nghị Đối thoại Hải quan – Doanh nghiệp 2026" />
+          <button type="button" class="photo-change-trigger" data-slot="customsAward" style="padding:4px 9px; font-size:0.68rem;">
+            Đổi ảnh
+          </button>
+          <div class="mini-caption" id="aboutMiniCaption">
+            Hội nghị Đối thoại Hải quan – Doanh nghiệp 2026
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: About Content & 3 Authentic Value Pillars -->
+      <div class="about-content">
+        <span class="eyebrow eyebrow-jade" id="aboutEyebrow">VỀ TÔI · CÂU CHUYỆN THUYTALK</span>
+        <h2 class="section-title" id="aboutTitle">Mình là Nguyễn Thị Ngọc Thúy</h2>
+        <div class="about-sub" id="aboutSubtitle">
+          Chuyên gia Thực chiến XNK – Logistics & Tiên phong Ứng dụng AI
+        </div>
+
+        <p class="about-narrative" id="aboutP1"></p>
+        <p class="about-narrative" id="aboutP2"></p>
+
+        <ul class="about-milestones" id="aboutMilestonesList"></ul>
+
+        <div class="about-stats-row" id="aboutStatsRow"></div>
+
+        <a href="#tu-van" class="btn btn-primary" id="aboutBtnConnect">
+          Đăng ký tư vấn chuyên sâu cùng Thúy
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       5. E-LEARNING ACADEMY SECTION (Concise Homepage Preview + Link to elearning.html)
+       ======================================================================== -->
+  <section class="elearning-section" id="hoc">
+    <div class="container">
+      <div class="section-header-bar">
+        <div>
+          <span class="eyebrow" id="elearnEyebrow">HỌC VIỆN E-LEARNING THUYTALK</span>
+          <h2 class="section-title" id="elearnTitle">
+            Khóa Học Thực Chiến Miễn Phí, Bộ Mini-Test &amp; Nhận Tài Liệu Qua Email
+          </h2>
+          <p class="section-desc" id="elearnDesc"></p>
+        </div>
+        <a href="elearning.html" class="btn btn-outline-orange btn-sm">
+          Mở trang Học viện E-Learning đầy đủ
+        </a>
+      </div>
+
+      <!-- Learner Email Login & Progress Sync Banner -->
+      <div class="learner-status-banner" id="learnerStatusBanner"></div>
+
+      <!-- E-Learning Courses Grid (Top 2 shown on homepage) -->
+      <div class="courses-grid" id="coursesGrid"></div>
+
+      <div class="section-more-bar">
+        <div>
+          <strong style="color:var(--jade-900); font-size:0.96rem;">Khám phá trọn bộ các khóa học E-Learning, Bài giảng HTML/Video &amp; Bộ câu hỏi Mini Test thực hành</strong>
+          <p style="font-size:0.82rem; color:var(--ink-600); margin-top:2px;">Trang chủ chỉ hiển thị 2 khóa học tiêu biểu để giao diện gọn gàng. Bấm sang trang Học viện để xem toàn bộ lộ trình học.</p>
+        </div>
+        <a href="elearning.html" class="btn btn-primary btn-sm">
+          Xem toàn bộ Học viện E-Learning
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       6. VIDEO THUYTALK SECTION (@thuystalk — Concise Preview + Link to videos.html)
+       ======================================================================== -->
+  <section class="video-section" id="video">
+    <div class="container">
+      <div class="section-header-bar">
+        <div>
+          <span class="eyebrow eyebrow-jade" id="vidEyebrow">KÊNH YOUTUBE @THUYSTALK</span>
+          <h2 class="section-title" id="vidTitle">Video Phân Tích &amp; Chia Sẻ Thực Chiến</h2>
+          <p class="section-desc" id="vidDesc"></p>
+        </div>
+        <div class="filter-tabs" id="videoFilterTabs"></div>
+      </div>
+
+      <div class="video-showcase-grid">
+        <div class="featured-video-card" id="featuredVideoStage"></div>
+        <div class="video-playlist-col" id="videoPlaylistCol"></div>
+      </div>
+
+      <div class="section-more-bar section-more-bar-dark">
+        <div>
+          <strong style="color:#FFFFFF; font-size:0.96rem;">Xem toàn bộ Thư viện Video @thuystalk (Đủ 4 chuyên mục CM1 · CM2 · CM3 · CM4 kèm kịch bản toàn văn)</strong>
+          <p style="font-size:0.82rem; color:var(--jade-200); margin-top:2px;">Mở trang chuyên mục Video riêng để xem đầy đủ danh sách phát và tải tài liệu đi kèm từng tập.</p>
+        </div>
+        <a href="videos.html" class="btn btn-primary btn-sm">
+          Xem toàn bộ Thư viện Video
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       7. FULL-TEXT ARTICLES SECTION (Top 3 Preview + Link to bai-viet.html)
+       ======================================================================== -->
+  <section class="articles-section" id="bai-viet">
+    <div class="container">
+      <div class="section-header-bar">
+        <div>
+          <span class="eyebrow" id="artEyebrow">BÀI VIẾT CHUYÊN SÂU · ĐĂNG TOÀN VĂN TRÊN WEB</span>
+          <h2 class="section-title" id="artTitle">Góc Nhìn Pháp Lý Hải Quan, Case Study &amp; Quản Trị</h2>
+          <p class="section-desc" id="artDesc"></p>
+        </div>
+        <div class="filter-tabs" id="articleFilterTabs"></div>
+      </div>
+
+      <div class="articles-grid" id="articlesGrid"></div>
+
+      <div class="section-more-bar">
+        <div>
+          <strong style="color:var(--jade-900); font-size:0.96rem;">Đọc toàn bộ Kho Bài Viết Chuyên Sâu, Phân Tích Công Văn &amp; Case Study Hải Quan</strong>
+          <p style="font-size:0.82rem; color:var(--ink-600); margin-top:2px;">Trang chủ hiển thị 3 bài viết tiêu biểu nhất. Bấm vào trang chuyên mục Bài viết để đọc toàn bộ các bài phân tích chuyên sâu.</p>
+        </div>
+        <a href="bai-viet.html" class="btn btn-jade btn-sm">
+          Xem tất cả Bài viết chuyên sâu
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       8. THUYSTALK AI LEGAL & CUSTOMS LOOKUP CONSOLE (Zero mention of NotebookLM)
+       ======================================================================== -->
+  <section class="notebook-section" id="notebook">
+    <div class="container">
+      <div class="section-header-bar">
+        <div>
+          <span class="eyebrow eyebrow-jade" id="nbEyebrow">TRỢ LÝ AI PHÁP LÝ &amp; KHO TRI THỨC HẢI QUAN THUYTALK</span>
+          <h2 class="section-title" id="nbTitle">Tra Cứu Nhanh Mã HS, Chính Sách Hải Quan &amp; Kiểm Soát Xuất Nhập Khẩu</h2>
+          <p class="section-desc" id="nbDesc"></p>
+        </div>
+        <a href="tra-cuu.html" class="btn btn-outline btn-sm">
+          Mở trang Tra cứu toàn màn hình
+        </a>
+      </div>
+
+      <div class="notebook-console">
+        <div class="notebook-console-header">
+          <div>
+            <h3 style="font-size:1.05rem; font-weight:800; margin-bottom:2px;">Hệ Thống Điều Hướng 4 Chuyên Đề Pháp Lý Hải Quan &amp; Kho Tri Thức AI ThuysTalk</h3>
+            <p style="font-size:0.82rem; color:var(--jade-200);">
+              Tự động phân tích câu hỏi theo 4 chuyên đề văn bản pháp lý chuẩn xác do Nguyễn Thị Ngọc Thúy biên soạn và thẩm định.
+            </p>
+          </div>
+          <div style="background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.24); padding:6px 14px; border-radius:999px; font-size:0.76rem; font-weight:700; color:#FFFFFF;">
+            Hệ thống AI Pháp lý ThuysTalk · Sẵn sàng
+          </div>
+        </div>
+
+        <!-- 4 Legal Branch Selector Cards -->
+        <div class="notebook-routing-pills" id="notebookRoutingPills"></div>
+
+        <!-- Chat & Citation Console -->
+        <div class="notebook-chat-body">
+          <div class="notebook-chat-messages" id="notebookChatMessages">
+            <div class="chat-bubble chat-bubble-ai">
+              <div>
+                Xin chào! Mình là Trợ lý AI Tra cứu Pháp lý &amp; Hải quan ThuysTalk, được huấn luyện trực tiếp từ 4 Kho Cẩm Nang Pháp Lý chuyên sâu của Nguyễn Thị Ngọc Thúy:
+                <br />1. <strong>Chuyên đề A:</strong> Hướng Dẫn Tra Mã HS Code Theo Sáu Quy Tắc (87 tài liệu pháp lý nguồn)
+                <br />2. <strong>Chuyên đề B:</strong> Hàng hóa kiểm soát chặt khi xuất khẩu ở Trung Quốc 2026 (26 tài liệu pháp lý nguồn)
+                <br />3. <strong>Chuyên đề C:</strong> Thủ tục hồ sơ kiểm soát hàng hóa theo chuyên ngành (52 tài liệu pháp lý nguồn)
+                <br />4. <strong>Chuyên đề D:</strong> Cẩm nang hỏi đáp hàng rủi ro từ 1/7/2026 &amp; Quyết định 31/2026/QĐ-TTg (21 tài liệu pháp lý nguồn)
+                <br /><br />Bạn hãy chọn câu hỏi gợi ý bên dưới hoặc nhập mặt hàng / quy định bất kỳ để tra cứu ngay!
+              </div>
+              <div class="chat-source-citation">
+                Nguồn trích xuất: Hệ Thống Tri Thức Pháp Lý &amp; Hải Quan ThuysTalk
+              </div>
+              <div class="chat-bubble-disclaimer">
+                AI có thể có sai sót, hãy liên hệ với Thúy <a href="tel:0767648862">0767.648.862</a> để được tư vấn cụ thể.
+              </div>
+            </div>
+          </div>
+
+          <!-- Persistent Disclaimer Bar (Rule: Note at bottom of chat) -->
+          <div class="chat-disclaimer-bar">
+            <span>AI có thể có sai sót, hãy liên hệ với Thúy <a href="tel:0767648862" class="disclaimer-phone">0767.648.862</a> để được tư vấn cụ thể</span>
+          </div>
+
+          <!-- Search Input Row -->
+          <form class="notebook-input-bar" id="notebookSearchForm">
+            <input
+              type="text"
+              id="notebookQueryInput"
+              class="notebook-query-input"
+              placeholder="Nhập câu hỏi tra cứu (VD: HS code máy giặt? Quyết định 31/2026 cấm chuyển cửa khẩu hàng nào?)"
+              autocomplete="off"
+            />
+            <button type="submit" class="btn btn-primary btn-sm" id="nbLiveQueryBtn">
+              Phân tích chuyên sâu AI
+            </button>
+          </form>
+
+          <!-- Quick Prompt Chips -->
+          <div class="quick-prompt-chips">
+            <button type="button" class="prompt-chip" data-quick-prompt="HS code máy giặt gia đình và công nghiệp áp mã thế nào?">
+              HS Code máy giặt (Nhóm 84.50)
+            </button>
+            <button type="button" class="prompt-chip" data-quick-prompt="Quyết định 31/2026 cấm chuyển cửa khẩu hàng nào về ICD?">
+              Quyết định 31/2026 cấm chuyển cửa khẩu hàng nào về ICD?
+            </button>
+            <button type="button" class="prompt-chip" data-quick-prompt="Hướng dẫn 6 quy tắc tổng quát GRI áp mã HS Code">
+              6 quy tắc GRI áp mã HS Code
+            </button>
+            <button type="button" class="prompt-chip" data-quick-prompt="Hàng hóa kiểm soát xuất khẩu lưỡng dụng Trung Quốc 2026">
+              Kiểm soát xuất khẩu Trung Quốc 2026
+            </button>
+            <button type="button" class="prompt-chip" data-quick-prompt="Quy trình đối soát Báo cáo quyết toán DNCX Mẫu 15/BCQT-NVL">
+              Báo cáo quyết toán DNCX Mẫu 15
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       9. DARK JADE CTA BANNER & 1-ON-1 CONSULTATION FORM
+       ======================================================================== -->
+  <section class="consult-section" id="tu-van">
+    <div class="container">
+      <div class="consult-banner-box">
+        <div class="consult-blob-left" aria-hidden="true"></div>
+        <div class="consult-blob-right" aria-hidden="true"></div>
+
+        <!-- Left Info Column -->
+        <div class="consult-info-col">
+          <span class="eyebrow" id="consultEyebrow">ĐỒNG HÀNH & TƯ VẤN CHUYÊN SÂU 1-1</span>
+          <h2 id="consultTitle">Bạn Cần Tư Vấn Kỹ Hơn Cho Lô Hàng Hoặc Doanh Nghiệp Của Mình?</h2>
+          <p id="consultDesc"></p>
+
+          <div class="consult-host-card">
+            <div class="consult-host-photo editable-photo-wrap">
+              <img src="assets/images/portrait-lifestyle.webp" id="consultHostImg" alt="Nguyễn Thị Ngọc Thúy" />
+              <button type="button" class="photo-change-trigger" data-slot="consultHost" style="padding:3px 7px; font-size:0.62rem; top:4px; left:4px;">
+                Đổi ảnh
+              </button>
+            </div>
+            <div>
+              <div style="font-weight:800; font-size:1.02rem;" id="consultHostName">Nguyễn Thị Ngọc Thúy</div>
+              <div style="font-size:0.82rem; color:var(--jade-200);" id="consultHostRole">
+                9+ Năm Thực Chiến XNK, Hải Quan & Tự Động Hóa AI
+              </div>
+              <div style="font-size:0.78rem; color:var(--orange-400); margin-top:4px; font-weight:700;">
+                Email: tthuyn@erktransport.com · Zalo: 0767.648.862
+              </div>
+            </div>
+          </div>
+
+          <div class="consult-security-note" id="consultSecurityNote">
+            Bảo mật 3 lớp theo chuẩn /secure-hybrid-web-architect & Nghị định 13/2023/NĐ-CP
+          </div>
+        </div>
+
+        <!-- Right Consultation Registration Form -->
+        <div class="consult-form-card">
+          <h3 id="consultFormTitle">Đăng Ký Tư Vấn Kỹ Hơn & Nhận Tài Liệu</h3>
+          <p class="form-sub" id="consultFormSub">
+            Thông tin của bạn được mã hóa bảo mật và phản hồi qua Email / Zalo trong 24h.
+          </p>
+
+          <form id="consultLeadForm" novalidate>
+            <!-- Honeypot field for bot protection -->
+            <div class="hp-field" aria-hidden="true">
+              <label>Website <input type="text" id="hpWebsiteInput" tabindex="-1" autocomplete="off" /></label>
+            </div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="consultNameInput" id="lblConsultName">Họ và tên của bạn *</label>
+                <input type="text" id="consultNameInput" class="form-control" required maxlength="100" placeholder="Nguyễn Văn A" />
+              </div>
+              <div class="form-group">
+                <label for="consultPhoneInput" id="lblConsultPhone">Số điện thoại / Zalo *</label>
+                <input type="tel" id="consultPhoneInput" class="form-control" required maxlength="30" placeholder="09xx.xxx.xxx" />
+              </div>
+            </div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label for="consultEmailInput" id="lblConsultEmail">Địa chỉ Email nhận tài liệu *</label>
+                <input type="email" id="consultEmailInput" class="form-control" required maxlength="120" placeholder="email@company.com" />
+              </div>
+              <div class="form-group">
+                <label for="consultTopicSelect" id="lblConsultTopic">Chủ đề bạn cần tư vấn chuyên sâu *</label>
+                <select id="consultTopicSelect" class="form-control"></select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="consultMsgInput" id="lblConsultMsg">Mô tả ngắn tình huống hoặc câu hỏi của bạn *</label>
+              <textarea id="consultMsgInput" class="form-control" rows="3" required maxlength="1200"></textarea>
+            </div>
+
+            <label class="consent-label">
+              <input type="checkbox" id="consultConsentCheck" required checked />
+              <span id="consultConsentText">
+                Tôi đồng ý cho phép ThuysTalk lưu trữ thông tin liên hệ để gửi tài liệu học tập và phản hồi tư vấn theo Chính sách bảo mật (Nghị định 13/2023/NĐ-CP).
+              </span>
+            </label>
+
+            <button type="submit" class="btn btn-primary" style="width:100%;" id="consultSubmitBtn">
+              Gửi đăng ký tư vấn & Nhận bộ tài liệu
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================
+       10. FOOTER
+       ======================================================================== -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top">
+        <a href="#top" class="brand-logo">
+          <div class="brand-monogram">T<span>T</span></div>
+          <div class="brand-text">
+            <span class="brand-name">ThuysTalk</span>
+            <span class="brand-sub">Nguyễn Thị Ngọc Thúy · XNK, Hải Quan & AI</span>
+          </div>
+        </a>
+
+        <div style="display:flex; gap:20px; flex-wrap:wrap; font-size:0.86rem; font-weight:700; color:var(--ink-600);">
+          <a href="index.html">Trang chủ</a>
+          <a href="#chuyen-mon">Chuyên môn</a>
+          <a href="#ve-toi">Về tôi</a>
+          <a href="elearning.html">E-Learning</a>
+          <a href="videos.html">Video ThuyTalk</a>
+          <a href="bai-viet.html">Bài viết</a>
+          <a href="tra-cuu.html">Tra cứu AI Pháp lý</a>
+          <a href="#tu-van">Tư vấn 1-1</a>
+          <a href="admin.html" id="footerAdminBtn" style="color:var(--jade-700); font-weight:800;">Quản trị hệ thống (CMS)</a>
+        </div>
+
+        <div class="hero-socials">
+          <a href="https://www.youtube.com/@thuystalk" target="_blank" rel="noopener noreferrer" class="social-pill">YT</a>
+          <a href="https://www.facebook.com/Th.xuatnhapkhau" target="_blank" rel="noopener noreferrer" class="social-pill">FB</a>
+          <a href="https://zalo.me/g/igquxijleubpmg9hsykq" target="_blank" rel="noopener noreferrer" class="social-pill">ZL</a>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span>Bản quyền 2026 Nguyễn Thị Ngọc Thúy (ThuysTalk).</span>
+        <span>Typography Plus Jakarta Sans · Màu Phỉ Thúy &amp; Cam · Bảo mật 3 lớp chuẩn <strong>/secure-hybrid-web-architect</strong></span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ========================================================================
+       MODAL 1: E-LEARNING CLASSROOM & MULTI-QUESTION MINI-TEST
+       ======================================================================== -->
+  <div class="modal-backdrop" id="classroomModal" role="dialog" aria-modal="true">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 id="classroomModalTitle">Học viện E-Learning ThuysTalk</h3>
+        <button type="button" class="modal-close" data-close-modal="classroomModal" aria-label="Close">Đóng</button>
+      </div>
+      <div class="modal-body" id="classroomModalBody"></div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL 2: FULL-TEXT ARTICLE & VIDEO SCRIPT READER
+       ======================================================================== -->
+  <div class="modal-backdrop" id="articleModal" role="dialog" aria-modal="true">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 id="articleModalTitle">Bài viết chuyên sâu ThuysTalk</h3>
+        <button type="button" class="modal-close" data-close-modal="articleModal" aria-label="Close">Đóng</button>
+      </div>
+      <div class="modal-body" id="articleModalBody"></div>
+    </div>
+  </div>
+
+  <!-- ========================================================================
+       MODAL 3: FULL 6-TAB CMS ADMIN STUDIO
+       (1. Ảnh Profile | 2. Bài viết | 3. Nhúng Video YouTube | 4. E-Learning & Auto Mini-Test | 5. Nguồn Dữ Liệu AI & /notebook | 6. Học viên & Backup)
+       ======================================================================== -->
+  <div class="modal-backdrop" id="adminStudioModal" role="dialog" aria-modal="true">
+    <div class="modal-window" style="max-width: 1120px;">
+      <div class="modal-header">
+        <h3>Hệ Thống Quản Trị Nội Dung Toàn Diện ThuysTalk (Full CMS Studio)</h3>
+        <button type="button" class="modal-close" data-close-modal="adminStudioModal" aria-label="Close">Đóng</button>
+      </div>
+      <div class="cms-tabs-bar" id="adminCmsTabsBar"></div>
+      <div class="modal-body" id="adminStudioBody"></div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast-notification" id="toastNotification" role="status" aria-live="polite"></div>
+
+  <!-- Firebase App, Firestore & Storage SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

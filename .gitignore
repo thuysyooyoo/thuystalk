@@ -1,0 +1,23 @@
+# Operating System
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python / Server Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.tmp
+*.tmp.xlsx
+
+# Local Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+*.log
+
+# Firebase & IDE Cache
+.firebase/
+.firebaserc.local
+.vscode/
+.idea/

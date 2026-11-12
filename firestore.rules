@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Public Content: Articles, Videos, E-Learning Courses, AI Knowledge Base
+    match /articles/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /videos/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /elearning_courses/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+    match /ai_kb/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // 2. Leads & Learners
+    match /learners/{document} {
+      allow create: if true;
+      allow read, update: if true;
+    }
+    match /leads/{document} {
+      allow create: if true;
+      allow read: if true;
+    }
+
+    // 3. System Profiles & Settings
+    match /settings/{document} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}

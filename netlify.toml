@@ -1,0 +1,15 @@
+[build]
+  publish = "."
+
+# Block any direct access to backend SQL/scripts/docs (Forced 404)
+[[redirects]]
+  from = "/backend/*"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/*.sql"
+  to = "/404.html"
+  status = 404
+  force = true
