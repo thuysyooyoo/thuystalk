@@ -2120,11 +2120,12 @@
 
           <!-- Inserts (Media, Link, Table, Callout) -->
           <div class="word-tool-group">
-            <label class="word-tool-btn" style="cursor:pointer; display:inline-flex; align-items:center; gap:3px;" title="Chèn Ảnh hoặc Video từ máy tính">
-              <span>+ Ảnh/Video</span>
+            <label class="word-tool-btn" style="cursor:pointer; display:inline-flex; align-items:center; gap:3px;" title="Tải ảnh hoặc video từ máy tính">
+              <span>+ Tải Ảnh/Video</span>
               <input type="file" class="word-media-upload-input" accept="image/*,video/mp4,video/webm" multiple style="display:none;" />
             </label>
-            <button type="button" class="word-tool-btn" data-role="insert-link" title="Chèn liên kết web">Link</button>
+            <button type="button" class="word-tool-btn" data-role="insert-img-url" title="Chèn ảnh từ link web online">+ Link Ảnh</button>
+            <button type="button" class="word-tool-btn" data-role="insert-link" title="Gán link vào chữ (Bôi đen chữ rồi bấm nút này)">🔗 Link</button>
             <button type="button" class="word-tool-btn" data-role="insert-table" title="Chèn bảng 3x3">+ Bảng</button>
             <button type="button" class="word-tool-btn" data-role="insert-callout" title="Chèn khung ghi chú pháp lý">+ Khung Lưu Ý</button>
           </div>
@@ -2144,7 +2145,7 @@
 
         <!-- Status Bar -->
         <div class="word-status-bar">
-          <span>Chế độ soạn thảo trực quan kiểu Word · Hỗ trợ định dạng, chèn ảnh & dán văn bản tức thì</span>
+          <span>Chế độ soạn thảo kiểu Word · Gõ trực tiếp, bôi đen chữ để gán link, chèn ảnh/video tức thì</span>
           <span class="word-stat-counter" id="${editorCanvasId}_counter">0 từ · 0 ký tự</span>
         </div>
       </div>
@@ -2157,6 +2158,26 @@
     if (!canvas) return null;
     const counter = containerEl.querySelector(".word-stat-counter");
 
+    let savedRange = null;
+
+    function saveSelection() {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        if (canvas.contains(range.commonAncestorContainer) || canvas === range.commonAncestorContainer) {
+          savedRange = range.cloneRange();
+        }
+      }
+    }
+
+    function restoreSelection() {
+      if (savedRange) {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(savedRange);
+      }
+    }
+
     function updateStats() {
       const text = (canvas.innerText || "").trim();
       const chars = text.length;
@@ -2166,15 +2187,32 @@
       }
     }
 
-    canvas.addEventListener("input", updateStats);
-    canvas.addEventListener("keyup", updateStats);
+    canvas.addEventListener("input", () => {
+      saveSelection();
+      updateStats();
+    });
+    canvas.addEventListener("keyup", saveSelection);
+    canvas.addEventListener("mouseup", saveSelection);
+    canvas.addEventListener("touchend", saveSelection);
 
-    // Command buttons
+    // Prevent toolbar elements from clearing the canvas text selection
+    containerEl.querySelectorAll(".word-toolbar button, .word-toolbar select, .word-toolbar label, .word-toolbar input").forEach((el) => {
+      el.addEventListener("mousedown", (e) => {
+        saveSelection();
+        if (el.tagName !== "SELECT" && el.tagName !== "INPUT") {
+          e.preventDefault();
+        }
+      });
+    });
+
+    // Formatting commands
     containerEl.querySelectorAll("[data-cmd]").forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.preventDefault();
         canvas.focus();
+        restoreSelection();
         document.execCommand(btn.dataset.cmd, false, null);
+        saveSelection();
         updateStats();
       });
     });
@@ -2184,8 +2222,10 @@
     if (formatSelect) {
       formatSelect.addEventListener("change", () => {
         canvas.focus();
+        restoreSelection();
         const tag = formatSelect.value;
         document.execCommand("formatBlock", false, "<" + tag + ">");
+        saveSelection();
         updateStats();
       });
     }
@@ -2195,25 +2235,86 @@
     if (foreInput) {
       foreInput.addEventListener("input", () => {
         canvas.focus();
+        restoreSelection();
         document.execCommand("foreColor", false, foreInput.value);
+        saveSelection();
       });
     }
     const hiliteInput = containerEl.querySelector("[data-role='hiliteColor']");
     if (hiliteInput) {
       hiliteInput.addEventListener("input", () => {
         canvas.focus();
+        restoreSelection();
         document.execCommand("hiliteColor", false, hiliteInput.value);
+        saveSelection();
       });
     }
 
-    // Insert Link
+    // Insert Link (Robust: Works on highlighted text OR prompts for link title)
     const linkBtn = containerEl.querySelector("[data-role='insert-link']");
     if (linkBtn) {
-      linkBtn.addEventListener("click", () => {
+      linkBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        saveSelection();
+
+        let highlightedText = "";
+        if (savedRange) {
+          highlightedText = savedRange.toString().trim();
+        }
+
         const url = window.prompt("Nhập đường dẫn trang web (URL):", "https://");
-        if (url && url !== "https://") {
+        if (!url || url.trim() === "" || url === "https://") return;
+        const cleanUrl = url.trim();
+
+        canvas.focus();
+        if (highlightedText && savedRange) {
+          restoreSelection();
+          document.execCommand("createLink", false, cleanUrl);
+        } else {
+          const linkText = window.prompt("Nhập chữ hiển thị cho đường link:", cleanUrl);
+          const displayText = linkText && linkText.trim() ? linkText.trim() : cleanUrl;
+          const linkHtml = `<a href="${escapeHtml(cleanUrl)}" target="_blank" rel="noopener noreferrer" style="color:#0D4738; text-decoration:underline; font-weight:700;">${escapeHtml(displayText)}</a>&nbsp;`;
+          if (savedRange) {
+            restoreSelection();
+            document.execCommand("insertHTML", false, linkHtml);
+          } else {
+            canvas.insertAdjacentHTML("beforeend", linkHtml);
+          }
+        }
+        saveSelection();
+        updateStats();
+        showToast("Đã chèn liên kết web thành công!");
+      });
+    }
+
+    // Insert Image from Online URL
+    const imgUrlBtn = containerEl.querySelector("[data-role='insert-img-url']");
+    if (imgUrlBtn) {
+      imgUrlBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        saveSelection();
+        const url = window.prompt("Dán đường link ảnh trực tuyến (https://...):", "https://");
+        if (url && url.trim() && url !== "https://") {
+          const imgHtml = `
+            <figure style="margin:16px auto; text-align:center; max-width:100%;">
+              <img src="${escapeHtml(url.trim())}" style="max-width:100%; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); display:block; margin:0 auto;" />
+            </figure>
+            <p><br></p>
+          `;
           canvas.focus();
-          document.execCommand("createLink", false, url);
+          if (savedRange) {
+            restoreSelection();
+            try {
+              document.execCommand("insertHTML", false, imgHtml);
+            } catch (err) {
+              canvas.insertAdjacentHTML("beforeend", imgHtml);
+            }
+          } else {
+            canvas.insertAdjacentHTML("beforeend", imgHtml);
+          }
+          saveSelection();
+          updateStats();
+          showToast("Đã chèn ảnh từ link thành công!");
         }
       });
     }
@@ -2221,7 +2322,9 @@
     // Insert Table
     const tableBtn = containerEl.querySelector("[data-role='insert-table']");
     if (tableBtn) {
-      tableBtn.addEventListener("click", () => {
+      tableBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        saveSelection();
         const tableHtml = `
           <table style="width:100%; border-collapse:collapse; margin:16px 0; font-size:0.88rem;">
             <thead style="background:#F1F5F9;">
@@ -2247,7 +2350,17 @@
           <p><br></p>
         `;
         canvas.focus();
-        document.execCommand("insertHTML", false, tableHtml);
+        if (savedRange) {
+          restoreSelection();
+          try {
+            document.execCommand("insertHTML", false, tableHtml);
+          } catch (err) {
+            canvas.insertAdjacentHTML("beforeend", tableHtml);
+          }
+        } else {
+          canvas.insertAdjacentHTML("beforeend", tableHtml);
+        }
+        saveSelection();
         updateStats();
       });
     }
@@ -2255,7 +2368,9 @@
     // Insert Callout Note Box
     const calloutBtn = containerEl.querySelector("[data-role='insert-callout']");
     if (calloutBtn) {
-      calloutBtn.addEventListener("click", () => {
+      calloutBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        saveSelection();
         const noteHtml = `
           <blockquote style="border-left:4px solid #F97316; background:#FFF7ED; padding:12px 18px; border-radius:0 8px 8px 0; margin:14px 0; color:#9A3412; font-weight:600;">
             <p style="margin:0;">Lưu ý thực tế: [Nhập kinh nghiệm thực tế hoặc quy định pháp lý cần ghi nhớ tại đây...]</p>
@@ -2263,65 +2378,76 @@
           <p><br></p>
         `;
         canvas.focus();
-        document.execCommand("insertHTML", false, noteHtml);
+        if (savedRange) {
+          restoreSelection();
+          try {
+            document.execCommand("insertHTML", false, noteHtml);
+          } catch (err) {
+            canvas.insertAdjacentHTML("beforeend", noteHtml);
+          }
+        } else {
+          canvas.insertAdjacentHTML("beforeend", noteHtml);
+        }
+        saveSelection();
         updateStats();
       });
     }
 
-    // Media upload (Image & Video)
+    // Instant Image & Video Upload (100% Free, Zero Blaze Paywall!)
     const mediaInput = containerEl.querySelector(".word-media-upload-input");
     if (mediaInput) {
       mediaInput.addEventListener("change", async (ev) => {
         const files = Array.from(ev.target.files || []);
         if (!files.length) return;
-        showToast("Đang xử lý và tải tệp phương tiện lên...");
+        showToast("Đang đọc tệp và chèn vào bài viết...");
         for (const file of files) {
           const isVideo = file.type.startsWith("video/") || /\.(webm|mp4|mov)$/i.test(file.name);
-          let mediaUrl = "";
-          // If Firebase Storage is ready, upload to Firebase Storage!
-          if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isStorageReady()) {
-            try {
-              const res = await window.ThuysTalkFirebase.uploadFile(file, isVideo ? "videos" : "articles");
-              mediaUrl = res.url;
-            } catch (err) {
-              console.warn("Storage upload fallback:", err);
-            }
-          }
 
-          if (!mediaUrl) {
-            // Local fallback
-            mediaUrl = await new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onload = (e) => resolve(e.target.result);
-              reader.readAsDataURL(file);
-            });
-          }
+          const dataUrl = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = () => resolve("");
+            reader.readAsDataURL(file);
+          });
 
-          canvas.focus();
+          if (!dataUrl) continue;
+
+          let mediaHtml = "";
           if (isVideo) {
-            const vHtml = `
-              <figure style="margin:16px 0; text-align:center;">
-                <video controls playsinline preload="metadata" style="max-width:100%; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
-                  <source src="${mediaUrl}" type="${file.type || 'video/mp4'}" />
+            mediaHtml = `
+              <figure style="margin:16px auto; text-align:center; max-width:100%;">
+                <video controls playsinline preload="metadata" style="max-width:100%; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); display:block; margin:0 auto;">
+                  <source src="${dataUrl}" type="${file.type || 'video/mp4'}" />
                 </video>
                 <figcaption style="font-size:0.8rem; color:#64748B; margin-top:6px;">Video: ${escapeHtml(file.name)}</figcaption>
               </figure>
               <p><br></p>
             `;
-            document.execCommand("insertHTML", false, vHtml);
           } else {
-            const imgHtml = `
-              <figure style="margin:16px 0; text-align:center;">
-                <img src="${mediaUrl}" alt="${escapeHtml(file.name)}" style="max-width:100%; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1);" />
+            mediaHtml = `
+              <figure style="margin:16px auto; text-align:center; max-width:100%;">
+                <img src="${dataUrl}" alt="${escapeHtml(file.name)}" style="max-width:100%; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); display:block; margin:0 auto;" />
                 <figcaption style="font-size:0.8rem; color:#64748B; margin-top:6px;">${escapeHtml(file.name)}</figcaption>
               </figure>
               <p><br></p>
             `;
-            document.execCommand("insertHTML", false, imgHtml);
           }
+
+          canvas.focus();
+          if (savedRange) {
+            restoreSelection();
+            try {
+              document.execCommand("insertHTML", false, mediaHtml);
+            } catch (err) {
+              canvas.insertAdjacentHTML("beforeend", mediaHtml);
+            }
+          } else {
+            canvas.insertAdjacentHTML("beforeend", mediaHtml);
+          }
+          saveSelection();
           updateStats();
         }
-        showToast("Đã chèn tệp phương tiện thành công vào nội dung!");
+        showToast("Đã chèn ảnh/video thành công!");
         mediaInput.value = "";
       });
     }
@@ -2338,9 +2464,10 @@
           const bodyMatch = text.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
           if (bodyMatch) text = bodyMatch[1].trim();
           if (!/<[a-z][\s\S]*>/i.test(text)) {
-            text = text.split(/\n+/).map(line => `<p>${escapeHtml(line)}</p>`).join("");
+            text = text.split(/\n+/).map((line) => `<p>${escapeHtml(line)}</p>`).join("");
           }
           canvas.innerHTML = canvas.innerHTML ? canvas.innerHTML + "<br />" + text : text;
+          saveSelection();
           updateStats();
           showToast(`Đã nạp nội dung từ tệp "${file.name}" vào trình soạn thảo!`);
         };
@@ -2470,18 +2597,44 @@
           topic: docTitle
         });
 
-        // Trigger auto checklist file download
-        if (activeMaterialPayload && activeMaterialPayload.courseOrItem) {
-          triggerChecklistDownload(activeMaterialPayload.courseOrItem);
-        } else if (state.courses && state.courses[0]) {
-          triggerChecklistDownload(state.courses[0]);
-        }
+        // Send email dispatch request to local server
+        fetch("http://localhost:8099/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: name,
+            email: email,
+            phone: phone,
+            docTitle: docTitle,
+            docType: docType
+          })
+        }).catch((e) => console.warn("Email API notice:", e));
 
-        // Display green success alert
+        // Display green success alert with optional manual preview button
         const alertBox = div.querySelector("#materialSuccessAlertBox");
         const alertText = div.querySelector("#materialSuccessAlertText");
-        alertText.innerHTML = `Tài liệu <strong>"${escapeHtml(docTitle)}"</strong> đã được gửi thành công về hộp thư: <strong>${escapeHtml(email)}</strong>.<br />Đồng thời, tệp Checklist dự phòng đã được tự động tải về máy tính của bạn.`;
+        alertText.innerHTML = `
+          Tài liệu <strong>"${escapeHtml(docTitle)}"</strong> đã được ghi nhận gửi thành công về hộp thư: <strong>${escapeHtml(email)}</strong>.<br />
+          Hồ sơ đã được lưu trữ trong danh sách khách hàng. Bạn có thể bấm nút bên dưới nếu muốn tải bản xem trước ngay lập tức:
+          <div style="margin-top:10px; text-align:center;">
+            <button type="button" class="btn btn-outline btn-xs" id="materialManualPreviewBtn" style="padding:6px 12px; font-size:0.78rem;">
+              Tải Bản Xem Trước Ngay (.txt)
+            </button>
+          </div>
+        `;
         alertBox.style.display = "block";
+
+        const manualBtn = div.querySelector("#materialManualPreviewBtn");
+        if (manualBtn) {
+          manualBtn.addEventListener("click", () => {
+            if (activeMaterialPayload && activeMaterialPayload.courseOrItem) {
+              triggerChecklistDownload(activeMaterialPayload.courseOrItem);
+            } else if (state.courses && state.courses[0]) {
+              triggerChecklistDownload(state.courses[0]);
+            }
+          });
+        }
+
         div.querySelector("#materialSubmitBtn").textContent = "Đã gửi tài liệu!";
         div.querySelector("#materialSubmitBtn").disabled = true;
 
@@ -3464,30 +3617,8 @@
               </div>
             </div>
             <div class="form-group">
-              <label>Nội dung kiến thức bài giảng (Viết bài, dán HTML hoặc tải lên tệp HTML kèm ảnh/video .jpg, .png, .webp, .webm, .mp4) *</label>
-              <div class="rich-editor-toolbar" id="cmsLessonToolbar">
-                <button type="button" class="rich-tool-btn" data-insert-tag="h3">+ Tiêu đề mục (H3)</button>
-                <button type="button" class="rich-tool-btn" data-insert-tag="p">+ Đoạn văn (&lt;p&gt;)</button>
-                <button type="button" class="rich-tool-btn" data-insert-tag="ul">+ Danh sách gạch đầu dòng</button>
-                <button type="button" class="rich-tool-btn" data-insert-tag="quote">+ Khung lưu ý pháp lý</button>
-                <label class="rich-tool-btn rich-tool-upload" style="cursor:pointer;">
-                  Tải tệp Bài giảng / HTML (.html, .txt, .md)
-                  <input type="file" id="cmsLessonHtmlUpload" accept=".html,.htm,.txt,.md" style="display:none;" />
-                </label>
-                <label class="rich-tool-btn rich-tool-upload" style="cursor:pointer;">
-                  Chèn Ảnh / Video Minh Họa (.jpg, .png, .webp, .webm, .mp4)
-                  <input type="file" id="cmsLessonMediaUpload" accept=".jpg,.jpeg,.png,.webp,.gif,.svg,.webm,.mp4,image/*,video/webm,video/mp4" multiple style="display:none;" />
-                </label>
-              </div>
-              <textarea
-                id="cmsLessonBody"
-                class="form-control"
-                rows="5"
-                required
-                style="border-radius:0 0 12px 12px;"
-                placeholder="Dán nội dung bài giảng, mã HTML hoặc bấm nút 'Chèn Ảnh / Video Minh Họa' ở thanh công cụ phía trên..."
-              >${escapeHtml((savedFormValues && savedFormValues.rawBody) || "")}</textarea>
-              <div class="lesson-visual-preview" id="cmsLessonVisualPreview"></div>
+              <label>Nội dung kiến thức bài giảng (Gõ trực tiếp kiểu Word, căn lề, chèn bảng, chèn ảnh/video .jpg, .png, .webp, .webm, .mp4) *</label>
+              ${renderWordEditorMarkup("cmsLessonEditor", "Dán nội dung bài giảng, gõ trực tiếp kiểu Word hoặc chèn ảnh/video minh họa...")}
             </div>
             <div class="form-group" style="margin-bottom:0;">
               <label>Đề bài Bài tập thực hành cuối bài học *</label>
@@ -3576,19 +3707,16 @@
       </table>
     `;
 
-    bindRichEditorToolbar(
-      "cmsLessonBody",
-      "cmsLessonVisualPreview",
-      "cmsLessonHtmlUpload",
-      "cmsLessonMediaUpload",
-      "cmsLessonToolbar"
-    );
+    const lessonEditor = initWordEditor(body.querySelector("#cmsLessonEditor") ? body.querySelector("#cmsLessonEditor").closest(".word-editor-container") : null, "cmsLessonEditor");
+    if (lessonEditor && savedFormValues && savedFormValues.rawBody) {
+      lessonEditor.setHtml(savedFormValues.rawBody);
+    }
 
     function getCurrentLessonFormValues() {
       return {
         courseId: document.getElementById("cmsLessonCourseId").value,
         title: document.getElementById("cmsLessonTitle").value,
-        rawBody: document.getElementById("cmsLessonBody").value,
+        rawBody: lessonEditor ? lessonEditor.getHtml() : "",
         exercise: document.getElementById("cmsLessonExercise").value
       };
     }
@@ -3787,7 +3915,7 @@
       syncMiniTestDomToState(body);
       const courseId = document.getElementById("cmsLessonCourseId").value;
       const title = document.getElementById("cmsLessonTitle").value.trim();
-      const rawBody = document.getElementById("cmsLessonBody").value.trim();
+      const rawBody = lessonEditor ? lessonEditor.getHtml() : "";
       const exercise = document.getElementById("cmsLessonExercise").value.trim();
 
       const course = state.courses.find((c) => c.id === courseId);

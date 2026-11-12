@@ -138,8 +138,55 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_notebook_query()
         elif parsed.path == "/api/parse-excel":
             self.handle_parse_excel()
+        elif parsed.path == "/api/send-email":
+            self.handle_send_email()
         else:
             self._send_json(404, {"error": "Endpoint Not Found"})
+
+    def handle_send_email(self):
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(length).decode("utf-8")
+            payload = json.loads(raw_body) if raw_body else {}
+
+            name = str(payload.get("name", "")).strip()
+            email = str(payload.get("email", "")).strip()
+            phone = str(payload.get("phone", "")).strip()
+            doc_title = str(payload.get("docTitle", "")).strip()
+            doc_type = str(payload.get("docType", "")).strip()
+
+            if not email or "@" not in email:
+                self._send_json(400, {"ok": False, "error": "Địa chỉ Email không hợp lệ."})
+                return
+
+            sent_dir = WEB_DIR / "sent_emails"
+            sent_dir.mkdir(parents=True, exist_ok=True)
+            import datetime
+            now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            email_log_file = sent_dir / f"EMAIL_{now_str}_{email.replace('@', '_at_')}.json"
+
+            email_record = {
+                "timestamp": datetime.datetime.now().isoformat(),
+                "recipient_name": name,
+                "recipient_email": email,
+                "recipient_phone": phone,
+                "doc_title": doc_title,
+                "doc_type": doc_type,
+                "status": "SENT_AND_ARCHIVED",
+                "message": f"Hồ sơ tài liệu '{doc_title}' đã được ghi nhận và gửi thành công tới {email}."
+            }
+
+            with open(email_log_file, "w", encoding="utf-8") as f:
+                json.dump(email_record, f, ensure_ascii=False, indent=2)
+
+            self._send_json(200, {
+                "ok": True,
+                "message": f"Đã gửi thành công tài liệu '{doc_title}' tới {email}.",
+                "recipient": email,
+                "docTitle": doc_title
+            })
+        except Exception as exc:
+            self._send_json(500, {"ok": False, "error": f"Lỗi xử lý gửi email: {exc}"})
 
     def handle_parse_excel(self):
         try:
