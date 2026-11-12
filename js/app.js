@@ -4137,25 +4137,45 @@
     });
   }
 
-  // --- TAB 6: LEADS & FULL CMS BACKUP ---
+  // --- TAB 6: LEADS & FULL CMS BACKUP (POWERED DIRECTLY BY CLOUD FIRESTORE) ---
   function renderAdminLeadsTab(body) {
-    const leads = JSON.parse(localStorage.getItem(STORAGE_KEYS.LEADS) || "[]");
-    const leadsRows =
-      leads.length === 0
-        ? `<tr><td colspan="6" style="padding:14px; text-align:center; color:var(--ink-500);">Chưa có lượt đăng ký mới trong phiên này.</td></tr>`
-        : leads
-            .map(
-              (ld, i) => `
+    const localLeads = JSON.parse(localStorage.getItem(STORAGE_KEYS.LEADS) || "[]");
+    let combinedItems = [...localLeads];
+
+    function buildTableHtml(items) {
+      if (!items || items.length === 0) {
+        return `<tr><td colspan="8" style="padding:18px; text-align:center; color:var(--ink-500);">Chưa có dữ liệu học viên trong bảng. Bấm 'Làm mới từ Cloud Firestore' để tải dữ liệu.</td></tr>`;
+      }
+      return items
+        .map((it, i) => {
+          const isOfficialLearner =
+            it.category === "learner" ||
+            it.source === "ThuysTalk Registration Portal" ||
+            it.role ||
+            it.emailVerified !== undefined;
+          const typeBadge = isOfficialLearner
+            ? `<span class="badge" style="background:#059669; color:#fff; font-weight:700; font-size:0.75rem;">Học Viên Chính Thức</span>`
+            : `<span class="badge" style="background:#F59E0B; color:#fff; font-weight:700; font-size:0.75rem;">Nhận Tài Liệu / Tư Vấn</span>`;
+          const timeDisplay = it.timeDisplay || it.registeredAt || it.requestedAt || it.timestamp || "-";
+          const roleOrTopic = it.role || it.docTitle || it.topic || "Khóa học E-Learning";
+          const statusDisplay = isOfficialLearner
+            ? `<span style="color:#059669; font-weight:700;">${it.status || "Hoạt động"}</span>`
+            : `<span style="color:#D97706; font-weight:700;">Đã tiếp nhận</span>`;
+
+          return `
           <tr>
             <td>${i + 1}</td>
-            <td style="font-weight:700;">${escapeHtml(ld.type)}</td>
-            <td>${escapeHtml(ld.name)}</td>
-            <td style="color:var(--jade-700); font-weight:700;">${escapeHtml(ld.email)}</td>
-            <td>${escapeHtml(ld.phone)}</td>
-            <td>${escapeHtml(ld.topic)}</td>
-          </tr>`
-            )
-            .join("");
+            <td>${typeBadge}</td>
+            <td style="font-weight:700; color:var(--ink-900);">${escapeHtml(it.name || "Học viên")}</td>
+            <td style="color:var(--jade-700); font-weight:700;">${escapeHtml(it.email || "")}</td>
+            <td>${escapeHtml(it.phone || "-")}</td>
+            <td>${escapeHtml(roleOrTopic)}</td>
+            <td style="font-size:0.8rem; color:var(--ink-600);">${escapeHtml(timeDisplay)}</td>
+            <td>${statusDisplay}</td>
+          </tr>`;
+        })
+        .join("");
+    }
 
     body.innerHTML = `
       <div class="cms-panel-box" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
@@ -4175,29 +4195,35 @@
           <div>
             <div style="display:flex; align-items:center; gap:8px;">
               <span class="badge badge-jade" style="background:var(--jade-800); color:#FFF; font-weight:800;">Firebase Cloud Active</span>
-              <strong style="color:var(--jade-900); font-size:0.95rem;">Cơ Sở Dữ Liệu Cloud Firestore &amp; Firebase Storage</strong>
+              <strong style="color:var(--jade-900); font-size:0.95rem;">Cơ Sở Dữ Liệu Cloud Firestore (Bảng Trực Tuyến Đã Kích Hoạt)</strong>
             </div>
             <p style="font-size:0.82rem; color:var(--ink-700); margin-top:4px;">
               Dự án: <code style="background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px; font-weight:700;">thuystalk</code> · 
-              App ID: <code style="background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px; font-weight:700;">1:767228711805</code> · 
-              Storage Bucket: <code style="background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px; font-weight:700;">thuystalk.firebasestorage.app</code>
+              Khu vực máy chủ: <code style="background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px; font-weight:700;">asia-southeast1 (Singapore)</code>
             </p>
             <p style="font-size:0.78rem; color:var(--ink-600); margin-top:2px;">
-              Khóa API chính thức đã kích hoạt: <code style="background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px; font-weight:700;">AIzaSyA3PZ3...DaEw8</code>. Tự động lưu trữ Học viên &amp; Leads 1-1 lên Cloud Firestore.
+              Khóa API chính thức đã kích hoạt: <code style="background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px; font-weight:700;">AIzaSyA3PZ3...DaEw8</code>. Tự động đồng bộ Học viên &amp; Leads 1-1 với Cloud Firestore.
             </p>
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button type="button" class="btn btn-jade btn-sm" id="syncFirebaseBtn">
-              Đồng bộ toàn bộ lên Cloud Firestore
+            <button type="button" class="btn btn-jade btn-sm" id="reloadFirestoreLeadsBtn">
+              Làm mới từ Cloud Firestore
             </button>
-            <a href="https://console.firebase.google.com/project/thuystalk/storage" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
-              Mở Firebase Storage Console
+            <button type="button" class="btn btn-outline btn-sm" id="syncFirebaseBtn">
+              Đồng bộ dữ liệu mẫu lên Firestore
+            </button>
+            <a href="https://console.firebase.google.com/project/thuystalk/firestore/databases/-default-/data" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="color:var(--jade-800); border-color:var(--jade-600); font-weight:700;">
+              Mở Cloud Firestore Console (Bảng Dữ Liệu)
             </a>
           </div>
         </div>
       </div>
 
-      <h4 style="margin-bottom:10px;">Danh sách Học viên nhận tài liệu & Khách đăng ký tư vấn (${leads.length})</h4>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+        <h4 style="margin:0;" id="leadsTableHeading">Danh sách Học viên nhận tài liệu & Khách đăng ký tư vấn (${combinedItems.length})</h4>
+        <span id="firestoreStatusIndicator" style="font-size:0.8rem; color:var(--jade-700); font-weight:700;">Đang kết nối Cloud Firestore...</span>
+      </div>
+
       <table class="cms-list-table">
         <thead>
           <tr>
@@ -4206,12 +4232,100 @@
             <th>Họ tên</th>
             <th>Email</th>
             <th>SĐT / Zalo</th>
-            <th>Chủ đề / Khóa học</th>
+            <th>Vai trò / Khóa học / Chủ đề</th>
+            <th>Thời gian</th>
+            <th>Trạng thái</th>
           </tr>
         </thead>
-        <tbody>${leadsRows}</tbody>
+        <tbody id="adminLeadsTableBody">${buildTableHtml(combinedItems)}</tbody>
       </table>
     `;
+
+    async function loadFirestoreData() {
+      const statusEl = document.getElementById("firestoreStatusIndicator");
+      const headingEl = document.getElementById("leadsTableHeading");
+      const tbodyEl = document.getElementById("adminLeadsTableBody");
+
+      try {
+        if (window.ThuysTalkFirebase) {
+          const [learners, leads] = await Promise.all([
+            window.ThuysTalkFirebase.fetchLearners(),
+            window.ThuysTalkFirebase.fetchLeads()
+          ]);
+
+          const firestoreItems = [];
+
+          // 1. Map official learners
+          learners.forEach((l) => {
+            firestoreItems.push({
+              category: "learner",
+              name: l.name || l.displayName || "Học viên",
+              email: l.email || "",
+              phone: l.phone || "-",
+              role: l.role || "Tài khoản Học viên",
+              status: l.status || (l.emailVerified ? "Đã kích hoạt" : "Hoạt động"),
+              timeDisplay:
+                l.registeredAt ||
+                (l.createdAt
+                  ? typeof l.createdAt.toDate === "function"
+                    ? l.createdAt.toDate().toLocaleString("vi-VN")
+                    : String(l.createdAt)
+                  : "Mới"),
+              raw: l
+            });
+          });
+
+          // 2. Map material delivery leads
+          leads.forEach((ld) => {
+            firestoreItems.push({
+              category: "lead",
+              name: ld.name || "Khách hàng",
+              email: ld.email || "",
+              phone: ld.phone || "-",
+              topic: ld.docTitle || ld.topic || "Đăng ký nhận tài liệu",
+              status: "Đã tiếp nhận",
+              timeDisplay: ld.requestedAt || ld.timestamp || "Mới",
+              raw: ld
+            });
+          });
+
+          if (firestoreItems.length > 0) {
+            combinedItems = firestoreItems;
+          }
+
+          window._cachedFirestoreCount = combinedItems.length;
+
+          // Update sidebar badge
+          const tabBadges = document.querySelectorAll('[data-cmstab="backup"] span');
+          tabBadges.forEach((el) => {
+            if (el.textContent && el.textContent.includes("lượt")) {
+              el.textContent = `${combinedItems.length} lượt`;
+            }
+          });
+
+          if (tbodyEl) tbodyEl.innerHTML = buildTableHtml(combinedItems);
+          if (headingEl)
+            headingEl.textContent = `Danh sách Học viên nhận tài liệu & Khách đăng ký tư vấn (${combinedItems.length})`;
+          if (statusEl)
+            statusEl.textContent = `Đã đồng bộ trực tiếp từ Cloud Firestore (${learners.length} học viên, ${leads.length} nhận tài liệu)`;
+        }
+      } catch (err) {
+        console.warn("loadFirestoreData notice:", err);
+        if (statusEl) statusEl.textContent = "Hiển thị dữ liệu cục bộ.";
+      }
+    }
+
+    // Trigger immediate fetch from Firestore
+    loadFirestoreData();
+
+    // Reload button listener
+    const reloadBtn = document.getElementById("reloadFirestoreLeadsBtn");
+    if (reloadBtn) {
+      reloadBtn.addEventListener("click", () => {
+        showToast("Đang làm mới dữ liệu từ Cloud Firestore...");
+        loadFirestoreData();
+      });
+    }
 
     document.getElementById("exportFullCmsBtn").addEventListener("click", () => {
       const payload = {
@@ -4234,16 +4348,16 @@
 
     document.getElementById("exportLeadsCsvBtn").addEventListener("click", () => {
       const rows = [
-        ["STT", "Thoi gian", "Phan loai", "Ho ten", "Email", "SDT/Zalo", "Chu de", "Ghi chu"],
-        ...leads.map((l, idx) => [
+        ["STT", "Phan loai", "Ho ten", "Email", "SDT/Zalo", "Vai tro / Khoa hoc / Chu de", "Thoi gian", "Trang thai"],
+        ...combinedItems.map((l, idx) => [
           idx + 1,
-          l.timestamp,
-          l.type,
-          l.name,
-          l.email,
-          l.phone,
-          l.topic,
-          l.message || ""
+          l.category === "learner" ? "Hoc vien chinh thuc" : "Nhan tai lieu / Tu van",
+          l.name || "",
+          l.email || "",
+          l.phone || "",
+          l.role || l.topic || "",
+          l.timeDisplay || "",
+          l.status || ""
         ])
       ];
       const csv =
@@ -4255,10 +4369,10 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "ThuysTalk_Danh_Sach_Hoc_Vien_Tu_Van.csv";
+      a.download = `thuystalk-danh-sach-hoc-vien-${Date.now()}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-      showToast("Đã xuất danh sách ra file CSV!");
+      showToast("Đã tải xuống danh sách học viên và leads từ Cloud Firestore!");
     });
 
     const syncFbBtn = document.getElementById("syncFirebaseBtn");
@@ -4271,6 +4385,7 @@
           await window.ThuysTalkFirebase.syncCollection("elearning_courses", state.courses);
           await window.ThuysTalkFirebase.syncCollection("ai_kb", state.aiKb);
           showToast("Đã đồng bộ toàn bộ Bài viết, Video, E-Learning lên Cloud Firestore (thuystalk) thành công!");
+          loadFirestoreData();
         } else {
           showToast("Cơ sở dữ liệu Firebase (thuystalk) đã được kết nối & sẵn sàng lưu trữ học viên!");
         }

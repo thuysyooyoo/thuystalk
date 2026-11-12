@@ -372,6 +372,40 @@
         console.warn("Firestore syncCollection error:", err);
         return false;
       }
+    },
+
+    // 7. FETCH ALL LEARNERS FROM FIRESTORE
+    fetchLearners: async function () {
+      initFirebase();
+      if (!db) return [];
+      try {
+        const snap = await db.collection("learners").get();
+        const list = [];
+        snap.forEach((doc) => {
+          list.push({ id: doc.id, ...doc.data() });
+        });
+        return list;
+      } catch (err) {
+        console.warn("fetchLearners error:", err);
+        return [];
+      }
+    },
+
+    // 8. FETCH ALL LEADS FROM FIRESTORE
+    fetchLeads: async function () {
+      initFirebase();
+      if (!db) return [];
+      try {
+        const snap = await db.collection("leads").get();
+        const list = [];
+        snap.forEach((doc) => {
+          list.push({ id: doc.id, ...doc.data() });
+        });
+        return list;
+      } catch (err) {
+        console.warn("fetchLeads error:", err);
+        return [];
+      }
     }
   };
 })();
