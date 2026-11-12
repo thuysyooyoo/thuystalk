@@ -11,15 +11,21 @@ Hỗ trợ:
 
 import base64
 import csv
+import datetime
 import http.server
 import io
 import json
 import os
 import shutil
+import smtplib
 import subprocess
 import sys
 import urllib.parse
 import webbrowser
+from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from pathlib import Path
 
 PORT = 8099
@@ -154,14 +160,110 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             phone = str(payload.get("phone", "")).strip()
             doc_title = str(payload.get("docTitle", "")).strip()
             doc_type = str(payload.get("docType", "")).strip()
+            content_preview = str(payload.get("content", "")).strip()
 
             if not email or "@" not in email:
                 self._send_json(400, {"ok": False, "error": "Địa chỉ Email không hợp lệ."})
                 return
 
+            # REAL SMTP TRANSMISSION VIA GMAIL (thuystalk.official@gmail.com)
+            smtp_success = False
+            smtp_notice = ""
+            try:
+                smtp_server = "smtp.gmail.com"
+                smtp_port = 465
+                sender_email = "thuystalk.official@gmail.com"
+                sender_pwd = "oyszmggjwhtphsij"
+
+                msg = MIMEMultipart("alternative")
+                msg["From"] = f"ThuysTalk Official <{sender_email}>"
+                msg["To"] = email
+                msg["Subject"] = f"[ThuysTalk] Tài Liệu Bạn Yêu Cầu: {doc_title}"
+
+                html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1E293B; background: #F8FAFC; margin: 0; padding: 20px; }}
+    .container {{ max-width: 600px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; overflow: hidden; border: 1px solid #E2E8F0; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }}
+    .header {{ background: linear-gradient(135deg, #065F46 0%, #047857 100%); color: #FFFFFF; padding: 28px 24px; text-align: center; }}
+    .header h1 {{ margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px; color: #FFFFFF; }}
+    .header p {{ margin: 6px 0 0; font-size: 14px; opacity: 0.95; color: #E6F4EA; }}
+    .body-wrap {{ padding: 28px 24px; }}
+    .doc-card {{ background: #F0FDF4; border-left: 4px solid #059669; padding: 16px; border-radius: 6px; margin: 20px 0; }}
+    .doc-title {{ font-size: 16px; font-weight: 800; color: #065F46; margin: 0 0 6px; }}
+    .doc-type {{ font-size: 12px; font-weight: 700; color: #D97706; text-transform: uppercase; margin: 0; }}
+    .footer {{ background: #F1F5F9; padding: 20px 24px; text-align: center; font-size: 12px; color: #64748B; border-top: 1px solid #E2E8F0; }}
+    .btn {{ display: inline-block; background: #047857; color: #FFFFFF !important; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; font-size: 14px; margin-top: 14px; }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>ThuysTalk | Pháp Lý & Xuất Nhập Khẩu Thực Tế</h1>
+      <p>Chia sẻ từ Nguyễn Thị Ngọc Thúy · Sáng lập ThuysTalk & Giám đốc Eureka Logistics</p>
+    </div>
+    <div class="body-wrap">
+      <p>Kính gửi <strong>{name or 'Anh/Chị'}</strong>,</p>
+      <p>ThuysTalk đã nhận được yêu cầu tài liệu của Anh/Chị từ website <strong>ThuysTalk</strong>. Em xin gửi toàn văn tài liệu chuyên môn theo yêu cầu của Anh/Chị:</p>
+      
+      <div class="doc-card">
+        <p class="doc-type">{doc_type or 'Tài Liệu Chuyên Môn'}</p>
+        <h3 class="doc-title">{doc_title}</h3>
+        <p style="margin: 8px 0 0; font-size: 13px; color: #334155;">Đã được đóng gói đầy đủ để Anh/Chị có thể tham khảo và áp dụng ngay vào nghiệp vụ thực tế.</p>
+      </div>
+
+      <p style="margin-top: 24px;">Nếu Anh/Chị có bất kỳ câu hỏi hoặc cần giải đáp chuyên sâu về thủ tục hải quan, kiểm tra C/O, mã HS hoặc chính sách xuất nhập khẩu mới nhất, hãy kết nối trực tiếp với Thúy qua Zalo:</p>
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="https://zalo.me/84767648862" class="btn" target="_blank" style="background:#047857; color:#FFFFFF; padding:12px 24px; text-decoration:none; border-radius:8px; font-weight:bold; display:inline-block;">Nhắn Zalo Với Thúy (0767.648.862)</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p style="margin: 0 0 6px;"><strong>ThuysTalk</strong> · Nền tảng Đào tạo E-Learning & Tra cứu Pháp lý XNK</p>
+      <p style="margin: 0;">Hotline / Zalo: 0767.648.862 · Website: ThuysTalk</p>
+    </div>
+  </div>
+</body>
+</html>"""
+                msg.attach(MIMEText(html_content, "html", "utf-8"))
+
+                # Text attachment
+                doc_text = f"THUYSTALK - TÀI LIỆU CHUYÊN MÔN XUẤT NHẬP KHẨU\n"
+                doc_text += f"Người nhận: {name or 'Học viên / Khách hàng'}\n"
+                doc_text += f"Email: {email}\n"
+                doc_text += f"Tài liệu: {doc_title}\n"
+                doc_text += f"Thời gian gửi: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n"
+                doc_text += f"--------------------------------------------------\n\n"
+                doc_text += f"Nội dung tài liệu: {doc_title}\n"
+                doc_text += f"Chuyên mục: {doc_type}\n"
+                if content_preview:
+                    doc_text += f"\nChi tiết nội dung:\n{content_preview}\n"
+                doc_text += f"\nChia sẻ bởi: Nguyễn Thị Ngọc Thúy (Sáng lập ThuysTalk / Giám đốc Eureka Logistics)\n"
+                doc_text += f"Hotline tư vấn chuyên sâu / Zalo: 0767.648.862\n"
+
+                part = MIMEBase("application", "octet-stream")
+                part.set_payload(doc_text.encode("utf-8"))
+                encoders.encode_base64(part)
+                safe_fname = "ThuysTalk_" + "".join(c for c in doc_title if c.isalnum() or c in (" ", "_", "-")).rstrip()[:40].replace(" ", "_") + ".txt"
+                part.add_header("Content-Disposition", f'attachment; filename="{safe_fname}"')
+                msg.attach(part)
+
+                server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=12)
+                server.login(sender_email, sender_pwd)
+                server.send_message(msg)
+                server.quit()
+                smtp_success = True
+                smtp_notice = "Đã gửi email thành công qua Gmail SMTP"
+                print(f"[SMTP THÀNH CÔNG] Đã gửi email tới {email} cho tài liệu: {doc_title}")
+            except Exception as smtp_err:
+                smtp_success = False
+                smtp_notice = str(smtp_err)
+                print(f"[SMTP LỖI] Gửi email thất bại: {smtp_err}")
+
+            # Archive local log record
             sent_dir = WEB_DIR / "sent_emails"
             sent_dir.mkdir(parents=True, exist_ok=True)
-            import datetime
             now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             email_log_file = sent_dir / f"EMAIL_{now_str}_{email.replace('@', '_at_')}.json"
 
@@ -172,8 +274,10 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "recipient_phone": phone,
                 "doc_title": doc_title,
                 "doc_type": doc_type,
-                "status": "SENT_AND_ARCHIVED",
-                "message": f"Hồ sơ tài liệu '{doc_title}' đã được ghi nhận và gửi thành công tới {email}."
+                "smtp_delivered": smtp_success,
+                "smtp_notice": smtp_notice,
+                "status": "DELIVERED" if smtp_success else "ARCHIVED",
+                "message": f"Hồ sơ tài liệu '{doc_title}' đã được gửi tới {email}."
             }
 
             with open(email_log_file, "w", encoding="utf-8") as f:
@@ -181,7 +285,8 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             self._send_json(200, {
                 "ok": True,
-                "message": f"Đã gửi thành công tài liệu '{doc_title}' tới {email}.",
+                "delivered": smtp_success,
+                "message": f"Tài liệu '{doc_title}' đã được gửi thành công trực tiếp vào hộp thư {email}!" if smtp_success else f"Đã ghi nhận yêu cầu tài liệu '{doc_title}' cho {email}.",
                 "recipient": email,
                 "docTitle": doc_title
             })
