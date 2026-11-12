@@ -84,6 +84,9 @@
 
   // Auto-init if SDK available
   if (typeof window !== "undefined") {
+    if (typeof firebase !== "undefined") {
+      initFirebase();
+    }
     window.addEventListener("DOMContentLoaded", () => {
       initFirebase();
     });
@@ -488,6 +491,50 @@
         return null;
       } catch (err) {
         console.warn(`fetchSiteSettings error (${settingKey}):`, err);
+        return null;
+      }
+    },
+
+    // 10. REAL-TIME LISTENER FOR INSTANT CROSS-BROWSER SYNCHRONIZATION
+    listenCollection: function (collName, callback) {
+      initFirebase();
+      if (!db || !collName || typeof callback !== "function") return null;
+      try {
+        return db.collection(collName).onSnapshot(
+          (snapshot) => {
+            const list = [];
+            snapshot.forEach((doc) => {
+              list.push({ id: doc.id, ...doc.data() });
+            });
+            callback(list);
+          },
+          (err) => {
+            console.warn(`Firestore onSnapshot error (${collName}):`, err);
+          }
+        );
+      } catch (e) {
+        console.warn(`listenCollection error (${collName}):`, e);
+        return null;
+      }
+    },
+
+    listenSiteSettings: function (settingKey, callback) {
+      initFirebase();
+      if (!db || !settingKey || typeof callback !== "function") return null;
+      try {
+        return db.collection("site_settings").doc(String(settingKey)).onSnapshot(
+          (doc) => {
+            if (doc.exists) {
+              const val = doc.data();
+              callback(val.data !== undefined ? val.data : val);
+            }
+          },
+          (err) => {
+            console.warn(`Firestore onSnapshot error (site_settings/${settingKey}):`, err);
+          }
+        );
+      } catch (e) {
+        console.warn(`listenSiteSettings error (${settingKey}):`, e);
         return null;
       }
     }

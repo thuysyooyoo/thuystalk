@@ -113,6 +113,9 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Bridge-Token")
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -146,6 +149,8 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_parse_excel()
         elif parsed.path == "/api/send-email":
             self.handle_send_email()
+        elif parsed.path == "/api/send-bulk-email":
+            self.handle_send_bulk_email()
         else:
             self._send_json(404, {"error": "Endpoint Not Found"})
 
@@ -292,6 +297,147 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             })
         except Exception as exc:
             self._send_json(500, {"ok": False, "error": f"Lỗi xử lý gửi email: {exc}"})
+
+    def handle_send_bulk_email(self):
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(length).decode("utf-8")
+            payload = json.loads(raw_body) if raw_body else {}
+
+            doc_title = str(payload.get("docTitle", "")).strip()
+            doc_type = str(payload.get("docType", "Bài viết chuyên sâu")).strip()
+            content_preview = str(payload.get("content", "")).strip()
+            recipients = payload.get("recipients", [])
+
+            if not doc_title:
+                doc_title = "Tài liệu chuyên môn ThuysTalk"
+
+            if not recipients or not isinstance(recipients, list):
+                self._send_json(400, {"ok": False, "error": "Danh sách người nhận không hợp lệ hoặc đang trống."})
+                return
+
+            smtp_server = "smtp.gmail.com"
+            smtp_port = 465
+            sender_email = "thuystalk.official@gmail.com"
+            sender_pwd = "oyszmggjwhtphsij"
+
+            sent_count = 0
+            failed_emails = []
+
+            # Prepare text attachment
+            doc_text = f"THUYSTALK - BÀI VIẾT & TÀI LIỆU CHUYÊN MÔN XUẤT NHẬP KHẨU\n"
+            doc_text += f"Tài liệu: {doc_title}\n"
+            doc_text += f"Chuyên mục: {doc_type}\n"
+            doc_text += f"Thời gian gửi: {datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')}\n"
+            doc_text += f"--------------------------------------------------\n\n"
+            doc_text += f"Tiêu đề: {doc_title}\n"
+            doc_text += f"Chuyên mục: {doc_type}\n\n"
+            if content_preview:
+                doc_text += f"Nội dung chi tiết:\n{content_preview}\n\n"
+            doc_text += f"Chia sẻ bởi: Nguyễn Thị Ngọc Thúy (Sáng lập ThuysTalk / Giám đốc Eureka Logistics)\n"
+            doc_text += f"Hotline tư vấn chuyên sâu / Zalo: 0767.648.862\n"
+
+            safe_fname = "ThuysTalk_" + "".join(c for c in doc_title if c.isalnum() or c in (" ", "_", "-")).rstrip()[:40].replace(" ", "_") + ".txt"
+
+            clean_preview = content_preview[:1200] + ("..." if len(content_preview) > 1200 else "")
+
+            # Open single SSL connection to Gmail SMTP for efficiency
+            server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=25)
+            server.login(sender_email, sender_pwd)
+
+            for rec in recipients:
+                rec_email = str(rec.get("email", "")).strip().lower()
+                rec_name = str(rec.get("name", "")).strip() or "Học viên / Đối tác"
+
+                if not rec_email or "@" not in rec_email:
+                    continue
+
+                try:
+                    msg = MIMEMultipart("alternative")
+                    msg["From"] = f"ThuysTalk Official <{sender_email}>"
+                    msg["To"] = rec_email
+                    msg["Subject"] = f"[ThuysTalk] Tài Liệu Mới: {doc_title}"
+
+                    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #1E293B; background: #F8FAFC; margin: 0; padding: 20px; }}
+    .container {{ max-width: 600px; margin: 0 auto; background: #FFFFFF; border-radius: 12px; overflow: hidden; border: 1px solid #E2E8F0; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }}
+    .header {{ background: linear-gradient(135deg, #065F46 0%, #047857 100%); color: #FFFFFF; padding: 28px 24px; text-align: center; }}
+    .header h1 {{ margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px; color: #FFFFFF; }}
+    .header p {{ margin: 6px 0 0; font-size: 14px; opacity: 0.95; color: #E6F4EA; }}
+    .body-wrap {{ padding: 28px 24px; }}
+    .doc-card {{ background: #F0FDF4; border-left: 4px solid #059669; padding: 16px; border-radius: 6px; margin: 20px 0; }}
+    .doc-title {{ font-size: 16px; font-weight: 800; color: #065F46; margin: 0 0 6px; }}
+    .doc-type {{ font-size: 12px; font-weight: 700; color: #D97706; text-transform: uppercase; margin: 0; }}
+    .footer {{ background: #F1F5F9; padding: 20px 24px; text-align: center; font-size: 12px; color: #64748B; border-top: 1px solid #E2E8F0; }}
+    .btn {{ display: inline-block; background: #047857; color: #FFFFFF !important; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; font-size: 14px; margin-top: 14px; }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>ThuysTalk | Pháp Lý & Xuất Nhập Khẩu Thực Tế</h1>
+      <p>Chia sẻ từ Nguyễn Thị Ngọc Thúy · Sáng lập ThuysTalk & Giám đốc Eureka Logistics</p>
+    </div>
+    <div class="body-wrap">
+      <p>Kính gửi <strong>{rec_name}</strong>,</p>
+      <p>ThuysTalk xin gửi tới Anh/Chị toàn văn tài liệu / bài viết chuyên sâu mới nhất được cập nhật trên nền tảng <strong>ThuysTalk</strong>:</p>
+      
+      <div class="doc-card">
+        <p class="doc-type">{doc_type}</p>
+        <h3 class="doc-title">{doc_title}</h3>
+        <p style="margin: 8px 0 0; font-size: 13px; color: #334155;">Toàn bộ biểu mẫu và công văn trích dẫn đã được đính kèm ở tệp <strong>{safe_fname}</strong> bên dưới.</p>
+      </div>
+
+      <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:16px; font-size:13px; color:#334155; margin:16px 0; line-height:1.6;">
+        <strong style="color:#065F46; display:block; margin-bottom:6px;">Tóm lược nội dung chính:</strong>
+        {clean_preview}
+      </div>
+
+      <p style="margin-top: 24px;">Nếu Anh/Chị có bất kỳ vướng mắc nghiệp vụ hải quan hoặc cần tư vấn trực tiếp cho lô hàng của doanh nghiệp mình, hãy kết nối cùng Thúy qua Zalo:</p>
+      <div style="text-align: center; margin: 20px 0;">
+        <a href="https://zalo.me/84767648862" class="btn" target="_blank" style="background:#047857; color:#FFFFFF; padding:12px 24px; text-decoration:none; border-radius:8px; font-weight:bold; display:inline-block;">Nhắn Zalo Với Thúy (0767.648.862)</a>
+      </div>
+    </div>
+    <div class="footer">
+      <p style="margin: 0 0 6px;"><strong>ThuysTalk</strong> · Nền tảng Đào tạo E-Learning & Tra cứu Pháp lý XNK</p>
+      <p style="margin: 0;">Hotline / Zalo: 0767.648.862 · Website: ThuysTalk</p>
+    </div>
+  </div>
+</body>
+</html>"""
+                    msg.attach(MIMEText(html_content, "html", "utf-8"))
+
+                    part = MIMEBase("application", "octet-stream")
+                    part.set_payload(doc_text.encode("utf-8"))
+                    encoders.encode_base64(part)
+                    part.add_header("Content-Disposition", f'attachment; filename="{safe_fname}"')
+                    msg.attach(part)
+
+                    server.send_message(msg)
+                    sent_count += 1
+                    print(f"[BULK SMTP] Đã gửi tới {rec_email} ({sent_count}/{len(recipients)})")
+                except Exception as send_err:
+                    print(f"[BULK SMTP ERROR] Thất bại khi gửi tới {rec_email}: {send_err}")
+                    failed_emails.append(rec_email)
+
+            try:
+                server.quit()
+            except Exception:
+                pass
+
+            self._send_json(200, {
+                "ok": True,
+                "sentCount": sent_count,
+                "total": len(recipients),
+                "failed": failed_emails,
+                "message": f"Đã gửi thành công {sent_count}/{len(recipients)} email."
+            })
+        except Exception as exc:
+            self._send_json(500, {"ok": False, "error": f"Lỗi xử lý gửi email hàng loạt: {exc}"})
 
     def handle_parse_excel(self):
         try:

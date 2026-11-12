@@ -189,9 +189,17 @@
   }
 
   let isHydratedFromFirestore = false;
+  let isRealtimeListening = false;
+  let hydrateRetryCount = 0;
 
   async function hydrateAllFromFirestore(forceRerender = false) {
-    if (!window.ThuysTalkFirebase || !window.ThuysTalkFirebase.isReady()) return;
+    if (!window.ThuysTalkFirebase || !window.ThuysTalkFirebase.isReady()) {
+      if (hydrateRetryCount < 10) {
+        hydrateRetryCount++;
+        setTimeout(() => hydrateAllFromFirestore(forceRerender), 400);
+      }
+      return;
+    }
     try {
       const [mediaRes, articlesRes, videosRes, coursesRes, aiKbRes] = await Promise.all([
         window.ThuysTalkFirebase.fetchSiteSettings("media_profile"),
@@ -250,9 +258,119 @@
         firestoreStatusPill.style.color = "var(--jade-800)";
         firestoreStatusPill.style.borderColor = "var(--jade-500)";
       }
+
+      // Kích hoạt Real-Time bi-directional synchronization trên Firestore onSnapshot
+      initFirestoreRealtimeSync();
     } catch (err) {
       console.warn("hydrateAllFromFirestore notice:", err);
     }
+  }
+
+  function initFirestoreRealtimeSync() {
+    if (isRealtimeListening || !window.ThuysTalkFirebase || !window.ThuysTalkFirebase.isReady()) return;
+    isRealtimeListening = true;
+
+    // 1. Articles Real-time Sync
+    window.ThuysTalkFirebase.listenCollection("articles", (articles) => {
+      if (Array.isArray(articles) && articles.length > 0) {
+        const currentJson = JSON.stringify(state.articles);
+        const newJson = JSON.stringify(articles);
+        if (currentJson !== newJson) {
+          state.articles = articles;
+          localStorage.setItem(STORAGE_KEYS.ARTICLES, newJson);
+          if (document.getElementById("adminSidebarNav")) {
+            if (state.activeCmsTab === "articles") renderAdminArticlesTab(document.getElementById("adminStudioBody"));
+          } else {
+            renderArticlesSection(window.THUYSTALK_I18N[state.lang]);
+          }
+          console.log("[REALTIME SYNC] Articles updated across browsers via Firestore onSnapshot");
+        }
+      }
+    });
+
+    // 2. Videos Real-time Sync
+    window.ThuysTalkFirebase.listenCollection("videos", (videos) => {
+      if (Array.isArray(videos) && videos.length > 0) {
+        const currentJson = JSON.stringify(state.videos);
+        const newJson = JSON.stringify(videos);
+        if (currentJson !== newJson) {
+          state.videos = videos;
+          localStorage.setItem(STORAGE_KEYS.VIDEOS, newJson);
+          if (document.getElementById("adminSidebarNav")) {
+            if (state.activeCmsTab === "videos") renderAdminVideosTab(document.getElementById("adminStudioBody"));
+          } else {
+            renderVideoSection(window.THUYSTALK_I18N[state.lang]);
+          }
+          console.log("[REALTIME SYNC] Videos updated across browsers via Firestore onSnapshot");
+        }
+      }
+    });
+
+    // 3. Courses Real-time Sync
+    window.ThuysTalkFirebase.listenCollection("courses", (courses) => {
+      if (Array.isArray(courses) && courses.length > 0) {
+        const currentJson = JSON.stringify(state.courses);
+        const newJson = JSON.stringify(courses);
+        if (currentJson !== newJson) {
+          state.courses = courses;
+          localStorage.setItem(STORAGE_KEYS.COURSES, newJson);
+          if (document.getElementById("adminSidebarNav")) {
+            if (state.activeCmsTab === "elearning") renderAdminElearningTab(document.getElementById("adminStudioBody"));
+          } else {
+            renderElearningSection(window.THUYSTALK_I18N[state.lang]);
+          }
+          console.log("[REALTIME SYNC] Courses updated across browsers via Firestore onSnapshot");
+        }
+      }
+    });
+
+    // 4. Media Profile Settings Real-time Sync
+    window.ThuysTalkFirebase.listenSiteSettings("media_profile", (mediaRes) => {
+      if (mediaRes && typeof mediaRes === "object") {
+        const currentJson = JSON.stringify(state.media);
+        const newJson = JSON.stringify({ ...state.media, ...mediaRes });
+        if (currentJson !== newJson) {
+          state.media = { ...state.media, ...mediaRes };
+          localStorage.setItem(STORAGE_KEYS.MEDIA, JSON.stringify(state.media));
+          if (document.getElementById("adminSidebarNav")) {
+            if (state.activeCmsTab === "photos") renderAdminPhotosTab(document.getElementById("adminStudioBody"));
+          } else {
+            renderAll();
+          }
+          console.log("[REALTIME SYNC] Media profile updated across browsers via Firestore onSnapshot");
+        }
+      }
+    });
+
+    // 5. Learners & Leads Real-time Sync (Admin Tab 06)
+    window.ThuysTalkFirebase.listenCollection("learners", () => {
+      if (document.getElementById("adminSidebarNav") && state.activeCmsTab === "leads") {
+        const reloadBtn = document.getElementById("reloadFirestoreLeadsBtn");
+        if (reloadBtn) reloadBtn.click();
+      }
+    });
+    window.ThuysTalkFirebase.listenCollection("leads", () => {
+      if (document.getElementById("adminSidebarNav") && state.activeCmsTab === "leads") {
+        const reloadBtn = document.getElementById("reloadFirestoreLeadsBtn");
+        if (reloadBtn) reloadBtn.click();
+      }
+    });
+
+    // 6. Cross-tab synchronization via local StorageEvent fallback
+    window.addEventListener("storage", (e) => {
+      if ([STORAGE_KEYS.ARTICLES, STORAGE_KEYS.VIDEOS, STORAGE_KEYS.COURSES, STORAGE_KEYS.MEDIA].includes(e.key)) {
+        console.log("[STORAGE EVENT] Cross-tab update detected:", e.key);
+        state.articles = loadArticlesState();
+        state.videos = loadVideosState();
+        state.courses = loadCoursesState();
+        state.media = loadMediaState();
+        if (document.getElementById("adminSidebarNav")) {
+          renderAdminStudioModal();
+        } else {
+          renderAll();
+        }
+      }
+    });
   }
 
   function escapeHtml(str) {
@@ -722,7 +840,7 @@
             }
           </button>
           <button type="button" class="btn btn-primary btn-sm" id="modalSendKitBtn">
-            ${state.lang === "vi" ? "Gửi bộ tài liệu về Email & Tải ngay" : "Email & Download Resource Kit"}
+            ${state.lang === "vi" ? "Tải bộ tài liệu & Checklist" : "Download Kit & Checklist"}
           </button>
         </div>
       </div>`;
@@ -786,38 +904,25 @@
     const course = state.courses.find((c) => c.id === courseId) || state.courses[0];
     if (!course) return;
 
-    let email = state.learnerEmail;
-    if (!email) {
-      const promptMsg =
-        state.lang === "vi"
-          ? "Nhập địa chỉ Email của bạn để hệ thống lưu tiến độ học và gửi bộ tài liệu khóa học:"
-          : "Enter your Email address to save your progress and receive the course resource kit:";
-      const entered = window.prompt(promptMsg, "");
-      if (!entered || !entered.includes("@")) {
-        showToast(state.lang === "vi" ? "Vui lòng nhập địa chỉ Email hợp lệ." : "Please enter a valid email address.");
-        return;
-      }
-      email = entered.trim();
-      state.learnerEmail = email;
-      localStorage.setItem(STORAGE_KEYS.LEARNER_EMAIL, email);
-      renderElearningSection(window.THUYSTALK_I18N[state.lang]);
-    }
-
-    const cTitleVi = typeof course.title === "object" ? course.title.vi : course.title;
-    recordLeadOrMaterial({
-      type: "Course Material Kit",
-      name: email.split("@")[0],
-      email: email,
-      phone: "-",
-      topic: cTitleVi
-    });
-
+    // Tải trực tiếp tài liệu & Checklist về máy người dùng không cần bắt buộc điền form
     triggerChecklistDownload(course);
     showToast(
       state.lang === "vi"
-        ? `Đã ghi nhận gửi bộ tài liệu tới ${email} và tải bản Checklist về máy`
-        : `Resource kit logged for ${email} and checklist downloaded`
+        ? "Đang tải bộ tài liệu & Checklist khóa học về máy..."
+        : "Downloading course resource kit & checklist..."
     );
+
+    // Nếu học viên đã đăng nhập email, ghi nhận tiến độ học tập vào hệ thống
+    if (state.learnerEmail) {
+      const cTitleVi = typeof course.title === "object" ? course.title.vi : course.title;
+      recordLeadOrMaterial({
+        type: "Course Material Kit",
+        name: state.learnerEmail.split("@")[0],
+        email: state.learnerEmail,
+        phone: "-",
+        topic: cTitleVi
+      });
+    }
   }
 
   function triggerChecklistDownload(course) {
@@ -1015,22 +1120,90 @@
       </div>
       <div class="material-lead-box" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
         <div>
-          <strong>${state.lang === "vi" ? "Bạn muốn nhận bộ Checklist của chủ đề video này qua Email?" : "Want the actionable checklist from this video emailed to you?"}</strong>
+          <strong>${state.lang === "vi" ? "Bạn muốn tải bộ Checklist hành động từ video này về máy?" : "Want the actionable checklist from this video downloaded to your device?"}</strong>
         </div>
         <button type="button" class="btn btn-primary btn-sm" id="videoRequestChecklistBtn">
-          ${state.lang === "vi" ? "Nhận Checklist qua Email" : "Email Me the Checklist"}
+          ${state.lang === "vi" ? "Tải Checklist video (.txt)" : "Download Video Checklist (.txt)"}
         </button>
       </div>`;
 
     document.getElementById("videoRequestChecklistBtn").addEventListener("click", () => {
-      openEmailMaterialModal({
-        docTitle: "Checklist hành động từ video: " + vTitle,
-        docType: "Video Checklist",
-        courseOrItem: state.courses[0]
-      });
+      downloadVideoChecklist(video);
     });
 
     document.getElementById("articleModal").classList.add("open");
+  }
+
+  function downloadVideoChecklist(video) {
+    const vTitle = typeof video.title === "object" ? video.title[state.lang] || video.title.vi : video.title;
+    const vCmLabel = typeof video.cmLabel === "object" ? video.cmLabel[state.lang] || video.cmLabel.vi : video.cm;
+    const vScript = typeof video.script === "object" ? video.script[state.lang] || video.script.vi : video.script;
+
+    const content = [
+      "====================================================================",
+      "THUYSTALK - CHECKLIST HÀNH ĐỘNG TỪ VIDEO",
+      "Chuyên mục: " + vCmLabel,
+      "Tiêu đề: " + vTitle,
+      "Thời lượng: " + (video.duration || "08:00") + " | Ngày đăng: " + (video.date || "11/2026"),
+      "Chia sẻ bởi: Nguyễn Thị Ngọc Thúy · Sáng lập ThuysTalk & Giám đốc Eureka Logistics",
+      "====================================================================",
+      "",
+      "NỘI DUNG KỊCH BẢN & CHECKLIST CHI TIẾT:",
+      String(vScript || "").replace(/<[^>]*>/g, "\n").replace(/\n{3,}/g, "\n\n").trim(),
+      "",
+      "--------------------------------------------------------------------",
+      "Hotline tư vấn chuyên sâu / Zalo: 0767.648.862 | Website: ThuysTalk",
+      "Email: tthuyn@erktransport.com | Zalo: 0767.648.862"
+    ].join("\r\n");
+
+    const blob = new Blob(["\uFEFF" + content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ThuysTalk_Checklist_${video.id || "video"}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("Đang tải Checklist video về máy...");
+  }
+
+  function downloadArticleTemplate(art) {
+    const aTitle = typeof art.title === "object" ? art.title[state.lang] || art.title.vi : art.title;
+    const aPillar = typeof art.pillarLabel === "object" ? art.pillarLabel[state.lang] || art.pillarLabel.vi : art.pillar;
+    const aBody = typeof art.body === "object" ? art.body[state.lang] || art.body.vi : art.body;
+    const aExcerpt = typeof art.excerpt === "object" ? art.excerpt[state.lang] || art.excerpt.vi : art.excerpt;
+
+    const content = [
+      "====================================================================",
+      "THUYSTALK - BIỂU MẪU & CÔNG VĂN TRÍCH DẪN BÀI VIẾT",
+      "Chuyên mục: " + aPillar,
+      "Tiêu đề: " + aTitle,
+      "Tác giả: Nguyễn Thị Ngọc Thúy · Sáng lập ThuysTalk & Giám đốc Eureka Logistics",
+      "Ngày đăng: " + (art.date || "11/2026"),
+      "====================================================================",
+      "",
+      "TÓM TẮT NỘI DUNG:",
+      String(aExcerpt || "").trim(),
+      "",
+      "TOÀN VĂN NỘI DUNG BÀI VIẾT & HƯỚNG DẪN ÁP DỤNG:",
+      String(aBody || "").replace(/<[^>]*>/g, "\n").replace(/\n{3,}/g, "\n\n").trim(),
+      "",
+      "--------------------------------------------------------------------",
+      "Hotline tư vấn chuyên sâu / Zalo: 0767.648.862 | Website: ThuysTalk",
+      "Email: tthuyn@erktransport.com | Zalo: 0767.648.862"
+    ].join("\r\n");
+
+    const blob = new Blob(["\uFEFF" + content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ThuysTalk_Tai_Lieu_${art.id || "article"}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("Đang tải biểu mẫu & công văn về máy...");
   }
 
   // ==========================================================================
@@ -1136,7 +1309,7 @@
       <div class="material-lead-box" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;">
         <div>
           <strong style="color:var(--jade-900); display:block;">
-            ${state.lang === "vi" ? "Nhận biểu mẫu & công văn trích dẫn trong bài viết qua Email" : "Get the official templates & regulatory files cited in this article"}
+            ${state.lang === "vi" ? "Tải biểu mẫu & công văn trích dẫn trong bài viết về máy" : "Download official templates & regulatory files cited in this article"}
           </strong>
           <span style="font-size:0.82rem; color:var(--ink-600);">
             ${state.lang === "vi" ? "Hoặc đặt câu hỏi tư vấn trực tiếp cho tình huống của doanh nghiệp bạn." : "Or book a 1-on-1 consultation for your company's specific case."}
@@ -1144,7 +1317,7 @@
         </div>
         <div style="display:flex; gap:10px;">
           <button type="button" class="btn btn-primary btn-sm" id="artSendTemplateBtn">
-            ${state.lang === "vi" ? "Nhận biểu mẫu qua Email" : "Email Me the Template"}
+            ${state.lang === "vi" ? "Tải Biểu mẫu & Công văn (.txt)" : "Download Template (.txt)"}
           </button>
           <a href="#tu-van" class="btn btn-outline btn-sm" id="artGoConsultBtn">
             ${state.lang === "vi" ? "Đăng ký tư vấn" : "Book Advisory"}
@@ -1153,11 +1326,7 @@
       </div>`;
 
     document.getElementById("artSendTemplateBtn").addEventListener("click", () => {
-      openEmailMaterialModal({
-        docTitle: "Biểu mẫu & Công văn trích dẫn bài viết: " + aTitle,
-        docType: "Article Template",
-        courseOrItem: state.courses[0]
-      });
+      downloadArticleTemplate(art);
     });
     document.getElementById("artGoConsultBtn").addEventListener("click", () => {
       document.getElementById("articleModal").classList.remove("open");
@@ -3087,6 +3256,7 @@
           <td>${escapeHtml(a.date)}</td>
           <td style="white-space:nowrap;">
             <button type="button" class="btn btn-outline btn-xs" data-edit-art="${a.id}" style="margin-right:6px; padding:4px 8px; font-size:0.75rem;">Sửa</button>
+            <button type="button" class="btn btn-jade btn-xs" data-bulk-email-art="${a.id}" style="margin-right:6px; padding:4px 8px; font-size:0.75rem; background:#047857; color:#fff;" title="Gửi tài liệu bài viết này qua email tới tất cả học viên & khách hàng đã đăng ký">Gửi email hàng loạt</button>
             <button type="button" class="btn btn-danger btn-xs" data-del-art="${a.id}" style="padding:4px 8px; font-size:0.75rem;">Xóa</button>
           </td>
         </tr>`;
@@ -3141,9 +3311,12 @@
             <label>Nội dung toàn văn bài viết (Gõ trực tiếp kiểu Word, căn lề, chèn bảng, chèn ảnh/video .jpg, .png, .webp, .webm, .mp4) *</label>
             ${renderWordEditorMarkup("cmsArtEditor", "Nhập nội dung bài viết trực tiếp tại đây như trong Word, căn lề, bôi màu và chèn ảnh dễ dàng...")}
           </div>
-          <div style="display:flex; gap:10px; align-items:center;">
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <button type="submit" class="btn btn-primary btn-sm" id="cmsArtSubmitBtn">
               Xuất bản bài viết ngay lên Web
+            </button>
+            <button type="button" class="btn btn-jade btn-sm" id="cmsArtBulkEmailFormBtn" style="display:none; background:#047857; color:#fff;">
+              Gửi email bài viết này cho tất cả học viên
             </button>
             <button type="button" class="btn btn-outline btn-sm" id="cmsArtCancelBtn" style="display:none;">
               Hủy Bỏ Sửa
@@ -3191,9 +3364,25 @@
         const submitBtn = document.getElementById("cmsArtSubmitBtn");
         submitBtn.textContent = "Lưu Thay Đổi Bài Viết";
         submitBtn.className = "btn btn-jade btn-sm";
+        document.getElementById("cmsArtBulkEmailFormBtn").style.display = "inline-flex";
         document.getElementById("cmsArtCancelBtn").style.display = "inline-flex";
 
         document.getElementById("cmsArticleFormCard").scrollIntoView({ behavior: "smooth" });
+      });
+    });
+
+    // Bind Bulk Email Button in Form
+    document.getElementById("cmsArtBulkEmailFormBtn").addEventListener("click", () => {
+      if (editingArtId) {
+        handleBulkEmailForArticle(editingArtId);
+      }
+    });
+
+    // Bind Bulk Email Button in Table Rows
+    body.querySelectorAll("[data-bulk-email-art]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.bulkEmailArt;
+        handleBulkEmailForArticle(id);
       });
     });
 
@@ -3207,6 +3396,7 @@
       const submitBtn = document.getElementById("cmsArtSubmitBtn");
       submitBtn.textContent = "Xuất bản bài viết ngay lên Web";
       submitBtn.className = "btn btn-primary btn-sm";
+      document.getElementById("cmsArtBulkEmailFormBtn").style.display = "none";
       document.getElementById("cmsArtCancelBtn").style.display = "none";
     });
 
@@ -3265,7 +3455,6 @@
         saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
         if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
           window.ThuysTalkFirebase.syncCollection("articles", state.articles);
-          window.ThuysTalkFirebase.deleteDoc("articles", id);
         }
         renderAll();
         renderAdminStudioModal();
@@ -3287,6 +3476,78 @@
         showToast("Đã xóa bài viết.");
       });
     });
+  }
+
+  async function handleBulkEmailForArticle(artId) {
+    const art = state.articles.find((a) => a.id === artId);
+    if (!art) return;
+    const artTitle = typeof art.title === "object" ? art.title.vi : art.title;
+    const artBody = typeof art.body === "object" ? (art.body.vi || art.body) : art.body;
+
+    showToast("Đang đồng bộ danh sách người nhận từ Cloud Firestore...");
+    let learners = [];
+    let leads = [];
+    try {
+      if (window.ThuysTalkFirebase) {
+        [learners, leads] = await Promise.all([
+          window.ThuysTalkFirebase.fetchLearners(),
+          window.ThuysTalkFirebase.fetchLeads()
+        ]);
+      }
+    } catch (e) {
+      console.warn("fetch error:", e);
+    }
+
+    const localLeads = JSON.parse(localStorage.getItem(STORAGE_KEYS.LEADS) || "[]");
+    const all = [...learners, ...leads, ...localLeads];
+
+    const emailMap = new Map();
+    all.forEach((item) => {
+      const em = (item.email || "").trim().toLowerCase();
+      if (em && em.includes("@") && !emailMap.has(em)) {
+        emailMap.set(em, {
+          email: em,
+          name: item.name || item.displayName || item.fullName || em.split("@")[0]
+        });
+      }
+    });
+
+    const recipients = Array.from(emailMap.values());
+    if (!recipients.length) {
+      alert("Hệ thống chưa tìm thấy tài khoản học viên hoặc khách hàng nào đã đăng ký trong hệ thống!");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Hệ thống tìm thấy ${recipients.length} tài khoản đã đăng ký (Học viên & Khách hàng).\n\n` +
+      `Bạn có chắc chắn muốn gửi email hàng loạt tài liệu bài viết:\n"${artTitle}"\n` +
+      `tới toàn bộ ${recipients.length} tài khoản này qua thuystalk.official@gmail.com không?`
+    );
+    if (!confirmed) return;
+
+    showToast(`Đang gửi email hàng loạt tới ${recipients.length} tài khoản...`);
+    try {
+      const cleanText = String(artBody || "").replace(/<[^>]*>/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+      const res = await fetch("http://localhost:8099/api/send-bulk-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          docTitle: artTitle,
+          docType: "Bài viết chuyên sâu / Tài liệu",
+          content: cleanText,
+          recipients: recipients
+        })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        alert(`ĐÃ GỬI EMAIL HÀNG LOẠT THÀNH CÔNG!\n\nSố lượng gửi thành công: ${data.sentCount} / ${data.total} tài khoản.\nNgười gửi: thuystalk.official@gmail.com`);
+        showToast(`Đã gửi thành công ${data.sentCount} email!`);
+      } else {
+        alert("Có lỗi khi gửi email hàng loạt: " + (data.error || "Lỗi không xác định"));
+      }
+    } catch (err) {
+      alert("Không thể kết nối tới máy chủ gửi mail: " + err.message);
+    }
   }
 
   // --- TAB 3: YOUTUBE VIDEO EMBED CMS (Supports full <iframe ...> code & URLs + Live Preview + Sửa Button) ---
@@ -3547,7 +3808,6 @@
         saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
         if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
           window.ThuysTalkFirebase.syncCollection("videos", state.videos);
-          window.ThuysTalkFirebase.deleteDoc("videos", id);
         }
         renderAll();
         renderAdminStudioModal();
@@ -4340,73 +4600,82 @@
       </table>
     `;
 
+    let currentLearners = [];
+    let currentLeads = [];
+
+    function refreshTableFromData() {
+      const tbodyEl = document.getElementById("adminLeadsTableBody");
+      const headingEl = document.getElementById("leadsTableHeading");
+      const statusEl = document.getElementById("firestoreStatusIndicator");
+
+      const firestoreItems = [];
+      currentLearners.forEach((l) => {
+        firestoreItems.push({
+          category: "learner",
+          name: l.name || l.displayName || "Học viên",
+          email: l.email || "",
+          phone: l.phone || "-",
+          role: l.role || "Tài khoản Học viên",
+          status: l.status || (l.emailVerified ? "Đã kích hoạt" : "Hoạt động"),
+          timeDisplay:
+            l.registeredAt ||
+            (l.createdAt
+              ? typeof l.createdAt.toDate === "function"
+                ? l.createdAt.toDate().toLocaleString("vi-VN")
+                : String(l.createdAt)
+              : "Mới"),
+          raw: l
+        });
+      });
+
+      currentLeads.forEach((ld) => {
+        firestoreItems.push({
+          category: "lead",
+          name: ld.name || "Khách hàng",
+          email: ld.email || "",
+          phone: ld.phone || "-",
+          topic: ld.docTitle || ld.topic || "Đăng ký nhận tài liệu",
+          status: "Đã tiếp nhận",
+          timeDisplay: ld.requestedAt || ld.timestamp || "Mới",
+          raw: ld
+        });
+      });
+
+      if (firestoreItems.length > 0) {
+        combinedItems = firestoreItems;
+      }
+      if (tbodyEl) tbodyEl.innerHTML = buildTableHtml(combinedItems);
+      if (headingEl)
+        headingEl.textContent = `Danh sách Học viên nhận tài liệu & Khách đăng ký tư vấn (${combinedItems.length})`;
+      if (statusEl)
+        statusEl.textContent = `Đã đồng bộ trực tiếp từ Cloud Firestore (${currentLearners.length} học viên, ${currentLeads.length} nhận tài liệu)`;
+    }
+
     async function loadFirestoreData() {
       const statusEl = document.getElementById("firestoreStatusIndicator");
-      const headingEl = document.getElementById("leadsTableHeading");
-      const tbodyEl = document.getElementById("adminLeadsTableBody");
-
       try {
         if (window.ThuysTalkFirebase) {
           const [learners, leads] = await Promise.all([
             window.ThuysTalkFirebase.fetchLearners(),
             window.ThuysTalkFirebase.fetchLeads()
           ]);
+          currentLearners = learners || [];
+          currentLeads = leads || [];
+          refreshTableFromData();
 
-          const firestoreItems = [];
-
-          // 1. Map official learners
-          learners.forEach((l) => {
-            firestoreItems.push({
-              category: "learner",
-              name: l.name || l.displayName || "Học viên",
-              email: l.email || "",
-              phone: l.phone || "-",
-              role: l.role || "Tài khoản Học viên",
-              status: l.status || (l.emailVerified ? "Đã kích hoạt" : "Hoạt động"),
-              timeDisplay:
-                l.registeredAt ||
-                (l.createdAt
-                  ? typeof l.createdAt.toDate === "function"
-                    ? l.createdAt.toDate().toLocaleString("vi-VN")
-                    : String(l.createdAt)
-                  : "Mới"),
-              raw: l
-            });
-          });
-
-          // 2. Map material delivery leads
-          leads.forEach((ld) => {
-            firestoreItems.push({
-              category: "lead",
-              name: ld.name || "Khách hàng",
-              email: ld.email || "",
-              phone: ld.phone || "-",
-              topic: ld.docTitle || ld.topic || "Đăng ký nhận tài liệu",
-              status: "Đã tiếp nhận",
-              timeDisplay: ld.requestedAt || ld.timestamp || "Mới",
-              raw: ld
-            });
-          });
-
-          if (firestoreItems.length > 0) {
-            combinedItems = firestoreItems;
-          }
-
-          window._cachedFirestoreCount = combinedItems.length;
-
-          // Update sidebar badge
-          const tabBadges = document.querySelectorAll('[data-cmstab="backup"] span');
-          tabBadges.forEach((el) => {
-            if (el.textContent && el.textContent.includes("lượt")) {
-              el.textContent = `${combinedItems.length} lượt`;
+          // Kích hoạt Realtime Firestore Listener cho Learners & Leads
+          window.ThuysTalkFirebase.listenCollection("learners", (list) => {
+            if (Array.isArray(list)) {
+              currentLearners = list;
+              refreshTableFromData();
             }
           });
-
-          if (tbodyEl) tbodyEl.innerHTML = buildTableHtml(combinedItems);
-          if (headingEl)
-            headingEl.textContent = `Danh sách Học viên nhận tài liệu & Khách đăng ký tư vấn (${combinedItems.length})`;
-          if (statusEl)
-            statusEl.textContent = `Đã đồng bộ trực tiếp từ Cloud Firestore (${learners.length} học viên, ${leads.length} nhận tài liệu)`;
+          window.ThuysTalkFirebase.listenCollection("leads", (list) => {
+            if (Array.isArray(list)) {
+              currentLeads = list;
+              refreshTableFromData();
+            }
+          });
         }
       } catch (err) {
         console.warn("loadFirestoreData notice:", err);
@@ -4414,8 +4683,12 @@
       }
     }
 
-    // Trigger immediate fetch from Firestore
+    // Trigger immediate fetch from Firestore (with retry if DB not ready yet)
     loadFirestoreData();
+    if (!window.ThuysTalkFirebase || !window.ThuysTalkFirebase.isReady()) {
+      setTimeout(loadFirestoreData, 600);
+      setTimeout(loadFirestoreData, 1500);
+    }
 
     // Reload button listener
     const reloadBtn = document.getElementById("reloadFirestoreLeadsBtn");

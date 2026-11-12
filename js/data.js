@@ -292,16 +292,16 @@ window.THUYSTALK_I18N = {
     },
     elearning: {
       eyebrow: "HỌC VIỆN E-LEARNING THUYTALK",
-      title: "Khóa Học Thực Hành Miễn Phí & Nhận Tài Liệu Qua Email",
-      desc: "Học từng bước ngắn gọn, làm bộ Mini Test & Bài tập tình huống để kiểm tra độ hiểu bài, tự động lưu tiến độ học tập và nhận bộ biểu mẫu thực tế gửi thẳng về Email của bạn.",
-      bannerTitleGuest: "Đăng nhập Email miễn phí để lưu tiến độ học & nhận bộ tài liệu gốc",
-      bannerDescGuest: "Nhập địa chỉ Email của bạn để hệ thống lưu lại các bài đã học và gửi biểu mẫu, checklist của từng khóa học.",
+      title: "Khóa Học Thực Hành Miễn Phí & Tải Tài Liệu Trực Tiếp",
+      desc: "Học từng bước ngắn gọn, làm bộ Mini Test & Bài tập tình huống để kiểm tra độ hiểu bài, tự động lưu tiến độ học tập và tải bộ biểu mẫu thực tế trực tiếp về máy của bạn.",
+      bannerTitleGuest: "Đăng nhập Email miễn phí để lưu tiến độ học & tải bộ tài liệu gốc",
+      bannerDescGuest: "Nhập địa chỉ Email của bạn để hệ thống lưu lại các bài đã học và tải biểu mẫu, checklist của từng khóa học.",
       bannerPlaceholder: "Nhập email của bạn (VD: lan.nguyen@company.com)...",
       bannerBtn: "Kích hoạt & Lưu tiến độ",
       bannerTitleLogged: "Học viên đang kích hoạt:",
-      bannerDescLogged: "Tiến độ học tập của bạn đang được tự động lưu. Bạn có thể bấm Nhận tài liệu về Email ở bất kỳ khóa học nào.",
+      bannerDescLogged: "Tiến độ học tập của bạn đang được tự động lưu. Bạn có thể bấm Tải tài liệu ở bất kỳ khóa học nào để tải ngay về máy.",
       btnStartCourse: "Vào học & Làm Mini Test",
-      btnSendMaterial: "Gửi tài liệu về Email"
+      btnSendMaterial: "Tải tài liệu"
     },
     video: {
       eyebrow: "KÊNH YOUTUBE @THUYSTALK",
@@ -457,9 +457,9 @@ window.THUYSTALK_I18N = {
       bannerPlaceholder: "Enter your email (e.g., alex@company.com)...",
       bannerBtn: "Activate & Save Progress",
       bannerTitleLogged: "Active Learner:",
-      bannerDescLogged: "Your learning progress is automatically saved. Click Email Me the Kit on any course to receive its templates.",
+      bannerDescLogged: "Your learning progress is automatically saved. Click Download Materials on any course to receive its templates.",
       btnStartCourse: "Open Classroom & Mini Test",
-      btnSendMaterial: "Email Me the Kit"
+      btnSendMaterial: "Download Materials"
     },
     video: {
       eyebrow: "YOUTUBE CHANNEL @THUYSTALK",
