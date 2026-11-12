@@ -281,6 +281,82 @@
       return auth ? auth.currentUser : null;
     },
 
+    // 5b. UPDATE LEARNER PROFILE
+    updateLearnerProfile: async function (profileData) {
+      initFirebase();
+      const user = auth ? auth.currentUser : null;
+      if (user && profileData.name) {
+        try {
+          await user.updateProfile({ displayName: profileData.name });
+        } catch (e) {}
+      }
+      if (db && profileData.email) {
+        try {
+          const docId = user ? user.uid : profileData.email.toLowerCase().replace(/[^a-z0-9]/g, "_");
+          await safeFirestoreWrite(
+            db.collection("learners").doc(docId).set({
+              name: profileData.name || "",
+              phone: profileData.phone || "",
+              company: profileData.company || "",
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true }),
+            2500
+          );
+          return true;
+        } catch (err) {
+          console.warn("updateLearnerProfile error:", err);
+        }
+      }
+      return false;
+    },
+
+    // 5c. CHANGE LEARNER PASSWORD
+    changeLearnerPassword: async function (newPassword) {
+      initFirebase();
+      if (!auth || !auth.currentUser) {
+        throw new Error("Vui lòng đăng nhập lại để thay đổi mật khẩu.");
+      }
+      await auth.currentUser.updatePassword(newPassword);
+      return true;
+    },
+
+    // 5d. SAVE & FETCH LEARNER PROGRESS (CLOUD SYNC)
+    saveLearnerProgress: async function (email, progressData) {
+      initFirebase();
+      if (!db || !email) return false;
+      try {
+        const user = auth ? auth.currentUser : null;
+        const docId = user ? user.uid : email.toLowerCase().replace(/[^a-z0-9]/g, "_");
+        await safeFirestoreWrite(
+          db.collection("learners").doc(docId).set({
+            progress: progressData,
+            lastStudiedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true }),
+          2000
+        );
+        return true;
+      } catch (e) {
+        console.warn("saveLearnerProgress error:", e);
+        return false;
+      }
+    },
+
+    fetchLearnerProgress: async function (email) {
+      initFirebase();
+      if (!db || !email) return null;
+      try {
+        const user = auth ? auth.currentUser : null;
+        const docId = user ? user.uid : email.toLowerCase().replace(/[^a-z0-9]/g, "_");
+        const doc = await db.collection("learners").doc(docId).get();
+        if (doc.exists && doc.data().progress) {
+          return doc.data().progress;
+        }
+      } catch (e) {
+        console.warn("fetchLearnerProgress error:", e);
+      }
+      return null;
+    },
+
     // 6. LOGOUT
     logoutLearner: async function () {
       if (auth) {

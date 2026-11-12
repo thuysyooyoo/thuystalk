@@ -467,13 +467,13 @@
           </div>
 
           <div class="consult-security-note" id="consultSecurityNote">
-            Bảo mật 3 lớp theo chuẩn /secure-hybrid-web-architect & Nghị định 13/2023/NĐ-CP
+            Bảo mật thông tin doanh nghiệp theo tiêu chuẩn Nghị định 13/2023/NĐ-CP
           </div>
         </div>
 
         <!-- Right Consultation Registration Form -->
         <div class="consult-form-card">
-          <h3 id="consultFormTitle">Đăng Ký Tư Vấn Kỹ Hơn & Nhận Tài Liệu</h3>
+          <h3 id="consultFormTitle">Đăng Ký Tư Vấn Kỹ Hơn &amp; Nhận Tài Liệu</h3>
           <p class="form-sub" id="consultFormSub">
             Thông tin của bạn được mã hóa bảo mật và phản hồi qua Email / Zalo trong 24h.
           </p>
@@ -484,42 +484,63 @@
               <label>Website <input type="text" id="hpWebsiteInput" tabindex="-1" autocomplete="off" /></label>
             </div>
 
-            <div class="form-row-2">
-              <div class="form-group">
-                <label for="consultNameInput" id="lblConsultName">Họ và tên của bạn *</label>
-                <input type="text" id="consultNameInput" class="form-control" required maxlength="100" placeholder="Nguyễn Văn A" />
-              </div>
-              <div class="form-group">
-                <label for="consultPhoneInput" id="lblConsultPhone">Số điện thoại / Zalo *</label>
-                <input type="tel" id="consultPhoneInput" class="form-control" required maxlength="30" placeholder="09xx.xxx.xxx" />
+            <!-- Logged-in learner badge (Hidden when guest) -->
+            <div id="consultLoggedInBadge" style="display:none; background:#F0FDF4; border:1.5px solid var(--jade-400); border-radius:10px; padding:12px 16px; margin-bottom:14px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <div>
+                  <span style="font-size:0.75rem; font-weight:800; color:var(--jade-800); text-transform:uppercase; letter-spacing:0.5px;">Tài khoản học viên đang gửi câu hỏi:</span>
+                  <div style="font-weight:800; color:var(--jade-950); font-size:0.95rem; margin-top:2px;">
+                    <span id="consultLoggedNameDisplay">Nguyễn Thị Ngọc Thúy</span>
+                    <span style="font-size:0.82rem; font-weight:500; color:var(--jade-700); margin-left:6px;" id="consultLoggedEmailDisplay">(thuystalk.official@gmail.com)</span>
+                  </div>
+                  <div style="font-size:0.78rem; color:var(--ink-600); margin-top:2px;">
+                    SĐT / Zalo: <strong id="consultLoggedPhoneDisplay">0767.648.862</strong>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-outline btn-xs" id="consultOpenProfileBtn" style="padding:4px 8px; font-size:0.75rem;">
+                  Đổi thông tin
+                </button>
               </div>
             </div>
 
-            <div class="form-row-2">
+            <!-- Guest personal info fields (Hidden when logged in) -->
+            <div id="consultGuestFieldsGroup">
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label for="consultNameInput" id="lblConsultName">Họ và tên của bạn *</label>
+                  <input type="text" id="consultNameInput" class="form-control" maxlength="100" placeholder="Nguyễn Văn A" />
+                </div>
+                <div class="form-group">
+                  <label for="consultPhoneInput" id="lblConsultPhone">Số điện thoại / Zalo *</label>
+                  <input type="tel" id="consultPhoneInput" class="form-control" maxlength="30" placeholder="09xx.xxx.xxx" />
+                </div>
+              </div>
+
               <div class="form-group">
                 <label for="consultEmailInput" id="lblConsultEmail">Địa chỉ Email nhận tài liệu *</label>
-                <input type="email" id="consultEmailInput" class="form-control" required maxlength="120" placeholder="email@company.com" />
-              </div>
-              <div class="form-group">
-                <label for="consultTopicSelect" id="lblConsultTopic">Chủ đề bạn cần tư vấn chuyên sâu *</label>
-                <select id="consultTopicSelect" class="form-control"></select>
+                <input type="email" id="consultEmailInput" class="form-control" maxlength="120" placeholder="email@company.com" />
               </div>
             </div>
 
             <div class="form-group">
-              <label for="consultMsgInput" id="lblConsultMsg">Mô tả ngắn tình huống hoặc câu hỏi của bạn *</label>
-              <textarea id="consultMsgInput" class="form-control" rows="3" required maxlength="1200"></textarea>
+              <label for="consultTopicSelect" id="lblConsultTopic">Chủ đề bạn cần tư vấn chuyên sâu *</label>
+              <select id="consultTopicSelect" class="form-control"></select>
             </div>
 
-            <label class="consent-label">
-              <input type="checkbox" id="consultConsentCheck" required checked />
+            <div class="form-group">
+              <label for="consultMsgInput" id="lblConsultMsg">Mô tả ngắn tình huống hoặc câu hỏi của bạn *</label>
+              <textarea id="consultMsgInput" class="form-control" rows="3" required maxlength="1200" placeholder="VD: Mình đang chuẩn bị nhập khẩu lô hàng máy móc / hóa chất về cảng Hải Phòng và cần tư vấn mã HS, thủ tục giấy phép..."></textarea>
+            </div>
+
+            <label class="consent-label" id="consultConsentLabel">
+              <input type="checkbox" id="consultConsentCheck" checked />
               <span id="consultConsentText">
-                Tôi đồng ý cho phép ThuysTalk lưu trữ thông tin liên hệ để gửi tài liệu học tập và phản hồi tư vấn theo Chính sách bảo mật (Nghị định 13/2023/NĐ-CP).
+                Tôi đồng ý cho phép ThuysTalk lưu trữ thông tin liên hệ để gửi tài liệu học tập và phản hồi tư vấn theo <a href="#" id="consultOpenPrivacyLink" style="color:var(--jade-700); text-decoration:underline; font-weight:700;">Chính sách bảo mật (Nghị định 13/2023/NĐ-CP)</a>.
               </span>
             </label>
 
             <button type="submit" class="btn btn-primary" style="width:100%;" id="consultSubmitBtn">
-              Gửi đăng ký tư vấn & Nhận bộ tài liệu
+              Gửi đăng ký tư vấn &amp; Nhận bộ tài liệu
             </button>
           </form>
         </div>
@@ -562,7 +583,11 @@
 
       <div class="footer-bottom">
         <span>Bản quyền 2026 Nguyễn Thị Ngọc Thúy (ThuysTalk).</span>
-        <span>Typography Plus Jakarta Sans · Màu Phỉ Thúy &amp; Cam · Bảo mật 3 lớp chuẩn <strong>/secure-hybrid-web-architect</strong></span>
+        <div style="display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <a href="#" id="openPrivacyPolicyLink" style="color:var(--jade-700); font-weight:700; text-decoration:underline;">Chính Sách Bảo Mật &amp; Quyền Riêng Tư</a>
+          <span style="color:var(--ink-400);">·</span>
+          <span>Bảo vệ dữ liệu cá nhân theo Nghị định 13/2023/NĐ-CP</span>
+        </div>
       </div>
     </div>
   </footer>

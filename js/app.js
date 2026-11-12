@@ -113,6 +113,8 @@
     notebookBridgeUrl:
       localStorage.getItem(STORAGE_KEYS.BRIDGE_URL) || "http://localhost:8099/api/notebook-query",
     learnerEmail: localStorage.getItem(STORAGE_KEYS.LEARNER_EMAIL) || "",
+    learnerName: localStorage.getItem(STORAGE_KEYS.LEARNER_NAME) || "",
+    learnerPhone: localStorage.getItem(STORAGE_KEYS.LEARNER_PHONE) || "",
     completedLessons: JSON.parse(localStorage.getItem(STORAGE_KEYS.PROGRESS) || "{}"),
     activeVideoCat: "all",
     activeVideoId: null,
@@ -584,25 +586,39 @@
     const banner = document.getElementById("learnerStatusBanner");
     if (banner) {
       if (state.learnerEmail) {
+        const displayName = state.learnerName || localStorage.getItem(STORAGE_KEYS.LEARNER_NAME) || state.learnerEmail.split("@")[0];
         banner.innerHTML = `
           <div class="learner-info">
             <div class="learner-badge-code">EDU</div>
             <div>
-              <h4>${t.elearning.bannerTitleLogged} <span class="text-orange">${escapeHtml(state.learnerEmail)}</span></h4>
-              <p>${t.elearning.bannerDescLogged}</p>
+              <h4>Xin chào, <span class="text-orange">${escapeHtml(displayName)}</span>!</h4>
+              <p style="font-size:0.83rem; margin:0; line-height:1.45;">Tài khoản: <strong>${escapeHtml(state.learnerEmail)}</strong> · Tiến trình học tập &amp; tài liệu mở khóa tự động.</p>
             </div>
           </div>
-          <div class="learner-email-form">
-            <button type="button" class="btn btn-outline btn-sm" id="changeLearnerEmailBtn">
-              ${state.lang === "vi" ? "Đổi Email học viên" : "Switch Learner Email"}
+          <div class="learner-email-form" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <button type="button" class="btn btn-jade btn-sm" id="bannerProfileBtn">
+              Hồ Sơ &amp; Tiến Trình
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="bannerLogoutBtn">
+              Đăng Xuất
             </button>
           </div>`;
-        const changeBtn = document.getElementById("changeLearnerEmailBtn");
-        if (changeBtn) {
-          changeBtn.addEventListener("click", () => {
+        const profileBtn = document.getElementById("bannerProfileBtn");
+        if (profileBtn) {
+          profileBtn.addEventListener("click", () => openUserProfileModal("info"));
+        }
+        const logoutBtn = document.getElementById("bannerLogoutBtn");
+        if (logoutBtn) {
+          logoutBtn.addEventListener("click", async () => {
+            if (window.ThuysTalkFirebase) {
+              await window.ThuysTalkFirebase.logoutLearner();
+            }
             state.learnerEmail = "";
             localStorage.removeItem(STORAGE_KEYS.LEARNER_EMAIL);
+            updateHeaderLearnerStatus();
+            updateConsultFormStatus();
             renderElearningSection(window.THUYSTALK_I18N[state.lang]);
+            showToast("Đã đăng xuất tài khoản học viên.");
           });
         }
       } else {
@@ -610,36 +626,25 @@
           <div class="learner-info">
             <div class="learner-badge-code">EDU</div>
             <div>
-              <h4>${t.elearning.bannerTitleGuest}</h4>
-              <p>${t.elearning.bannerDescGuest}</p>
+              <h4>Đăng ký hoặc Đăng nhập để lưu tiến độ học &amp; tải bộ tài liệu gốc</h4>
+              <p style="font-size:0.83rem; margin:0; line-height:1.45;">Tài khoản học viên hoàn toàn miễn phí. Đăng nhập để lưu bài đã học, làm mini test và tải biểu mẫu, checklist chuyên ngành.</p>
             </div>
           </div>
-          <form class="learner-email-form" id="learnerQuickLoginForm">
-            <input type="email" required class="learner-email-input" id="learnerQuickEmailInput" placeholder="${t.elearning.bannerPlaceholder}" />
-            <button type="submit" class="btn btn-jade btn-sm">${t.elearning.bannerBtn}</button>
-          </form>`;
-        const form = document.getElementById("learnerQuickLoginForm");
-        if (form) {
-          form.addEventListener("submit", (e) => {
-            e.preventDefault();
-            const val = document.getElementById("learnerQuickEmailInput").value.trim();
-            if (!val || !val.includes("@")) return;
-            state.learnerEmail = val;
-            localStorage.setItem(STORAGE_KEYS.LEARNER_EMAIL, val);
-            recordLeadOrMaterial({
-              type: "E-Learning Activation",
-              name: val.split("@")[0],
-              email: val,
-              phone: "-",
-              topic: "Kích hoạt lưu tiến độ E-Learning"
-            });
-            showToast(
-              state.lang === "vi"
-                ? `Đã kích hoạt lưu tiến độ học tập cho ${val}`
-                : `Progress tracking activated for ${val}`
-            );
-            renderElearningSection(window.THUYSTALK_I18N[state.lang]);
-          });
+          <div class="learner-email-form" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <button type="button" class="btn btn-jade btn-sm" id="bannerLoginBtn">
+              Đăng Nhập Tài Khoản
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="bannerRegisterBtn">
+              Đăng Ký Tài Khoản Mới
+            </button>
+          </div>`;
+        const loginBtn = document.getElementById("bannerLoginBtn");
+        if (loginBtn) {
+          loginBtn.addEventListener("click", () => openLearnerAuthModal("login"));
+        }
+        const regBtn = document.getElementById("bannerRegisterBtn");
+        if (regBtn) {
+          regBtn.addEventListener("click", () => openLearnerAuthModal("register"));
         }
       }
     }
@@ -1927,9 +1932,63 @@
     }
   }
 
+  function updateConsultFormStatus() {
+    const loggedBadge = document.getElementById("consultLoggedInBadge");
+    const guestGroup = document.getElementById("consultGuestFieldsGroup");
+    const submitBtn = document.getElementById("consultSubmitBtn");
+    const nameInp = document.getElementById("consultNameInput");
+    const phoneInp = document.getElementById("consultPhoneInput");
+    const emailInp = document.getElementById("consultEmailInput");
+    const nameDisp = document.getElementById("consultLoggedNameDisplay");
+    const emailDisp = document.getElementById("consultLoggedEmailDisplay");
+    const phoneDisp = document.getElementById("consultLoggedPhoneDisplay");
+
+    if (!loggedBadge || !guestGroup) return;
+
+    if (state.learnerEmail) {
+      loggedBadge.style.display = "block";
+      guestGroup.style.display = "none";
+      if (nameInp) nameInp.removeAttribute("required");
+      if (phoneInp) phoneInp.removeAttribute("required");
+      if (emailInp) emailInp.removeAttribute("required");
+
+      const displayName = state.learnerName || localStorage.getItem(STORAGE_KEYS.LEARNER_NAME) || state.learnerEmail.split("@")[0];
+      const displayPhone = state.learnerPhone || localStorage.getItem(STORAGE_KEYS.LEARNER_PHONE) || "Chưa cập nhật";
+
+      if (nameDisp) nameDisp.textContent = displayName;
+      if (emailDisp) emailDisp.textContent = `(${state.learnerEmail})`;
+      if (phoneDisp) phoneDisp.textContent = displayPhone;
+
+      if (submitBtn) submitBtn.textContent = "Gửi câu hỏi tư vấn ngay";
+    } else {
+      loggedBadge.style.display = "none";
+      guestGroup.style.display = "block";
+      if (nameInp) nameInp.setAttribute("required", "required");
+      if (phoneInp) phoneInp.setAttribute("required", "required");
+      if (emailInp) emailInp.setAttribute("required", "required");
+
+      if (submitBtn) submitBtn.textContent = "Gửi đăng ký tư vấn & Nhận bộ tài liệu";
+    }
+  }
+
   function initConsultForm() {
     const form = document.getElementById("consultLeadForm");
     if (!form) return;
+
+    updateConsultFormStatus();
+
+    const openProfileBtn = document.getElementById("consultOpenProfileBtn");
+    if (openProfileBtn) {
+      openProfileBtn.addEventListener("click", () => openUserProfileModal("info"));
+    }
+
+    const openPrivLink = document.getElementById("consultOpenPrivacyLink");
+    if (openPrivLink) {
+      openPrivLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        openPrivacyPolicyModal();
+      });
+    }
 
     form.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -1945,19 +2004,32 @@
         return;
       }
 
-      const name = document.getElementById("consultNameInput").value.trim();
-      const phone = document.getElementById("consultPhoneInput").value.trim();
-      const email = document.getElementById("consultEmailInput").value.trim();
+      let name, phone, email;
+      if (state.learnerEmail) {
+        email = state.learnerEmail;
+        name = state.learnerName || localStorage.getItem(STORAGE_KEYS.LEARNER_NAME) || email.split("@")[0];
+        phone = state.learnerPhone || localStorage.getItem(STORAGE_KEYS.LEARNER_PHONE) || "-";
+      } else {
+        name = document.getElementById("consultNameInput").value.trim();
+        phone = document.getElementById("consultPhoneInput").value.trim();
+        email = document.getElementById("consultEmailInput").value.trim();
+      }
+
       const topic = document.getElementById("consultTopicSelect").value;
       const message = document.getElementById("consultMsgInput").value.trim();
       const consent = document.getElementById("consultConsentCheck").checked;
 
-      if (!name || !phone || !email || !consent) {
+      if (!name || !email || !consent) {
         showToast(
           state.lang === "vi"
             ? "Vui lòng điền đầy đủ thông tin và tích đồng ý Chính sách bảo mật."
             : "Please complete all required fields and accept the privacy policy."
         );
+        return;
+      }
+
+      if (!topic || !message) {
+        showToast("Vui lòng chọn chủ đề và mô tả câu hỏi cần tư vấn.");
         return;
       }
 
@@ -1970,15 +2042,23 @@
         message
       });
 
-      state.learnerEmail = email;
-      localStorage.setItem(STORAGE_KEYS.LEARNER_EMAIL, email);
-      renderElearningSection(window.THUYSTALK_I18N[state.lang]);
+      if (!state.learnerEmail) {
+        state.learnerEmail = email;
+        state.learnerName = name;
+        state.learnerPhone = phone;
+        localStorage.setItem(STORAGE_KEYS.LEARNER_EMAIL, email);
+        localStorage.setItem(STORAGE_KEYS.LEARNER_NAME, name);
+        if (phone && phone !== "-") localStorage.setItem(STORAGE_KEYS.LEARNER_PHONE, phone);
+        updateConsultFormStatus();
+        updateHeaderLearnerStatus();
+        renderElearningSection(window.THUYSTALK_I18N[state.lang]);
+      }
 
-      form.reset();
+      document.getElementById("consultMsgInput").value = "";
       showToast(
         state.lang === "vi"
-          ? `Cảm ơn ${name}! Yêu cầu tư vấn & nhận tài liệu đã được bảo mật ghi nhận.`
-          : `Thank you ${name}! Your advisory request has been securely recorded.`
+          ? `Cảm ơn ${name}! Câu hỏi tư vấn đã được gửi thành công. Chị Thúy sẽ phản hồi trong 24h.`
+          : `Thank you ${name}! Your consultation inquiry has been submitted.`
       );
     });
   }
@@ -3102,13 +3182,29 @@
           state.learnerEmail = email;
           localStorage.setItem(STORAGE_KEYS.LEARNER_EMAIL, email);
           if (userRes && userRes.name) {
+            state.learnerName = userRes.name;
             localStorage.setItem(STORAGE_KEYS.LEARNER_NAME, userRes.name);
+          }
+          if (userRes && userRes.phone) {
+            state.learnerPhone = userRes.phone;
+            localStorage.setItem(STORAGE_KEYS.LEARNER_PHONE, userRes.phone);
+          }
+
+          if (window.ThuysTalkFirebase) {
+            window.ThuysTalkFirebase.fetchLearnerProgress(email).then((cloudProg) => {
+              if (cloudProg && typeof cloudProg === "object") {
+                state.completedLessons = Object.assign({}, state.completedLessons, cloudProg);
+                localStorage.setItem(STORAGE_KEYS.PROGRESS, JSON.stringify(state.completedLessons));
+                renderElearningSection(window.THUYSTALK_I18N[state.lang]);
+              }
+            }).catch(() => {});
           }
 
           authDiv.classList.remove("open");
           showToast(`Chào mừng bạn trở lại! Đăng nhập thành công.`);
           renderElearningSection(window.THUYSTALK_I18N[state.lang]);
           updateHeaderLearnerStatus();
+          updateConsultFormStatus();
 
           // Clear any active chat gate
           const gate = document.querySelector(".chat-login-gate-card");
@@ -3152,6 +3248,378 @@
         }
       });
     }
+
+    // 3. User Profile & Cloud Progress Modal
+    if (!document.getElementById("userProfileModal")) {
+      const profDiv = document.createElement("div");
+      profDiv.className = "modal-backdrop";
+      profDiv.id = "userProfileModal";
+      profDiv.setAttribute("role", "dialog");
+      profDiv.setAttribute("aria-modal", "true");
+      profDiv.innerHTML = `
+        <div class="modal-card" style="max-width:560px;">
+          <div class="modal-head">
+            <h3 style="color:var(--jade-900);">Hồ Sơ &amp; Tiến Trình Học Tập Cá Nhân</h3>
+            <button class="modal-close" data-close-modal="userProfileModal" aria-label="Đóng">&times;</button>
+          </div>
+          <div class="modal-body" style="padding:20px 24px;">
+            <div class="auth-tabs-nav" style="display:flex; gap:8px; border-bottom:1px solid var(--jade-200); margin-bottom:18px;">
+              <button type="button" class="auth-tab-btn active" id="profileTabInfoBtn">Thông Tin Cá Nhân</button>
+              <button type="button" class="auth-tab-btn" id="profileTabPassBtn">Đổi Mật Khẩu</button>
+              <button type="button" class="auth-tab-btn" id="profileTabProgressBtn">Tiến Trình Học Tập</button>
+            </div>
+
+            <!-- Pane 1: Thông tin cá nhân -->
+            <div id="profilePaneInfo">
+              <form id="profileInfoForm">
+                <div class="form-group" style="margin-bottom:12px;">
+                  <label style="font-size:0.82rem; font-weight:700; color:var(--ink-700);">Email tài khoản (Google Firebase ID)</label>
+                  <input type="email" id="profileEmailInp" class="form-control" readonly style="background:#F1F5F9; color:var(--ink-700); cursor:not-allowed;" />
+                </div>
+                <div class="form-row-2">
+                  <div class="form-group">
+                    <label style="font-size:0.82rem; font-weight:700; color:var(--ink-700);">Họ và tên của bạn *</label>
+                    <input type="text" id="profileNameInp" class="form-control" required placeholder="VD: Nguyễn Thị Lan" />
+                  </div>
+                  <div class="form-group">
+                    <label style="font-size:0.82rem; font-weight:700; color:var(--ink-700);">Số điện thoại / Zalo *</label>
+                    <input type="tel" id="profilePhoneInp" class="form-control" required placeholder="VD: 0912 345 678" />
+                  </div>
+                </div>
+                <div class="form-group" style="margin-bottom:14px;">
+                  <label style="font-size:0.82rem; font-weight:700; color:var(--ink-700);">Đơn vị công tác / Doanh nghiệp</label>
+                  <input type="text" id="profileCompanyInp" class="form-control" placeholder="VD: Công ty TNHH Logistics ABC" />
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px;">
+                  <span id="profileUpdateStatus" style="font-size:0.8rem; color:var(--jade-700); font-weight:700;"></span>
+                  <div style="display:flex; gap:10px;">
+                    <button type="button" class="btn btn-outline btn-sm" data-close-modal="userProfileModal">Đóng</button>
+                    <button type="submit" class="btn btn-primary btn-sm" id="profileSaveInfoBtn">Cập Nhật Thông Tin</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <!-- Pane 2: Đổi mật khẩu -->
+            <div id="profilePanePass" style="display:none;">
+              <div class="auth-notice-box" style="margin-bottom:14px;">
+                Mật khẩu mới cần tối thiểu 6 ký tự để bảo vệ tài khoản học viên và dữ liệu tiến trình E-Learning của bạn.
+              </div>
+              <form id="profileChangePassForm">
+                <div class="form-group">
+                  <label style="font-size:0.82rem; font-weight:700; color:var(--ink-700);">Mật khẩu mới (tối thiểu 6 ký tự) *</label>
+                  <input type="password" id="profileNewPassInp" class="form-control" required minlength="6" placeholder="Nhập mật khẩu mới" />
+                </div>
+                <div class="form-group">
+                  <label style="font-size:0.82rem; font-weight:700; color:var(--ink-700);">Xác nhận lại mật khẩu mới *</label>
+                  <input type="password" id="profileConfirmPassInp" class="form-control" required minlength="6" placeholder="Nhập lại mật khẩu mới" />
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:18px;">
+                  <button type="button" id="profileSendResetEmailBtn" style="border:none; background:transparent; font-size:0.8rem; color:var(--jade-700); font-weight:700; text-decoration:underline; cursor:pointer; padding:0;">
+                    Gửi link đổi mật khẩu qua Email
+                  </button>
+                  <div style="display:flex; gap:10px;">
+                    <button type="button" class="btn btn-outline btn-sm" data-close-modal="userProfileModal">Đóng</button>
+                    <button type="submit" class="btn btn-primary btn-sm" id="profileSavePassBtn">Đổi Mật Khẩu</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <!-- Pane 3: Tiến trình học tập -->
+            <div id="profilePaneProgress" style="display:none;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                <div>
+                  <strong style="color:var(--jade-900); font-size:0.92rem;">Tiến Độ Học Tập Đã Ghi Nhận</strong>
+                  <p style="font-size:0.8rem; color:var(--ink-600); margin:2px 0 0;">Tiến trình tự động đồng bộ 2 chiều với Cloud Firestore.</p>
+                </div>
+                <button type="button" class="btn btn-outline btn-xs" id="profileSyncCloudProgressBtn" style="font-size:0.75rem;">
+                  Đồng bộ Cloud ngay
+                </button>
+              </div>
+              <div id="profileCoursesProgressList" style="display:flex; flex-direction:column; gap:12px; max-height:280px; overflow-y:auto; padding-right:4px;">
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(profDiv);
+
+      profDiv.querySelectorAll("[data-close-modal]").forEach((b) => {
+        b.addEventListener("click", () => profDiv.classList.remove("open"));
+      });
+      profDiv.addEventListener("click", (e) => {
+        if (e.target === profDiv) profDiv.classList.remove("open");
+      });
+
+      // Tab switching
+      const tabInfo = profDiv.querySelector("#profileTabInfoBtn");
+      const tabPass = profDiv.querySelector("#profileTabPassBtn");
+      const tabProg = profDiv.querySelector("#profileTabProgressBtn");
+      const paneInfo = profDiv.querySelector("#profilePaneInfo");
+      const panePass = profDiv.querySelector("#profilePanePass");
+      const paneProg = profDiv.querySelector("#profilePaneProgress");
+
+      tabInfo.addEventListener("click", () => {
+        tabInfo.classList.add("active");
+        tabPass.classList.remove("active");
+        tabProg.classList.remove("active");
+        paneInfo.style.display = "block";
+        panePass.style.display = "none";
+        paneProg.style.display = "none";
+      });
+
+      tabPass.addEventListener("click", () => {
+        tabPass.classList.add("active");
+        tabInfo.classList.remove("active");
+        tabProg.classList.remove("active");
+        panePass.style.display = "block";
+        paneInfo.style.display = "none";
+        paneProg.style.display = "none";
+      });
+
+      tabProg.addEventListener("click", () => {
+        tabProg.classList.add("active");
+        tabInfo.classList.remove("active");
+        tabPass.classList.remove("active");
+        paneProg.style.display = "block";
+        paneInfo.style.display = "none";
+        panePass.style.display = "none";
+        renderUserProfileProgress(profDiv);
+      });
+
+      // Form 1: Save Info
+      profDiv.querySelector("#profileInfoForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = profDiv.querySelector("#profileNameInp").value.trim();
+        const phone = profDiv.querySelector("#profilePhoneInp").value.trim();
+        const company = profDiv.querySelector("#profileCompanyInp").value.trim();
+        const email = state.learnerEmail;
+
+        if (!name || !phone) {
+          showToast("Vui lòng điền Họ tên và Số điện thoại.");
+          return;
+        }
+
+        state.learnerName = name;
+        state.learnerPhone = phone;
+        localStorage.setItem(STORAGE_KEYS.LEARNER_NAME, name);
+        localStorage.setItem(STORAGE_KEYS.LEARNER_PHONE, phone);
+        if (company) localStorage.setItem("thuystalk_learner_company", company);
+
+        const saveBtn = profDiv.querySelector("#profileSaveInfoBtn");
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Đang lưu...";
+
+        try {
+          if (window.ThuysTalkFirebase) {
+            await window.ThuysTalkFirebase.updateLearnerProfile({ name, phone, company, email });
+          }
+          showToast("Đã cập nhật thông tin cá nhân thành công!");
+          updateHeaderLearnerStatus();
+          updateConsultFormStatus();
+          renderElearningSection(window.THUYSTALK_I18N[state.lang]);
+        } catch (err) {
+          showToast("Lỗi lưu thông tin: " + (err.message || err));
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.textContent = "Cập Nhật Thông Tin";
+        }
+      });
+
+      // Form 2: Change Password
+      profDiv.querySelector("#profileChangePassForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const newPass = profDiv.querySelector("#profileNewPassInp").value;
+        const confirmPass = profDiv.querySelector("#profileConfirmPassInp").value;
+
+        if (newPass.length < 6) {
+          showToast("Mật khẩu mới phải có tối thiểu 6 ký tự.");
+          return;
+        }
+        if (newPass !== confirmPass) {
+          showToast("Mật khẩu xác nhận không khớp.");
+          return;
+        }
+
+        const passBtn = profDiv.querySelector("#profileSavePassBtn");
+        passBtn.disabled = true;
+        passBtn.textContent = "Đang đổi mật khẩu...";
+
+        try {
+          if (window.ThuysTalkFirebase) {
+            await window.ThuysTalkFirebase.changeLearnerPassword(newPass);
+            showToast("Đổi mật khẩu thành công!");
+            profDiv.querySelector("#profileNewPassInp").value = "";
+            profDiv.querySelector("#profileConfirmPassInp").value = "";
+          } else {
+            showToast("Đã lưu mật khẩu.");
+          }
+        } catch (err) {
+          alert("Lỗi đổi mật khẩu: " + (err.message || err));
+        } finally {
+          passBtn.disabled = false;
+          passBtn.textContent = "Đổi Mật Khẩu";
+        }
+      });
+
+      // Reset email button
+      profDiv.querySelector("#profileSendResetEmailBtn").addEventListener("click", async () => {
+        if (!state.learnerEmail) return;
+        try {
+          if (window.ThuysTalkFirebase) {
+            await window.ThuysTalkFirebase.sendPasswordReset(state.learnerEmail);
+            showToast(`Đã gửi email đặt lại mật khẩu tới: ${state.learnerEmail}`);
+          }
+        } catch (e) {
+          alert("Lỗi gửi link: " + e.message);
+        }
+      });
+
+      // Sync cloud progress button
+      profDiv.querySelector("#profileSyncCloudProgressBtn").addEventListener("click", async () => {
+        if (!state.learnerEmail) return;
+        if (window.ThuysTalkFirebase) {
+          const ok = await window.ThuysTalkFirebase.saveLearnerProgress(state.learnerEmail, state.completedLessons);
+          if (ok) {
+            showToast("Đã đồng bộ tiến trình học tập lên Cloud Firestore thành công!");
+          } else {
+            showToast("Đã lưu tiến trình cục bộ.");
+          }
+        }
+      });
+    }
+
+    // 4. Privacy Policy Modal (Nghị định 13/2023/NĐ-CP)
+    if (!document.getElementById("privacyPolicyModal")) {
+      const privDiv = document.createElement("div");
+      privDiv.className = "modal-backdrop";
+      privDiv.id = "privacyPolicyModal";
+      privDiv.setAttribute("role", "dialog");
+      privDiv.setAttribute("aria-modal", "true");
+      privDiv.innerHTML = `
+        <div class="modal-card" style="max-width:680px; max-height:90vh; display:flex; flex-direction:column;">
+          <div class="modal-head">
+            <h3 style="color:var(--jade-900);">Chính Sách Bảo Mật &amp; Quyền Riêng Tư (Nghị định 13/2023/NĐ-CP)</h3>
+            <button class="modal-close" data-close-modal="privacyPolicyModal" aria-label="Đóng">&times;</button>
+          </div>
+          <div class="modal-body" style="padding:20px 24px; overflow-y:auto; font-size:0.88rem; line-height:1.65; color:var(--ink-800);">
+            <div style="background:var(--jade-50); border:1px solid var(--jade-300); border-radius:8px; padding:12px 16px; margin-bottom:16px;">
+              <strong style="color:var(--jade-950);">Cam kết của ThuysTalk:</strong> Hệ thống tôn trọng và bảo vệ tuyệt đối dữ liệu cá nhân của học viên và doanh nghiệp theo đúng quy định tại <strong>Nghị định số 13/2023/NĐ-CP</strong> của Chính phủ về bảo vệ dữ liệu cá nhân.
+            </div>
+
+            <h4 style="color:var(--jade-900); margin:14px 0 6px; font-size:0.95rem;">1. Mục Đích Thu Thập Dữ Liệu</h4>
+            <p style="margin:0 0 10px;">Chúng tôi chỉ thu thập thông tin cần thiết phục vụ trực tiếp cho các mục đích:</p>
+            <ul style="margin:0 0 12px 20px; padding:0;">
+              <li>Lưu trữ tiến trình học tập các khóa E-Learning, kết quả Mini-test chuyên môn.</li>
+              <li>Cung cấp và gửi tài liệu, checklist nghiệp vụ, biểu mẫu hải quan qua email theo yêu cầu.</li>
+              <li>Phản hồi và tư vấn chuyên sâu 1-1 về thủ tục hải quan, chính sách XNK, quản trị rủi ro.</li>
+            </ul>
+
+            <h4 style="color:var(--jade-900); margin:14px 0 6px; font-size:0.95rem;">2. Phạm Vi Dữ Liệu Thu Thập</h4>
+            <ul style="margin:0 0 12px 20px; padding:0;">
+              <li>Thông tin cơ bản: Họ và tên, địa chỉ email, số điện thoại / Zalo.</li>
+              <li>Thông tin công việc (tự nguyện): Đơn vị công tác, chức vụ, câu hỏi / tình huống tư vấn.</li>
+              <li>Thông tin tiến độ: Lịch sử hoàn thành các bài học, lượt tải tài liệu.</li>
+            </ul>
+
+            <h4 style="color:var(--jade-900); margin:14px 0 6px; font-size:0.95rem;">3. Tiêu Chuẩn Bảo Mật &amp; Cam Kết Không Chia Sẻ</h4>
+            <p style="margin:0 0 10px;">
+              Dữ liệu được lưu trữ trên nền tảng <strong>Google Cloud Firestore &amp; Firebase Authentication</strong> (đạt chứng chỉ an ninh ISO/IEC 27001, SOC 1/2/3). Mã hóa đường truyền SSL/TLS 256-bit. ThuysTalk <strong>tuyệt đối không chia sẻ, mua bán hoặc chuyển giao</strong> thông tin của bạn cho bất kỳ bên thứ ba nào vì mục đích quảng cáo thương mại.
+            </p>
+
+            <h4 style="color:var(--jade-900); margin:14px 0 6px; font-size:0.95rem;">4. Quyền Của Bạn Đối Với Dữ Liệu Cá Nhân</h4>
+            <ul style="margin:0 0 12px 20px; padding:0;">
+              <li><strong>Quyền xem &amp; chỉnh sửa:</strong> Bạn có toàn quyền xem và sửa đổi thông tin cá nhân bất kỳ lúc nào tại mục <em>Hồ sơ học viên</em>.</li>
+              <li><strong>Quyền yêu cầu xóa:</strong> Bạn có quyền yêu cầu xóa vĩnh viễn toàn bộ tài khoản và dữ liệu đã lưu bằng cách gửi email hoặc nhắn tin Hotline / Zalo.</li>
+              <li><strong>Quyền rút lại sự đồng ý:</strong> Bạn có quyền hủy nhận email tài liệu bất cứ lúc nào.</li>
+            </ul>
+
+            <h4 style="color:var(--jade-900); margin:14px 0 6px; font-size:0.95rem;">5. Đầu Mối Tiếp Nhận &amp; Phụ Trách Bảo Vệ Dữ Liệu (DPO)</h4>
+            <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px 16px;">
+              <div><strong>Người đại diện phụ trách:</strong> Nguyễn Thị Ngọc Thúy (Founder ThuysTalk · Giám đốc Eureka Logistics)</div>
+              <div><strong>Email liên hệ:</strong> <a href="mailto:thuystalk.official@gmail.com" style="color:var(--jade-700); font-weight:700;">thuystalk.official@gmail.com</a></div>
+              <div><strong>Hotline / Zalo hỗ trợ:</strong> <a href="https://zalo.me/84767648862" target="_blank" style="color:var(--jade-700); font-weight:700;">0767.648.862</a></div>
+            </div>
+          </div>
+          <div style="padding:14px 24px; border-top:1px solid var(--jade-200); display:flex; justify-content:flex-end;">
+            <button type="button" class="btn btn-primary btn-sm" data-close-modal="privacyPolicyModal">Đã hiểu &amp; Đóng</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(privDiv);
+
+      privDiv.querySelectorAll("[data-close-modal]").forEach((b) => {
+        b.addEventListener("click", () => privDiv.classList.remove("open"));
+      });
+      privDiv.addEventListener("click", (e) => {
+        if (e.target === privDiv) privDiv.classList.remove("open");
+      });
+    }
+  }
+
+  function renderUserProfileProgress(modalDiv) {
+    const container = modalDiv.querySelector("#profileCoursesProgressList");
+    if (!container) return;
+    if (!state.courses || state.courses.length === 0) {
+      container.innerHTML = `<p style="font-size:0.85rem; color:var(--ink-500); text-align:center;">Chưa có dữ liệu khóa học.</p>`;
+      return;
+    }
+    container.innerHTML = state.courses.map((course) => {
+      const total = (course.lessons && course.lessons.length) || 1;
+      let done = 0;
+      if (course.lessons) {
+        course.lessons.forEach((l) => {
+          if (state.completedLessons[l.id]) done++;
+        });
+      }
+      const percent = Math.round((done / total) * 100);
+      return `
+        <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <strong style="font-size:0.88rem; color:var(--jade-950);">${escapeHtml(course.title && (course.title.vi || course.title))}</strong>
+            <span style="font-size:0.78rem; font-weight:800; color:${percent === 100 ? '#059669' : 'var(--orange-600)'};">${done}/${total} bài (${percent}%)</span>
+          </div>
+          <div style="width:100%; height:8px; background:#E2E8F0; border-radius:4px; overflow:hidden;">
+            <div style="width:${percent}%; height:100%; background:${percent === 100 ? '#059669' : 'var(--orange-500)'}; transition:width 0.3s ease;"></div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function openUserProfileModal(activeTab = "info") {
+    ensureGlobalModals();
+    const div = document.getElementById("userProfileModal");
+    if (!div) return;
+
+    const emailInp = div.querySelector("#profileEmailInp");
+    const nameInp = div.querySelector("#profileNameInp");
+    const phoneInp = div.querySelector("#profilePhoneInp");
+    const companyInp = div.querySelector("#profileCompanyInp");
+
+    if (emailInp) emailInp.value = state.learnerEmail || "";
+    if (nameInp) nameInp.value = state.learnerName || localStorage.getItem(STORAGE_KEYS.LEARNER_NAME) || "";
+    if (phoneInp) phoneInp.value = state.learnerPhone || localStorage.getItem(STORAGE_KEYS.LEARNER_PHONE) || "";
+    if (companyInp) companyInp.value = localStorage.getItem("thuystalk_learner_company") || "";
+
+    renderUserProfileProgress(div);
+
+    if (activeTab === "pass") {
+      div.querySelector("#profileTabPassBtn").click();
+    } else if (activeTab === "progress") {
+      div.querySelector("#profileTabProgressBtn").click();
+    } else {
+      div.querySelector("#profileTabInfoBtn").click();
+    }
+
+    div.classList.add("open");
+  }
+
+  function openPrivacyPolicyModal() {
+    ensureGlobalModals();
+    const div = document.getElementById("privacyPolicyModal");
+    if (div) div.classList.add("open");
   }
 
   function openEmailMaterialModal(payload) {
@@ -3200,16 +3668,22 @@
       }
 
       if (state.learnerEmail) {
-        const displayName = localStorage.getItem(STORAGE_KEYS.LEARNER_NAME) || state.learnerEmail.split("@")[0];
+        const displayName = state.learnerName || localStorage.getItem(STORAGE_KEYS.LEARNER_NAME) || state.learnerEmail.split("@")[0];
         authBtn.innerHTML = `
-          <div style="display:inline-flex; align-items:center; gap:8px; background:var(--jade-50); border:1.5px solid var(--jade-400); padding:4px 12px; border-radius:20px; font-size:0.78rem; font-weight:700; color:var(--jade-900);">
+          <div style="display:inline-flex; align-items:center; gap:6px; background:var(--jade-50); border:1.5px solid var(--jade-400); padding:3px 10px; border-radius:20px; font-size:0.78rem; font-weight:700; color:var(--jade-900);">
             <span style="width:7px; height:7px; border-radius:50%; background:#10B981; display:inline-block;"></span>
-            <span title="${escapeHtml(state.learnerEmail)}">Học viên: ${escapeHtml(displayName)}</span>
-            <button type="button" id="headerLogoutLearnerBtn" style="border:none; background:transparent; font-size:0.75rem; color:#EF4444; font-weight:800; cursor:pointer; padding:0 2px;" title="Đăng xuất tài khoản">
+            <button type="button" id="headerProfileTriggerBtn" style="border:none; background:transparent; font-size:0.78rem; color:var(--jade-900); font-weight:700; cursor:pointer; padding:0; text-decoration:none;" title="Xem &amp; sửa thông tin cá nhân, đổi mật khẩu">
+              Học viên: <strong style="color:var(--jade-950); text-decoration:underline;">${escapeHtml(displayName)}</strong>
+            </button>
+            <button type="button" id="headerLogoutLearnerBtn" style="border:none; background:transparent; font-size:0.75rem; color:#EF4444; font-weight:800; cursor:pointer; padding:0 2px; margin-left:4px;" title="Đăng xuất tài khoản">
               Thoát
             </button>
           </div>
         `;
+        const profileTrigger = authBtn.querySelector("#headerProfileTriggerBtn");
+        if (profileTrigger) {
+          profileTrigger.addEventListener("click", () => openUserProfileModal("info"));
+        }
         const logoutBtn = authBtn.querySelector("#headerLogoutLearnerBtn");
         if (logoutBtn) {
           logoutBtn.addEventListener("click", async (e) => {
@@ -3220,6 +3694,7 @@
             state.learnerEmail = "";
             localStorage.removeItem(STORAGE_KEYS.LEARNER_EMAIL);
             updateHeaderLearnerStatus();
+            updateConsultFormStatus();
             renderElearningSection(window.THUYSTALK_I18N[state.lang]);
             showToast("Đã đăng xuất tài khoản học viên.");
           });
@@ -4499,39 +4974,85 @@
   // --- TAB 6: LEADS & FULL CMS BACKUP (POWERED DIRECTLY BY CLOUD FIRESTORE) ---
   function renderAdminLeadsTab(body) {
     const localLeads = JSON.parse(localStorage.getItem(STORAGE_KEYS.LEADS) || "[]");
-    let combinedItems = [...localLeads];
+    let currentLearners = [];
+    let currentLeads = [...localLeads];
 
-    function buildTableHtml(items) {
-      if (!items || items.length === 0) {
-        return `<tr><td colspan="8" style="padding:18px; text-align:center; color:var(--ink-500);">Chưa có dữ liệu học viên trong bảng. Bấm 'Làm mới từ Cloud Firestore' để tải dữ liệu.</td></tr>`;
+    function buildLearnersTableHtml(learners) {
+      if (!learners || learners.length === 0) {
+        return `<tr><td colspan="8" style="padding:18px; text-align:center; color:var(--ink-500);">Chưa có tài khoản người dùng đăng ký mới trên Cloud Firestore. Bấm 'Làm mới từ Cloud Firestore' để tải dữ liệu.</td></tr>`;
       }
-      return items
-        .map((it, i) => {
-          const isOfficialLearner =
-            it.category === "learner" ||
-            it.source === "ThuysTalk Registration Portal" ||
-            it.role ||
-            it.emailVerified !== undefined;
-          const typeBadge = isOfficialLearner
-            ? `<span class="badge" style="background:#059669; color:#fff; font-weight:700; font-size:0.75rem;">Học Viên Chính Thức</span>`
-            : `<span class="badge" style="background:#F59E0B; color:#fff; font-weight:700; font-size:0.75rem;">Nhận Tài Liệu / Tư Vấn</span>`;
-          const timeDisplay = it.timeDisplay || it.registeredAt || it.requestedAt || it.timestamp || "-";
-          const roleOrTopic = it.role || it.docTitle || it.topic || "Khóa học E-Learning";
-          const statusDisplay = isOfficialLearner
-            ? `<span style="color:#059669; font-weight:700;">${it.status || "Hoạt động"}</span>`
-            : `<span style="color:#D97706; font-weight:700;">Đã tiếp nhận</span>`;
+      return learners
+        .map((l, i) => {
+          const name = l.name || l.displayName || "Học viên mới";
+          const email = l.email || "-";
+          const phone = l.phone || "-";
+          const company = l.company || l.role || "Học viên ThuysTalk";
+          const dateStr =
+            l.registeredAt ||
+            (l.createdAt
+              ? typeof l.createdAt.toDate === "function"
+                ? l.createdAt.toDate().toLocaleString("vi-VN")
+                : String(l.createdAt)
+              : "Mới");
+          const verifiedBadge =
+            l.emailVerified === true
+              ? `<span class="badge" style="background:#059669; color:#fff; font-weight:700; font-size:0.75rem;">Đã xác thực</span>`
+              : `<span class="badge" style="background:#6B7280; color:#fff; font-weight:700; font-size:0.75rem;">Chưa kích hoạt</span>`;
+
+          let progressDisplay = `<span style="color:var(--ink-600); font-size:0.8rem;">0% (Mới)</span>`;
+          if (l.progress && typeof l.progress === "object") {
+            const completedCount = Object.keys(l.progress).filter((k) => l.progress[k]).length;
+            if (completedCount > 0) {
+              progressDisplay = `<span style="color:#059669; font-weight:700; font-size:0.8rem;">Đã học ${completedCount} bài</span>`;
+            }
+          }
 
           return `
-          <tr>
-            <td>${i + 1}</td>
-            <td>${typeBadge}</td>
-            <td style="font-weight:700; color:var(--ink-900);">${escapeHtml(it.name || "Học viên")}</td>
-            <td style="color:var(--jade-700); font-weight:700;">${escapeHtml(it.email || "")}</td>
-            <td>${escapeHtml(it.phone || "-")}</td>
-            <td>${escapeHtml(roleOrTopic)}</td>
-            <td style="font-size:0.8rem; color:var(--ink-600);">${escapeHtml(timeDisplay)}</td>
-            <td>${statusDisplay}</td>
-          </tr>`;
+            <tr>
+              <td style="text-align:center;">${i + 1}</td>
+              <td style="font-weight:700; color:var(--ink-900);">${escapeHtml(name)}</td>
+              <td style="color:var(--jade-700); font-weight:700;">${escapeHtml(email)}</td>
+              <td>${escapeHtml(phone)}</td>
+              <td>${escapeHtml(company)}</td>
+              <td style="font-size:0.8rem; color:var(--ink-600);">${escapeHtml(dateStr)}</td>
+              <td>${verifiedBadge}</td>
+              <td>${progressDisplay}</td>
+            </tr>
+          `;
+        })
+        .join("");
+    }
+
+    function buildLeadsTableHtml(leads) {
+      if (!leads || leads.length === 0) {
+        return `<tr><td colspan="8" style="padding:18px; text-align:center; color:var(--ink-500);">Chưa có lịch sử lưu hoặc tải tài liệu nào được ghi nhận.</td></tr>`;
+      }
+      return leads
+        .map((ld, i) => {
+          const name = ld.name || "Khách hàng";
+          const email = ld.email || "-";
+          const phone = ld.phone || "-";
+          const topic = ld.docTitle || ld.topic || "Tài liệu chuyên môn";
+          const type = ld.type || (ld.docTitle ? "Tải tài liệu" : "Tư vấn 1-1");
+          const typeBadge =
+            type.includes("Tư vấn")
+              ? `<span class="badge" style="background:#EA580C; color:#fff; font-weight:700; font-size:0.75rem;">Tư Vấn 1-1</span>`
+              : `<span class="badge" style="background:#0284C7; color:#fff; font-weight:700; font-size:0.75rem;">Tải Tài Liệu</span>`;
+          const timeStr = ld.requestedAt || ld.timestamp || "-";
+          const status = ld.status || "Đã gửi tài liệu / Đã ghi nhận";
+
+          return `
+            <tr>
+              <td style="text-align:center;">${i + 1}</td>
+              <td style="font-weight:700; color:var(--ink-900);">${escapeHtml(name)}</td>
+              <td style="color:var(--jade-700); font-weight:700;">${escapeHtml(email)}</td>
+              <td>${escapeHtml(phone)}</td>
+              <td>${escapeHtml(topic)}</td>
+              <td>${typeBadge}</td>
+              <td style="font-size:0.8rem; color:var(--ink-600);">${escapeHtml(timeStr)}</td>
+              <td style="color:#059669; font-weight:700; font-size:0.82rem;">${escapeHtml(status)}</td>
+            </tr>
+          `;
         })
         .join("");
     }
@@ -4539,12 +5060,13 @@
     body.innerHTML = `
       <div class="cms-panel-box" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
         <div>
-          <strong style="color:var(--jade-900);">Sao lưu & Khôi phục Toàn bộ Dữ liệu Quản trị Website (Full CMS JSON)</strong>
+          <strong style="color:var(--jade-900);">Sao lưu &amp; Khôi phục Toàn bộ Dữ liệu Quản trị Website (Full CMS JSON)</strong>
           <p style="font-size:0.8rem; color:var(--ink-600);">Xuất toàn bộ Ảnh, Bài viết, Video YouTube, Khóa học E-Learning và Nguồn dữ liệu AI ra 1 tệp JSON duy nhất.</p>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button type="button" class="btn btn-jade btn-sm" id="exportFullCmsBtn">Xuất toàn bộ cấu hình CMS (.json)</button>
-          <button type="button" class="btn btn-primary btn-sm" id="exportLeadsCsvBtn">Xuất danh sách Học viên / Tư vấn (.csv)</button>
+          <button type="button" class="btn btn-primary btn-sm" id="exportLearnersCsvBtn">Xuất danh sách Người dùng mới (.csv)</button>
+          <button type="button" class="btn btn-outline btn-sm" id="exportLeadsCsvBtn">Xuất lịch sử Học tập / Tải tài liệu (.csv)</button>
         </div>
       </div>
 
@@ -4561,7 +5083,7 @@
               Khu vực máy chủ: <code style="background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px; font-weight:700;">asia-southeast1 (Singapore)</code>
             </p>
             <p style="font-size:0.78rem; color:var(--ink-600); margin-top:2px;">
-              Khóa API chính thức đã kích hoạt: <code style="background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px; font-weight:700;">AIzaSyA3PZ3...DaEw8</code>. Tự động đồng bộ Học viên &amp; Leads 1-1 với Cloud Firestore.
+              Khóa API chính thức đã kích hoạt: <code style="background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px; font-weight:700;">AIzaSyA3PZ3...DaEw8</code>. Tự động tách bạch Danh sách Người dùng mới và Lịch sử lưu/tải tài liệu.
             </p>
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -4572,87 +5094,85 @@
               Đồng bộ dữ liệu mẫu lên Firestore
             </button>
             <a href="https://console.firebase.google.com/project/thuystalk/firestore/databases/-default-/data" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="color:var(--jade-800); border-color:var(--jade-600); font-weight:700;">
-              Mở Cloud Firestore Console (Bảng Dữ Liệu)
+              Mở Cloud Firestore Console
             </a>
           </div>
         </div>
       </div>
 
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
-        <h4 style="margin:0;" id="leadsTableHeading">Danh sách Học viên nhận tài liệu & Khách đăng ký tư vấn (${combinedItems.length})</h4>
-        <span id="firestoreStatusIndicator" style="font-size:0.8rem; color:var(--jade-700); font-weight:700;">Đang kết nối Cloud Firestore...</span>
+      <!-- PHẦN 1: DANH SÁCH NGƯỜI DÙNG ĐĂNG KÝ MỚI -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+        <div>
+          <h4 style="margin:0; color:var(--jade-950);" id="learnersTableHeading">
+            1. Danh Sách Tài Khoản Người Dùng Đăng Ký Mới (0)
+          </h4>
+          <span style="font-size:0.8rem; color:var(--ink-600);">Tài khoản học viên chính thức đăng ký qua hệ thống và xác thực với Google Firebase.</span>
+        </div>
+        <span id="firestoreLearnersStatus" style="font-size:0.8rem; color:var(--jade-700); font-weight:700;">Đang kết nối Cloud Firestore...</span>
       </div>
 
       <table class="cms-list-table">
         <thead>
           <tr>
             <th>#</th>
-            <th>Phân loại</th>
-            <th>Họ tên</th>
+            <th>Họ tên học viên</th>
+            <th>Email tài khoản</th>
+            <th>SĐT / Zalo</th>
+            <th>Doanh nghiệp / Vai trò</th>
+            <th>Ngày đăng ký</th>
+            <th>Xác thực Email</th>
+            <th>Tiến độ học tập</th>
+          </tr>
+        </thead>
+        <tbody id="adminLearnersTableBody">${buildLearnersTableHtml(currentLearners)}</tbody>
+      </table>
+
+      <!-- PHẦN 2: LỊCH SỬ NGƯỜI HỌC TẬP HAY LƯU / TẢI TÀI LIỆU -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:32px; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+        <div>
+          <h4 style="margin:0; color:var(--orange-800);" id="leadsTableHeading">
+            2. Lịch Sử Người Học Tập Hay Lưu / Tải Tài Liệu Của Người Dùng (${currentLeads.length})
+          </h4>
+          <span style="font-size:0.8rem; color:var(--ink-600);">Nhật ký tương tác: Học viên/khách hàng tải tài liệu chuyên môn hoặc gửi yêu cầu tư vấn 1-1.</span>
+        </div>
+        <span id="firestoreLeadsStatus" style="font-size:0.8rem; color:var(--orange-700); font-weight:700;">Đồng bộ thời gian thực</span>
+      </div>
+
+      <table class="cms-list-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Họ tên người dùng</th>
             <th>Email</th>
             <th>SĐT / Zalo</th>
-            <th>Vai trò / Khóa học / Chủ đề</th>
+            <th>Nội dung tài liệu / Chủ đề tư vấn</th>
+            <th>Phân loại</th>
             <th>Thời gian</th>
             <th>Trạng thái</th>
           </tr>
         </thead>
-        <tbody id="adminLeadsTableBody">${buildTableHtml(combinedItems)}</tbody>
+        <tbody id="adminLeadsTableBody">${buildLeadsTableHtml(currentLeads)}</tbody>
       </table>
     `;
 
-    let currentLearners = [];
-    let currentLeads = [];
+    function refreshTablesFromData() {
+      const learnersTbody = document.getElementById("adminLearnersTableBody");
+      const leadsTbody = document.getElementById("adminLeadsTableBody");
+      const learnersHeading = document.getElementById("learnersTableHeading");
+      const leadsHeading = document.getElementById("leadsTableHeading");
+      const learnersStatus = document.getElementById("firestoreLearnersStatus");
+      const leadsStatus = document.getElementById("firestoreLeadsStatus");
 
-    function refreshTableFromData() {
-      const tbodyEl = document.getElementById("adminLeadsTableBody");
-      const headingEl = document.getElementById("leadsTableHeading");
-      const statusEl = document.getElementById("firestoreStatusIndicator");
-
-      const firestoreItems = [];
-      currentLearners.forEach((l) => {
-        firestoreItems.push({
-          category: "learner",
-          name: l.name || l.displayName || "Học viên",
-          email: l.email || "",
-          phone: l.phone || "-",
-          role: l.role || "Tài khoản Học viên",
-          status: l.status || (l.emailVerified ? "Đã kích hoạt" : "Hoạt động"),
-          timeDisplay:
-            l.registeredAt ||
-            (l.createdAt
-              ? typeof l.createdAt.toDate === "function"
-                ? l.createdAt.toDate().toLocaleString("vi-VN")
-                : String(l.createdAt)
-              : "Mới"),
-          raw: l
-        });
-      });
-
-      currentLeads.forEach((ld) => {
-        firestoreItems.push({
-          category: "lead",
-          name: ld.name || "Khách hàng",
-          email: ld.email || "",
-          phone: ld.phone || "-",
-          topic: ld.docTitle || ld.topic || "Đăng ký nhận tài liệu",
-          status: "Đã tiếp nhận",
-          timeDisplay: ld.requestedAt || ld.timestamp || "Mới",
-          raw: ld
-        });
-      });
-
-      if (firestoreItems.length > 0) {
-        combinedItems = firestoreItems;
-      }
-      if (tbodyEl) tbodyEl.innerHTML = buildTableHtml(combinedItems);
-      if (headingEl)
-        headingEl.textContent = `Danh sách Học viên nhận tài liệu & Khách đăng ký tư vấn (${combinedItems.length})`;
-      if (statusEl)
-        statusEl.textContent = `Đã đồng bộ trực tiếp từ Cloud Firestore (${currentLearners.length} học viên, ${currentLeads.length} nhận tài liệu)`;
+      if (learnersTbody) learnersTbody.innerHTML = buildLearnersTableHtml(currentLearners);
+      if (leadsTbody) leadsTbody.innerHTML = buildLeadsTableHtml(currentLeads);
+      if (learnersHeading) learnersHeading.textContent = `1. Danh Sách Tài Khoản Người Dùng Đăng Ký Mới (${currentLearners.length})`;
+      if (leadsHeading) leadsHeading.textContent = `2. Lịch Sử Người Học Tập Hay Lưu / Tải Tài Liệu Của Người Dùng (${currentLeads.length})`;
+      if (learnersStatus) learnersStatus.textContent = `Đã đồng bộ (${currentLearners.length} tài khoản)`;
+      if (leadsStatus) leadsStatus.textContent = `Đã đồng bộ (${currentLeads.length} lượt tải/tư vấn)`;
     }
 
     async function loadFirestoreData() {
-      const statusEl = document.getElementById("firestoreStatusIndicator");
+      const learnersStatus = document.getElementById("firestoreLearnersStatus");
       try {
         if (window.ThuysTalkFirebase) {
           const [learners, leads] = await Promise.all([
@@ -4660,37 +5180,37 @@
             window.ThuysTalkFirebase.fetchLeads()
           ]);
           currentLearners = learners || [];
-          currentLeads = leads || [];
-          refreshTableFromData();
+          if (leads && leads.length > 0) {
+            currentLeads = leads;
+          }
+          refreshTablesFromData();
 
-          // Kích hoạt Realtime Firestore Listener cho Learners & Leads
+          // Realtime Listeners for both collections
           window.ThuysTalkFirebase.listenCollection("learners", (list) => {
             if (Array.isArray(list)) {
               currentLearners = list;
-              refreshTableFromData();
+              refreshTablesFromData();
             }
           });
           window.ThuysTalkFirebase.listenCollection("leads", (list) => {
             if (Array.isArray(list)) {
               currentLeads = list;
-              refreshTableFromData();
+              refreshTablesFromData();
             }
           });
         }
       } catch (err) {
         console.warn("loadFirestoreData notice:", err);
-        if (statusEl) statusEl.textContent = "Hiển thị dữ liệu cục bộ.";
+        if (learnersStatus) learnersStatus.textContent = "Hiển thị dữ liệu cục bộ.";
       }
     }
 
-    // Trigger immediate fetch from Firestore (with retry if DB not ready yet)
     loadFirestoreData();
     if (!window.ThuysTalkFirebase || !window.ThuysTalkFirebase.isReady()) {
       setTimeout(loadFirestoreData, 600);
       setTimeout(loadFirestoreData, 1500);
     }
 
-    // Reload button listener
     const reloadBtn = document.getElementById("reloadFirestoreLeadsBtn");
     if (reloadBtn) {
       reloadBtn.addEventListener("click", () => {
@@ -4718,18 +5238,18 @@
       showToast("Đã tải xuống tệp thuystalk-full-cms-config.json!");
     });
 
-    document.getElementById("exportLeadsCsvBtn").addEventListener("click", () => {
+    document.getElementById("exportLearnersCsvBtn").addEventListener("click", () => {
       const rows = [
-        ["STT", "Phan loai", "Ho ten", "Email", "SDT/Zalo", "Vai tro / Khoa hoc / Chu de", "Thoi gian", "Trang thai"],
-        ...combinedItems.map((l, idx) => [
+        ["STT", "Ho ten hoc vien", "Email tai khoan", "SDT/Zalo", "Doanh nghiep / Vai tro", "Ngay dang ky", "Xac thuc Email", "Tien do hoc tap"],
+        ...currentLearners.map((l, idx) => [
           idx + 1,
-          l.category === "learner" ? "Hoc vien chinh thuc" : "Nhan tai lieu / Tu van",
-          l.name || "",
+          l.name || l.displayName || "",
           l.email || "",
           l.phone || "",
-          l.role || l.topic || "",
-          l.timeDisplay || "",
-          l.status || ""
+          l.company || l.role || "",
+          l.registeredAt || (l.createdAt ? (typeof l.createdAt.toDate === "function" ? l.createdAt.toDate().toLocaleString("vi-VN") : String(l.createdAt)) : ""),
+          l.emailVerified ? "Da xac thuc" : "Chua kich hoat",
+          l.progress ? Object.keys(l.progress).filter((k) => l.progress[k]).length + " bai" : "0%"
         ])
       ];
       const csv =
@@ -4741,10 +5261,39 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `thuystalk-danh-sach-hoc-vien-${Date.now()}.csv`;
+      a.download = `thuystalk-danh-sach-nguoi-dung-moi-${Date.now()}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-      showToast("Đã tải xuống danh sách học viên và leads từ Cloud Firestore!");
+      showToast("Đã tải xuống danh sách người dùng đăng ký mới (.csv)!");
+    });
+
+    document.getElementById("exportLeadsCsvBtn").addEventListener("click", () => {
+      const rows = [
+        ["STT", "Ho ten nguoi dung", "Email", "SDT/Zalo", "Noi dung tai lieu / Chu de tu van", "Phan loai", "Thoi gian", "Trang thai"],
+        ...currentLeads.map((ld, idx) => [
+          idx + 1,
+          ld.name || "",
+          ld.email || "",
+          ld.phone || "",
+          ld.docTitle || ld.topic || "",
+          ld.type || "Tai tai lieu",
+          ld.requestedAt || ld.timestamp || "",
+          ld.status || "Da ghi nhan"
+        ])
+      ];
+      const csv =
+        "\uFEFF" +
+        rows
+          .map((r) => r.map((cell) => `"${String(cell || "").replace(/"/g, '""')}"`).join(","))
+          .join("\r\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `thuystalk-lich-su-tai-lieu-tu-van-${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("Đã tải xuống lịch sử học tập & tải tài liệu (.csv)!");
     });
 
     const syncFbBtn = document.getElementById("syncFirebaseBtn");
@@ -4845,6 +5394,15 @@
     initConsultForm();
     bindPhotoTriggers(document);
     hydrateAllFromFirestore();
+
+    // Global click listener for Privacy Policy Modal (Nghị định 13/2023/NĐ-CP)
+    document.addEventListener("click", (e) => {
+      const privTarget = e.target.closest("#openPrivacyPolicyLink, .open-privacy-link, #consultOpenPrivacyLink");
+      if (privTarget) {
+        e.preventDefault();
+        openPrivacyPolicyModal();
+      }
+    });
 
     // Language Switcher
     document.querySelectorAll(".lang-btn").forEach((btn) => {
