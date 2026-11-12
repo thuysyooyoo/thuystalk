@@ -3104,24 +3104,25 @@
       </div>
 
       <!-- Firebase Cloud Integration Card (Project: thuystalk) -->
-      <div class="cms-panel-box" style="margin-top:14px; border:1.5px solid var(--jade-300); background:linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%);">
+      <div class="cms-panel-box" style="margin-top:14px; border:1.5px solid var(--jade-400); background:linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%);">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
           <div>
             <div style="display:flex; align-items:center; gap:8px;">
-              <span class="badge badge-jade" style="background:var(--jade-800); color:#FFF; font-weight:800;">Firebase Cloud</span>
+              <span class="badge badge-jade" style="background:var(--jade-800); color:#FFF; font-weight:800;">Firebase Cloud Active</span>
               <strong style="color:var(--jade-900); font-size:0.95rem;">Cơ Sở Dữ Liệu Cloud Firestore &amp; Firebase Storage</strong>
             </div>
             <p style="font-size:0.82rem; color:var(--ink-700); margin-top:4px;">
               Dự án: <code style="background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px; font-weight:700;">thuystalk</code> · 
+              App ID: <code style="background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px; font-weight:700;">1:767228711805</code> · 
               Storage Bucket: <code style="background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px; font-weight:700;">thuystalk.firebasestorage.app</code>
             </p>
             <p style="font-size:0.78rem; color:var(--ink-600); margin-top:2px;">
-              Tự động lưu trữ danh sách Học viên, Đăng ký tư vấn 1-1, đồng bộ Bài viết &amp; Video lên Cloud Firestore.
+              Khóa API chính thức đã kích hoạt: <code style="background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px; font-weight:700;">AIzaSyA3PZ3...DaEw8</code>. Tự động lưu trữ Học viên &amp; Leads 1-1 lên Cloud Firestore.
             </p>
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <button type="button" class="btn btn-jade btn-sm" id="syncFirebaseBtn">
-              Đồng bộ dữ liệu lên Cloud Firestore
+              Đồng bộ toàn bộ lên Cloud Firestore
             </button>
             <a href="https://console.firebase.google.com/project/thuystalk/storage" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
               Mở Firebase Storage Console

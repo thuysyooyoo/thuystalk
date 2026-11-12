@@ -8,11 +8,15 @@
 (function () {
   const STORAGE_KEY_FIREBASE = "thuystalk_firebase_custom_config";
 
-  // Default Project Configuration for thuystalk
-  const DEFAULT_FIREBASE_CONFIG = {
+  // Official Firebase Project Configuration for thuystalk (From Firebase Console)
+  const OFFICIAL_FIREBASE_CONFIG = {
+    apiKey: "AIzaSyA3PZ3oRrPzEJCVIVLF6sQpbY3OuFDaEw8",
+    authDomain: "thuystalk.firebaseapp.com",
     projectId: "thuystalk",
     storageBucket: "thuystalk.firebasestorage.app",
-    authDomain: "thuystalk.firebaseapp.com"
+    messagingSenderId: "767228711805",
+    appId: "1:767228711805:web:1e25ade86083436aeef214",
+    measurementId: "G-8HZEVN52VD"
   };
 
   let db = null;
@@ -22,11 +26,11 @@
   function getStoredConfig() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY_FIREBASE);
-      if (raw) return JSON.parse(raw);
+      if (raw) return { ...OFFICIAL_FIREBASE_CONFIG, ...JSON.parse(raw) };
     } catch (e) {
       // Ignore
     }
-    return DEFAULT_FIREBASE_CONFIG;
+    return OFFICIAL_FIREBASE_CONFIG;
   }
 
   function saveStoredConfig(cfg) {
