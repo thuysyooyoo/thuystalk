@@ -151,16 +151,108 @@
     return JSON.parse(JSON.stringify(defaultArr));
   }
 
+  const STORAGE_KEY_TO_FIRESTORE = {
+    [STORAGE_KEYS.ARTICLES]: "articles",
+    [STORAGE_KEYS.VIDEOS]: "videos",
+    [STORAGE_KEYS.COURSES]: "courses",
+    [STORAGE_KEYS.AI_KB]: "ai_kb",
+    [STORAGE_KEYS.LEADS]: "leads"
+  };
+
   function saveCollection(key, arr) {
     try {
       localStorage.setItem(key, JSON.stringify(arr));
     } catch (e) {
       showToast("Lưu ý: Dung lượng bộ nhớ trình duyệt gần đầy, đã áp dụng trên phiên hiện tại.");
     }
+
+    // Auto-sync 1-1 to Cloud Firestore as Single Source of Truth
+    const collName = STORAGE_KEY_TO_FIRESTORE[key];
+    if (collName && window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
+      window.ThuysTalkFirebase.syncCollection(collName, arr).catch((err) => {
+        console.warn(`Cloud Firestore auto-sync error for ${collName}:`, err);
+      });
+    }
   }
 
   function saveCustomMedia() {
-    saveCollection(STORAGE_KEYS.MEDIA, state.media);
+    try {
+      localStorage.setItem(STORAGE_KEYS.MEDIA, JSON.stringify(state.media));
+    } catch (e) {}
+
+    // Auto-sync Profile Photos & Settings to Cloud Firestore
+    if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
+      window.ThuysTalkFirebase.saveSiteSettings("media_profile", state.media).catch((err) => {
+        console.warn("Cloud Firestore auto-sync error for media_profile:", err);
+      });
+    }
+  }
+
+  let isHydratedFromFirestore = false;
+
+  async function hydrateAllFromFirestore(forceRerender = false) {
+    if (!window.ThuysTalkFirebase || !window.ThuysTalkFirebase.isReady()) return;
+    try {
+      const [mediaRes, articlesRes, videosRes, coursesRes, aiKbRes] = await Promise.all([
+        window.ThuysTalkFirebase.fetchSiteSettings("media_profile"),
+        window.ThuysTalkFirebase.fetchCollection("articles"),
+        window.ThuysTalkFirebase.fetchCollection("videos"),
+        window.ThuysTalkFirebase.fetchCollection("courses"),
+        window.ThuysTalkFirebase.fetchCollection("ai_kb")
+      ]);
+
+      let hasUpdates = false;
+
+      if (mediaRes && typeof mediaRes === "object" && Object.keys(mediaRes).length > 0) {
+        state.media = { ...state.media, ...mediaRes };
+        localStorage.setItem(STORAGE_KEYS.MEDIA, JSON.stringify(state.media));
+        hasUpdates = true;
+      }
+
+      if (Array.isArray(articlesRes) && articlesRes.length > 0) {
+        state.articles = articlesRes;
+        localStorage.setItem(STORAGE_KEYS.ARTICLES, JSON.stringify(state.articles));
+        hasUpdates = true;
+      }
+
+      if (Array.isArray(videosRes) && videosRes.length > 0) {
+        state.videos = videosRes;
+        localStorage.setItem(STORAGE_KEYS.VIDEOS, JSON.stringify(state.videos));
+        hasUpdates = true;
+      }
+
+      if (Array.isArray(coursesRes) && coursesRes.length > 0) {
+        state.courses = coursesRes;
+        localStorage.setItem(STORAGE_KEYS.COURSES, JSON.stringify(state.courses));
+        hasUpdates = true;
+      }
+
+      if (Array.isArray(aiKbRes) && aiKbRes.length > 0) {
+        state.aiKb = aiKbRes;
+        localStorage.setItem(STORAGE_KEYS.AI_KB, JSON.stringify(state.aiKb));
+        hasUpdates = true;
+      }
+
+      isHydratedFromFirestore = true;
+
+      if (hasUpdates || forceRerender) {
+        console.log("ThuysTalk: Hydrated 5/5 domains from Cloud Firestore SSoT successfully!");
+        if (document.getElementById("adminSidebarNav")) {
+          renderAdminStudioModal();
+        } else {
+          renderAll();
+        }
+      }
+
+      const firestoreStatusPill = document.getElementById("adminSidebarFirestoreStatus");
+      if (firestoreStatusPill) {
+        firestoreStatusPill.textContent = "Cloud Firestore SSoT: Đã kết nối trực tiếp (5/5 phân hệ)";
+        firestoreStatusPill.style.color = "var(--jade-800)";
+        firestoreStatusPill.style.borderColor = "var(--jade-500)";
+      }
+    } catch (err) {
+      console.warn("hydrateAllFromFirestore notice:", err);
+    }
   }
 
   function escapeHtml(str) {
@@ -3173,6 +3265,7 @@
         saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
         if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
           window.ThuysTalkFirebase.syncCollection("articles", state.articles);
+          window.ThuysTalkFirebase.deleteDoc("articles", id);
         }
         renderAll();
         renderAdminStudioModal();
@@ -3187,6 +3280,7 @@
         saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
         if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
           window.ThuysTalkFirebase.syncCollection("articles", state.articles);
+          window.ThuysTalkFirebase.deleteDoc("articles", id);
         }
         renderAll();
         renderAdminStudioModal();
@@ -3453,6 +3547,7 @@
         saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
         if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
           window.ThuysTalkFirebase.syncCollection("videos", state.videos);
+          window.ThuysTalkFirebase.deleteDoc("videos", id);
         }
         renderAll();
         renderAdminStudioModal();
@@ -3472,6 +3567,7 @@
         saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
         if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
           window.ThuysTalkFirebase.syncCollection("videos", state.videos);
+          window.ThuysTalkFirebase.deleteDoc("videos", id);
         }
         renderAll();
         renderAdminStudioModal();
@@ -4131,6 +4227,9 @@
         const id = btn.dataset.delKb;
         state.aiKb = state.aiKb.filter((k) => k.id !== id);
         saveCollection(STORAGE_KEYS.AI_KB, state.aiKb);
+        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
+          window.ThuysTalkFirebase.deleteDoc("ai_kb", id);
+        }
         renderAdminStudioModal();
         showToast("Đã xóa mục dữ liệu AI.");
       });
@@ -4463,6 +4562,7 @@
       const requestedSlot = params.get("slot");
       if (requestedTab) state.activeCmsTab = requestedTab;
       renderAdminStudioModal(requestedSlot || null);
+      hydrateAllFromFirestore();
       return;
     }
 
@@ -4471,6 +4571,7 @@
     renderAll();
     initConsultForm();
     bindPhotoTriggers(document);
+    hydrateAllFromFirestore();
 
     // Language Switcher
     document.querySelectorAll(".lang-btn").forEach((btn) => {

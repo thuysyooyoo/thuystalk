@@ -406,6 +406,90 @@
         console.warn("fetchLeads error:", err);
         return [];
       }
+    },
+
+    // 9. GENERIC CRUD OPERATIONS FOR SINGLE SOURCE OF TRUTH (SSoT)
+    saveDoc: async function (collName, docId, data) {
+      initFirebase();
+      if (!db || !collName || !docId) return false;
+      try {
+        await safeFirestoreWrite(
+          db.collection(collName).doc(String(docId)).set({
+            ...data,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true }),
+          2500
+        );
+        return true;
+      } catch (err) {
+        console.warn(`saveDoc error (${collName}/${docId}):`, err);
+        return false;
+      }
+    },
+
+    deleteDoc: async function (collName, docId) {
+      initFirebase();
+      if (!db || !collName || !docId) return false;
+      try {
+        await safeFirestoreWrite(
+          db.collection(collName).doc(String(docId)).delete(),
+          2500
+        );
+        return true;
+      } catch (err) {
+        console.warn(`deleteDoc error (${collName}/${docId}):`, err);
+        return false;
+      }
+    },
+
+    fetchCollection: async function (collName) {
+      initFirebase();
+      if (!db || !collName) return [];
+      try {
+        const snap = await db.collection(collName).get();
+        const list = [];
+        snap.forEach((doc) => {
+          list.push({ id: doc.id, ...doc.data() });
+        });
+        return list;
+      } catch (err) {
+        console.warn(`fetchCollection error (${collName}):`, err);
+        return [];
+      }
+    },
+
+    saveSiteSettings: async function (settingKey, data) {
+      initFirebase();
+      if (!db || !settingKey) return false;
+      try {
+        await safeFirestoreWrite(
+          db.collection("site_settings").doc(String(settingKey)).set({
+            data: data,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true }),
+          2500
+        );
+        return true;
+      } catch (err) {
+        console.warn(`saveSiteSettings error (${settingKey}):`, err);
+        return false;
+      }
+    },
+
+    fetchSiteSettings: async function (settingKey) {
+      initFirebase();
+      if (!db || !settingKey) return null;
+      try {
+        const snap = await db.collection("site_settings").doc(String(settingKey)).get();
+        if (snap.exists) {
+          const val = snap.data();
+          return val.data !== undefined ? val.data : val;
+        }
+        return null;
+      } catch (err) {
+        console.warn(`fetchSiteSettings error (${settingKey}):`, err);
+        return null;
+      }
     }
   };
 })();
