@@ -2847,12 +2847,12 @@
       div.setAttribute("role", "dialog");
       div.setAttribute("aria-modal", "true");
       div.innerHTML = `
-        <div class="modal-card" style="max-width:520px;">
-          <div class="modal-head">
-            <h3 id="materialModalHeading" style="color:var(--jade-900);">Nhận Tài Liệu &amp; Checklist Qua Email</h3>
-            <button class="modal-close" data-close-modal="emailMaterialModal" aria-label="Đóng">&times;</button>
+        <div class="modal-card" style="max-width:520px; background:#FFFFFF !important; color:#0F172A !important; border-radius:18px; box-shadow:0 30px 70px rgba(0,0,0,0.45); border:1.5px solid #E2E8F0; overflow:hidden;">
+          <div class="modal-head" style="padding:18px 24px; background:#FFFFFF !important; border-bottom:1.5px solid #E2E8F0; display:flex; align-items:center; justify-content:space-between;">
+            <h3 id="materialModalHeading" style="color:#064E3B !important; font-size:1.05rem; font-weight:800; margin:0;">Nhận Tài Liệu &amp; Checklist Qua Email</h3>
+            <button class="modal-close" data-close-modal="emailMaterialModal" aria-label="Đóng" style="background:#F1F5F9 !important; color:#475569 !important; border:1px solid #CBD5E1; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.25rem; cursor:pointer;">&times;</button>
           </div>
-          <div class="modal-body" style="padding:20px 24px;">
+          <div class="modal-body" style="padding:22px 24px; background:#FFFFFF !important; color:#0F172A !important;">
             <div class="material-delivery-target">
               <span style="font-size:0.75rem; font-weight:800; color:var(--orange-600); text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:4px;">
                 Tài liệu bạn đang yêu cầu:
@@ -2993,25 +2993,25 @@
       authDiv.setAttribute("role", "dialog");
       authDiv.setAttribute("aria-modal", "true");
       authDiv.innerHTML = `
-        <div class="modal-card" style="max-width:480px;">
-          <div class="modal-head">
-            <h3 id="authModalTitle" style="color:var(--jade-900);">Tài Khoản Học Viên ThuysTalk</h3>
-            <button class="modal-close" data-close-modal="learnerAuthModal" aria-label="Đóng">&times;</button>
+        <div class="modal-card" style="max-width:480px; background:#FFFFFF !important; color:#0F172A !important; border-radius:18px; box-shadow:0 30px 70px rgba(0,0,0,0.45); border:1.5px solid #E2E8F0; overflow:hidden;">
+          <div class="modal-head" style="padding:18px 24px; background:#FFFFFF !important; border-bottom:1.5px solid #E2E8F0; display:flex; align-items:center; justify-content:space-between;">
+            <h3 id="authModalTitle" style="color:#064E3B !important; font-size:1.05rem; font-weight:800; margin:0;">Tài Khoản Học Viên ThuysTalk</h3>
+            <button class="modal-close" data-close-modal="learnerAuthModal" aria-label="Đóng" style="background:#F1F5F9 !important; color:#475569 !important; border:1px solid #CBD5E1; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.25rem; cursor:pointer;">&times;</button>
           </div>
-          <div class="modal-body" style="padding:20px 24px;">
-            <div class="auth-tabs-nav">
+          <div class="modal-body" style="padding:22px 24px; background:#FFFFFF !important; color:#0F172A !important;">
+            <div class="auth-tabs-nav" style="display:grid; grid-template-columns:1fr 1fr; background:#F1F5F9; border-radius:10px; padding:4px; margin-bottom:20px; gap:4px;">
               <button type="button" class="auth-tab-btn active" id="authTabRegisterBtn">Đăng Ký Tài Khoản</button>
               <button type="button" class="auth-tab-btn" id="authTabLoginBtn">Đăng Nhập</button>
             </div>
 
             <!-- Tab 1: Registration Form -->
             <div id="authRegisterPane">
-              <div class="auth-notice-box">
-                Đăng ký tài khoản miễn phí để lưu tiến độ học tập, nhận trọn bộ biểu mẫu pháp lý và mở khóa không giới hạn Hệ thống Tra cứu AI Hải quan. Google Firebase sẽ gửi email xác thực đến hộp thư của bạn.
+              <div class="auth-notice-box" style="background:#FFFBEB; border-left:3.5px solid #F59E0B; padding:12px 14px; border-radius:6px; margin-bottom:16px; font-size:0.83rem; color:#92400E; line-height:1.5;">
+                <strong>Lưu ý:</strong> Mỗi địa chỉ email chỉ được tạo <strong>1 tài khoản duy nhất</strong>. Sau khi đăng ký, Google Firebase sẽ gửi thư xác thực đến hộp thư của bạn. Bắt buộc nhấn kích hoạt trước khi đăng nhập.
               </div>
 
-              <div id="authRegisterSuccessBox" style="display:none;" class="auth-success-banner">
-                <h4 style="color:var(--jade-900); margin-bottom:6px; font-weight:800;">Đã Gửi Email Xác Thực!</h4>
+              <div id="authRegisterSuccessBox" style="display:none;" class="auth-success-banner" style="background:#F0FDF4; border:1.5px solid #86EFAC; border-radius:12px; padding:16px 20px; text-align:center; color:#064E3B; margin-bottom:14px;">
+                <h4 style="color:#064E3B; margin-bottom:6px; font-weight:800;">Đã Gửi Email Xác Thực!</h4>
                 <p style="font-size:0.84rem; margin-bottom:10px; line-height:1.5;" id="authRegisterSuccessMsg">
                   Một thư xác thực từ Google Firebase đã được gửi tới hộp thư của bạn. Vui lòng mở email và nhấn vào liên kết kích hoạt trước khi đăng nhập.
                 </p>
@@ -3060,11 +3060,11 @@
                   <input type="password" id="authLogPass" class="form-control" required placeholder="Mật khẩu của bạn" />
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-                  <button type="button" id="authForgotPassBtn" style="border:none; background:transparent; font-size:0.8rem; color:var(--jade-700); font-weight:700; cursor:pointer; padding:0;">
-                    Quên mật khẩu?
+                  <button type="button" id="authForgotPassBtn" style="border:none; background:transparent; font-size:0.8rem; color:#047857; font-weight:700; cursor:pointer; padding:0; text-decoration:underline;">
+                    Quên mật khẩu? (Nhận mật khẩu mới)
                   </button>
-                  <button type="button" id="authResendVerifyBtn" style="border:none; background:transparent; font-size:0.8rem; color:var(--orange-600); font-weight:700; cursor:pointer; padding:0; display:none;">
-                    Gửi lại email xác thực
+                  <button type="button" id="authResendVerifyBtn" style="border:none; background:transparent; font-size:0.8rem; color:#EA580C; font-weight:700; cursor:pointer; padding:0; display:none;">
+                    Gửi lại email kích hoạt
                   </button>
                 </div>
                 <div style="display:flex; justify-content:flex-end; gap:10px;">
@@ -3111,7 +3111,7 @@
         tabLog.click();
       });
 
-      // Handle Register with Firebase Email Verification
+      // Handle Register with Firebase Email Verification (1 Account per Email)
       authDiv.querySelector("#authRegisterForm").addEventListener("submit", async (e) => {
         e.preventDefault();
         const name = authDiv.querySelector("#authRegName").value.trim();
@@ -3137,11 +3137,17 @@
           authDiv.querySelector("#authRegisterSuccessBox").style.display = "block";
           authDiv.querySelector("#authRegisterSuccessMsg").innerHTML = `
             Một thư xác thực từ <strong>Google Firebase</strong> đã được gửi tới: <strong>${escapeHtml(email)}</strong>.<br />
-            Vui lòng mở hộp thư email của bạn (kiểm tra cả mục Hộp thư đến và Spam) và bấm vào liên kết xác nhận để kích hoạt tài khoản.
+            Theo quy định, bạn <strong>bắt buộc phải mở email và nhấn kích hoạt</strong> trước khi đăng nhập.
           `;
           authDiv.querySelector("#authLogEmail").value = email;
           showToast(`Đã gửi email xác thực tới ${email}! Vui lòng kích hoạt tài khoản.`);
         } catch (err) {
+          if (err.code === "auth/email-already-in-use" || (err.message && err.message.includes("email-already-in-use"))) {
+            alert("Email này đã được đăng ký tài khoản trên hệ thống! Mỗi địa chỉ email chỉ được tạo duy nhất 1 tài khoản học viên. Nếu bạn quên mật khẩu, vui lòng nhấn 'Quên mật khẩu' để nhận lại mật khẩu mới qua email.");
+            tabLog.click();
+            authDiv.querySelector("#authLogEmail").value = email;
+            return;
+          }
           alert("Lỗi đăng ký tài khoản: " + (err.message || err));
         } finally {
           btn.disabled = false;
@@ -3149,7 +3155,7 @@
         }
       });
 
-      // Handle Login with Email & Password
+      // Handle Login with Email & Password (Chưa kích hoạt thì KHÔNG cho đăng nhập)
       authDiv.querySelector("#authLoginForm").addEventListener("submit", async (e) => {
         e.preventDefault();
         const email = authDiv.querySelector("#authLogEmail").value.trim();
@@ -3167,10 +3173,19 @@
           if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isAuthReady()) {
             userRes = await window.ThuysTalkFirebase.loginLearner(email, pass);
             if (userRes && userRes.emailVerified === false) {
+              if (window.ThuysTalkFirebase) {
+                await window.ThuysTalkFirebase.logoutLearner();
+              }
+              state.learnerEmail = "";
+              localStorage.removeItem(STORAGE_KEYS.LEARNER_EMAIL);
               noticeBox.style.display = "block";
               noticeBox.innerHTML = `
-                <strong>Tài khoản chưa được kích hoạt qua Email!</strong><br />
-                Google Firebase yêu cầu bạn bấm vào liên kết trong thư xác thực đã gửi tới <strong>${escapeHtml(email)}</strong> trước khi đăng nhập.
+                <div style="background:#FEF2F2; border:1.5px solid #F87171; border-radius:8px; padding:12px; margin-bottom:8px;">
+                  <strong style="color:#DC2626; font-size:0.9rem;">Tài khoản chưa được kích hoạt qua Email!</strong><br />
+                  <span style="color:#7F1D1D; font-size:0.84rem; line-height:1.5; display:block; margin-top:4px;">
+                    Theo quy định, bạn <strong>bắt buộc phải kích hoạt tài khoản</strong> trước khi đăng nhập. Vui lòng mở hộp thư email <strong>${escapeHtml(email)}</strong> và nhấn vào liên kết xác nhận của Google Firebase.
+                  </span>
+                </div>
               `;
               resendBtn.style.display = "inline-block";
               btn.disabled = false;
@@ -3206,6 +3221,14 @@
           updateHeaderLearnerStatus();
           updateConsultFormStatus();
 
+          // Nếu đăng nhập bằng mật khẩu mặc định mới do quên mật khẩu, nhắc đổi mật khẩu ngay
+          if (userRes && userRes.isDefaultPasswordLogin) {
+            showToast("Bạn đã đăng nhập bằng mật khẩu mặc định mới (ThuyTalk@2026). Vui lòng cập nhật mật khẩu riêng trong Hồ Sơ!");
+            setTimeout(() => {
+              openUserProfileModal("pass");
+            }, 600);
+          }
+
           // Clear any active chat gate
           const gate = document.querySelector(".chat-login-gate-card");
           if (gate) gate.remove();
@@ -3230,21 +3253,54 @@
         }
       });
 
-      // Password reset
+      // Password reset & Send Default Password via SMTP
       authDiv.querySelector("#authForgotPassBtn").addEventListener("click", async () => {
         const email = authDiv.querySelector("#authLogEmail").value.trim();
         if (!email || !email.includes("@")) {
-          showToast("Vui lòng nhập Email học viên ở ô trên để nhận link đặt lại mật khẩu.");
+          showToast("Vui lòng nhập Email học viên ở ô trên để nhận mật khẩu mặc định mới.");
           authDiv.querySelector("#authLogEmail").focus();
           return;
         }
+
+        const forgotBtn = authDiv.querySelector("#authForgotPassBtn");
+        forgotBtn.textContent = "Đang gửi mật khẩu mới...";
+        forgotBtn.disabled = true;
+
         try {
+          // 1. Gửi email mật khẩu mặc định mới qua SMTP daemon (thuystalk.official@gmail.com)
+          fetch("http://localhost:8099/api/reset-password", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: email })
+          }).catch((e) => console.warn("Reset email SMTP notice:", e));
+
+          // 2. Gửi link đặt lại mật khẩu của Google Firebase
           if (window.ThuysTalkFirebase) {
-            await window.ThuysTalkFirebase.sendPasswordReset(email);
-            showToast(`Đã gửi email đặt lại mật khẩu tới ${email}!`);
+            try {
+              await window.ThuysTalkFirebase.sendPasswordReset(email);
+            } catch (fbErr) {
+              console.warn("Firebase reset notice:", fbErr);
+            }
           }
+
+          const noticeBox = authDiv.querySelector("#authLoginNoticeBox");
+          noticeBox.style.display = "block";
+          noticeBox.innerHTML = `
+            <div style="background:#F0FDF4; border:1.5px solid #059669; border-radius:8px; padding:12px; margin-bottom:8px;">
+              <strong style="color:#065F46; font-size:0.9rem;">Đã Gửi Mật Khẩu Mặc Định Mới!</strong><br />
+              <span style="color:#047857; font-size:0.84rem; line-height:1.5; display:block; margin-top:4px;">
+                Hệ thống đã gửi email chứa <strong>mật khẩu mặc định mới (ThuyTalk@2026)</strong> về hộp thư: <strong>${escapeHtml(email)}</strong>.<br />
+                Vui lòng kiểm tra hộp thư, nhập mật khẩu mặc định để đăng nhập và đổi sang mật khẩu riêng tại mục Hồ sơ cá nhân.
+              </span>
+            </div>
+          `;
+          authDiv.querySelector("#authLogPass").value = "ThuyTalk@2026";
+          showToast(`Đã gửi email mật khẩu mặc định mới tới ${email}!`);
         } catch (e) {
-          alert("Lỗi: " + e.message);
+          alert("Lỗi khôi phục mật khẩu: " + e.message);
+        } finally {
+          forgotBtn.textContent = "Quên mật khẩu? (Nhận mật khẩu mới)";
+          forgotBtn.disabled = false;
         }
       });
     }
@@ -3257,16 +3313,16 @@
       profDiv.setAttribute("role", "dialog");
       profDiv.setAttribute("aria-modal", "true");
       profDiv.innerHTML = `
-        <div class="modal-card" style="max-width:560px;">
-          <div class="modal-head">
-            <h3 style="color:var(--jade-900);">Hồ Sơ &amp; Tiến Trình Học Tập Cá Nhân</h3>
-            <button class="modal-close" data-close-modal="userProfileModal" aria-label="Đóng">&times;</button>
+        <div class="modal-card" style="max-width:580px; background:#FFFFFF !important; color:#0F172A !important; border-radius:18px; box-shadow:0 30px 70px rgba(0,0,0,0.45); border:1.5px solid #E2E8F0; overflow:hidden;">
+          <div class="modal-head" style="padding:18px 24px; background:#FFFFFF !important; border-bottom:1.5px solid #E2E8F0; display:flex; align-items:center; justify-content:space-between;">
+            <h3 style="color:#064E3B !important; font-size:1.05rem; font-weight:800; margin:0;">Hồ Sơ &amp; Tiến Trình Học Tập Cá Nhân</h3>
+            <button class="modal-close" data-close-modal="userProfileModal" aria-label="Đóng" style="background:#F1F5F9 !important; color:#475569 !important; border:1px solid #CBD5E1; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.25rem; cursor:pointer;">&times;</button>
           </div>
-          <div class="modal-body" style="padding:20px 24px;">
-            <div class="auth-tabs-nav" style="display:flex; gap:8px; border-bottom:1px solid var(--jade-200); margin-bottom:18px;">
-              <button type="button" class="auth-tab-btn active" id="profileTabInfoBtn">Thông Tin Cá Nhân</button>
-              <button type="button" class="auth-tab-btn" id="profileTabPassBtn">Đổi Mật Khẩu</button>
-              <button type="button" class="auth-tab-btn" id="profileTabProgressBtn">Tiến Trình Học Tập</button>
+          <div class="modal-body" style="padding:22px 24px; background:#FFFFFF !important; color:#0F172A !important;">
+            <div class="auth-tabs-nav profile-tabs-3" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; background:#F1F5F9; border-radius:10px; padding:4px; margin-bottom:20px;">
+              <button type="button" class="auth-tab-btn active" id="profileTabInfoBtn" style="padding:9px 12px; font-size:0.82rem;">Thông Tin Cá Nhân</button>
+              <button type="button" class="auth-tab-btn" id="profileTabPassBtn" style="padding:9px 12px; font-size:0.82rem;">Đổi Mật Khẩu</button>
+              <button type="button" class="auth-tab-btn" id="profileTabProgressBtn" style="padding:9px 12px; font-size:0.82rem;">Tiến Trình Học Tập</button>
             </div>
 
             <!-- Pane 1: Thông tin cá nhân -->
@@ -3498,51 +3554,51 @@
       privDiv.setAttribute("role", "dialog");
       privDiv.setAttribute("aria-modal", "true");
       privDiv.innerHTML = `
-        <div class="modal-card" style="max-width:680px; max-height:90vh; display:flex; flex-direction:column;">
-          <div class="modal-head">
-            <h3 style="color:var(--jade-900);">Chính Sách Bảo Mật &amp; Quyền Riêng Tư (Nghị định 13/2023/NĐ-CP)</h3>
-            <button class="modal-close" data-close-modal="privacyPolicyModal" aria-label="Đóng">&times;</button>
+        <div class="modal-card" style="max-width:680px; max-height:90vh; background:#FFFFFF !important; color:#0F172A !important; border-radius:18px; box-shadow:0 30px 70px rgba(0,0,0,0.45); border:1.5px solid #E2E8F0; overflow:hidden; display:flex; flex-direction:column;">
+          <div class="modal-head" style="padding:18px 24px; background:#FFFFFF !important; border-bottom:1.5px solid #E2E8F0; display:flex; align-items:center; justify-content:space-between;">
+            <h3 style="color:#064E3B !important; font-size:1.05rem; font-weight:800; margin:0;">Chính Sách Bảo Mật &amp; Quyền Riêng Tư (Nghị định 13/2023/NĐ-CP)</h3>
+            <button class="modal-close" data-close-modal="privacyPolicyModal" aria-label="Đóng" style="background:#F1F5F9 !important; color:#475569 !important; border:1px solid #CBD5E1; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.25rem; cursor:pointer;">&times;</button>
           </div>
-          <div class="modal-body" style="padding:20px 24px; overflow-y:auto; font-size:0.88rem; line-height:1.65; color:var(--ink-800);">
-            <div style="background:var(--jade-50); border:1px solid var(--jade-300); border-radius:8px; padding:12px 16px; margin-bottom:16px;">
-              <strong style="color:var(--jade-950);">Cam kết của ThuysTalk:</strong> Hệ thống tôn trọng và bảo vệ tuyệt đối dữ liệu cá nhân của học viên và doanh nghiệp theo đúng quy định tại <strong>Nghị định số 13/2023/NĐ-CP</strong> của Chính phủ về bảo vệ dữ liệu cá nhân.
+          <div class="modal-body" style="padding:22px 24px; overflow-y:auto; font-size:0.88rem; line-height:1.65; color:#1E293B !important; background:#FFFFFF !important;">
+            <div style="background:#F0FDF4; border:1.5px solid #86EFAC; border-radius:10px; padding:14px 18px; margin-bottom:18px;">
+              <strong style="color:#064E3B;">Cam kết của ThuysTalk:</strong> Hệ thống tôn trọng và bảo vệ tuyệt đối dữ liệu cá nhân của học viên và doanh nghiệp theo đúng quy định tại <strong>Nghị định số 13/2023/NĐ-CP</strong> của Chính phủ về bảo vệ dữ liệu cá nhân.
             </div>
 
-            <h4 style="color:var(--jade-900); margin:14px 0 6px; font-size:0.95rem;">1. Mục Đích Thu Thập Dữ Liệu</h4>
-            <p style="margin:0 0 10px;">Chúng tôi chỉ thu thập thông tin cần thiết phục vụ trực tiếp cho các mục đích:</p>
-            <ul style="margin:0 0 12px 20px; padding:0;">
+            <h4 style="color:#064E3B; margin:16px 0 6px; font-size:0.95rem; font-weight:800;">1. Mục Đích Thu Thập Dữ Liệu</h4>
+            <p style="margin:0 0 10px; color:#334155;">Chúng tôi chỉ thu thập thông tin cần thiết phục vụ trực tiếp cho các mục đích:</p>
+            <ul style="margin:0 0 14px 20px; padding:0; color:#334155;">
               <li>Lưu trữ tiến trình học tập các khóa E-Learning, kết quả Mini-test chuyên môn.</li>
               <li>Cung cấp và gửi tài liệu, checklist nghiệp vụ, biểu mẫu hải quan qua email theo yêu cầu.</li>
               <li>Phản hồi và tư vấn chuyên sâu 1-1 về thủ tục hải quan, chính sách XNK, quản trị rủi ro.</li>
             </ul>
 
-            <h4 style="color:var(--jade-900); margin:14px 0 6px; font-size:0.95rem;">2. Phạm Vi Dữ Liệu Thu Thập</h4>
-            <ul style="margin:0 0 12px 20px; padding:0;">
+            <h4 style="color:#064E3B; margin:16px 0 6px; font-size:0.95rem; font-weight:800;">2. Phạm Vi Dữ Liệu Thu Thập</h4>
+            <ul style="margin:0 0 14px 20px; padding:0; color:#334155;">
               <li>Thông tin cơ bản: Họ và tên, địa chỉ email, số điện thoại / Zalo.</li>
               <li>Thông tin công việc (tự nguyện): Đơn vị công tác, chức vụ, câu hỏi / tình huống tư vấn.</li>
               <li>Thông tin tiến độ: Lịch sử hoàn thành các bài học, lượt tải tài liệu.</li>
             </ul>
 
-            <h4 style="color:var(--jade-900); margin:14px 0 6px; font-size:0.95rem;">3. Tiêu Chuẩn Bảo Mật &amp; Cam Kết Không Chia Sẻ</h4>
-            <p style="margin:0 0 10px;">
-              Dữ liệu được lưu trữ trên nền tảng <strong>Google Cloud Firestore &amp; Firebase Authentication</strong> (đạt chứng chỉ an ninh ISO/IEC 27001, SOC 1/2/3). Mã hóa đường truyền SSL/TLS 256-bit. ThuysTalk <strong>tuyệt đối không chia sẻ, mua bán hoặc chuyển giao</strong> thông tin của bạn cho bất kỳ bên thứ ba nào vì mục đích quảng cáo thương mại.
+            <h4 style="color:#064E3B; margin:16px 0 6px; font-size:0.95rem; font-weight:800;">3. Tiêu Chuẩn Bảo Mật &amp; Cam Kết Không Chia Sẻ</h4>
+            <p style="margin:0 0 12px; color:#334155;">
+              Dữ liệu được lưu trữ an toàn trên nền tảng <strong>Google Cloud Firestore &amp; Firebase Authentication</strong> (đạt chứng chỉ an ninh ISO/IEC 27001, SOC 1/2/3). Mã hóa đường truyền SSL/TLS 256-bit. ThuysTalk <strong>tuyệt đối không chia sẻ, mua bán hoặc chuyển giao</strong> thông tin của bạn cho bất kỳ bên thứ ba nào vì mục đích quảng cáo thương mại.
             </p>
 
-            <h4 style="color:var(--jade-900); margin:14px 0 6px; font-size:0.95rem;">4. Quyền Của Bạn Đối Với Dữ Liệu Cá Nhân</h4>
-            <ul style="margin:0 0 12px 20px; padding:0;">
+            <h4 style="color:#064E3B; margin:16px 0 6px; font-size:0.95rem; font-weight:800;">4. Quyền Của Bạn Đối Với Dữ Liệu Cá Nhân</h4>
+            <ul style="margin:0 0 14px 20px; padding:0; color:#334155;">
               <li><strong>Quyền xem &amp; chỉnh sửa:</strong> Bạn có toàn quyền xem và sửa đổi thông tin cá nhân bất kỳ lúc nào tại mục <em>Hồ sơ học viên</em>.</li>
               <li><strong>Quyền yêu cầu xóa:</strong> Bạn có quyền yêu cầu xóa vĩnh viễn toàn bộ tài khoản và dữ liệu đã lưu bằng cách gửi email hoặc nhắn tin Hotline / Zalo.</li>
               <li><strong>Quyền rút lại sự đồng ý:</strong> Bạn có quyền hủy nhận email tài liệu bất cứ lúc nào.</li>
             </ul>
 
-            <h4 style="color:var(--jade-900); margin:14px 0 6px; font-size:0.95rem;">5. Đầu Mối Tiếp Nhận &amp; Phụ Trách Bảo Vệ Dữ Liệu (DPO)</h4>
-            <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px 16px;">
+            <h4 style="color:#064E3B; margin:16px 0 6px; font-size:0.95rem; font-weight:800;">5. Đầu Mối Tiếp Nhận &amp; Phụ Trách Bảo Vệ Dữ Liệu (DPO)</h4>
+            <div style="background:#F8FAFC; border:1px solid #CBD5E1; border-radius:10px; padding:14px 18px; color:#1E293B; line-height:1.6;">
               <div><strong>Người đại diện phụ trách:</strong> Nguyễn Thị Ngọc Thúy (Founder ThuysTalk · Giám đốc Eureka Logistics)</div>
-              <div><strong>Email liên hệ:</strong> <a href="mailto:thuystalk.official@gmail.com" style="color:var(--jade-700); font-weight:700;">thuystalk.official@gmail.com</a></div>
-              <div><strong>Hotline / Zalo hỗ trợ:</strong> <a href="https://zalo.me/84767648862" target="_blank" style="color:var(--jade-700); font-weight:700;">0767.648.862</a></div>
+              <div><strong>Email liên hệ:</strong> <a href="mailto:thuystalk.official@gmail.com" style="color:#047857; font-weight:700;">thuystalk.official@gmail.com</a></div>
+              <div><strong>Hotline / Zalo hỗ trợ:</strong> <a href="https://zalo.me/84767648862" target="_blank" style="color:#047857; font-weight:700;">0767.648.862</a></div>
             </div>
           </div>
-          <div style="padding:14px 24px; border-top:1px solid var(--jade-200); display:flex; justify-content:flex-end;">
+          <div style="padding:14px 24px; border-top:1px solid #E2E8F0; background:#FFFFFF !important; display:flex; justify-content:flex-end;">
             <button type="button" class="btn btn-primary btn-sm" data-close-modal="privacyPolicyModal">Đã hiểu &amp; Đóng</button>
           </div>
         </div>

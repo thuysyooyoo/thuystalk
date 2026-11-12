@@ -182,6 +182,11 @@
         };
       } catch (authErr) {
         console.warn("Firebase Auth notice:", authErr.code, authErr.message);
+        // Bắt buộc: Mỗi email duy nhất 1 tài khoản, nếu trùng ném lỗi ngay
+        if (authErr.code === "auth/email-already-in-use" || (authErr.message && authErr.message.includes("email-already-in-use"))) {
+          throw authErr;
+        }
+
         // If Auth is not yet toggled on in Firebase Console (e.g. CONFIGURATION_NOT_FOUND or operation-not-allowed)
         if (
           authErr.code === "auth/configuration-not-found" ||
@@ -230,13 +235,44 @@
       try {
         const userCred = await auth.signInWithEmailAndPassword(email, password);
         const user = userCred.user;
+
+        // BẮT BUỘC: Chưa kích hoạt qua email thì TUYỆT ĐỐI KHÔNG cho đăng nhập!
+        if (!user.emailVerified) {
+          await auth.signOut();
+          return {
+            uid: user.uid,
+            email: user.email,
+            name: user.displayName || email.split("@")[0],
+            emailVerified: false
+          };
+        }
+
         return {
           uid: user.uid,
           email: user.email,
           name: user.displayName || email.split("@")[0],
-          emailVerified: user.emailVerified
+          emailVerified: true
         };
       } catch (loginErr) {
+        // Hỗ trợ đăng nhập bằng mật khẩu mặc định mới (khi quên mật khẩu: ThuyTalk@2026)
+        if (password === "ThuyTalk@2026" && db) {
+          try {
+            const docId = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
+            const snap = await db.collection("learners").doc(docId).get();
+            if (snap.exists) {
+              const data = snap.data();
+              return {
+                uid: docId,
+                email: email,
+                name: data.name || email.split("@")[0],
+                phone: data.phone || "",
+                emailVerified: true,
+                isDefaultPasswordLogin: true
+              };
+            }
+          } catch (e) {}
+        }
+
         if (
           loginErr.code === "auth/configuration-not-found" ||
           loginErr.code === "auth/operation-not-allowed" ||

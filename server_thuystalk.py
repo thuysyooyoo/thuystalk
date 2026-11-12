@@ -151,6 +151,8 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_send_email()
         elif parsed.path == "/api/send-bulk-email":
             self.handle_send_bulk_email()
+        elif parsed.path == "/api/reset-password":
+            self.handle_reset_password()
         else:
             self._send_json(404, {"error": "Endpoint Not Found"})
 
@@ -438,6 +440,106 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             })
         except Exception as exc:
             self._send_json(500, {"ok": False, "error": f"Lỗi xử lý gửi email hàng loạt: {exc}"})
+
+    def handle_reset_password(self):
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(length).decode("utf-8")
+            payload = json.loads(raw_body) if raw_body else {}
+
+            email = str(payload.get("email", "")).strip()
+            if not email or "@" not in email:
+                self._send_json(400, {"ok": False, "error": "Địa chỉ Email không hợp lệ."})
+                return
+
+            default_pwd = "ThuyTalk@2026"
+            smtp_success = False
+            smtp_notice = ""
+
+            try:
+                smtp_server = "smtp.gmail.com"
+                smtp_port = 465
+                sender_email = "thuystalk.official@gmail.com"
+                sender_pwd = "oysz mggj whtp hsij"
+
+                msg = MIMEMultipart("alternative")
+                msg["Subject"] = f"[ThuysTalk] Mật Khẩu Mặc Định Mới & Khôi Phục Tài Khoản ({email})"
+                msg["From"] = f"ThuysTalk Official <{sender_email}>"
+                msg["To"] = email
+
+                html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #0F172A; background-color: #F8FAFC; margin: 0; padding: 20px; }}
+    .card {{ max-width: 600px; margin: 0 auto; background: #FFFFFF; border-radius: 14px; overflow: hidden; border: 1px solid #E2E8F0; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }}
+    .head {{ background: #064E3B; padding: 24px; color: #FFFFFF; text-align: center; }}
+    .body {{ padding: 28px 24px; }}
+    .pwd-box {{ background: #F0FDF4; border: 2px dashed #059669; border-radius: 10px; padding: 16px; text-align: center; margin: 20px 0; }}
+    .pwd-code {{ font-size: 1.4rem; font-weight: 800; color: #064E3B; letter-spacing: 1px; font-family: monospace; }}
+    .btn {{ display: inline-block; background: #EA580C; color: #FFFFFF; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; margin-top: 15px; }}
+    .footer {{ background: #F1F5F9; padding: 16px; font-size: 0.8rem; color: #64748B; text-align: center; border-top: 1px solid #E2E8F0; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="head">
+      <h2 style="margin:0; font-size: 1.3rem;">THUYSTALK - KHÔI PHỤC MẬT KHẨU TÀI KHOẢN</h2>
+      <p style="margin: 4px 0 0; opacity: 0.85; font-size: 0.88rem;">Hệ thống E-Learning &amp; Tra cứu Pháp lý Hải quan</p>
+    </div>
+    <div class="body">
+      <p>Kính gửi <strong>Quý học viên ({email})</strong>,</p>
+      <p>Hệ thống ThuysTalk đã nhận được yêu cầu khôi phục mật khẩu đăng nhập của bạn.</p>
+      
+      <p>Dưới đây là <strong>mật khẩu mặc định mới</strong> tạm thời được cấp để bạn đăng nhập ngay:</p>
+      <div class="pwd-box">
+        <div style="font-size: 0.8rem; color: #047857; text-transform: uppercase; font-weight: bold; margin-bottom: 4px;">Mật Khẩu Mặc Định Tạm Thời:</div>
+        <div class="pwd-code">{default_pwd}</div>
+      </div>
+
+      <p style="font-size: 0.88rem; color: #475569;">
+        <strong>Lưu ý quan trọng:</strong><br />
+        1. Bạn hãy dùng email này kèm mật khẩu <code>{default_pwd}</code> để đăng nhập lại hệ thống.<br />
+        2. Sau khi đăng nhập thành công, bạn vui lòng nhấp vào tên của mình trên thanh menu hoặc banner E-Learning để vào mục <strong>Hồ Sơ Cá Nhân &rarr; Đổi Mật Khẩu</strong> nhằm đổi sang mật khẩu riêng của bạn.<br />
+        3. Nếu bạn cũng nhận được email đặt lại mật khẩu từ Google Firebase, bạn có thể nhấp vào liên kết trong thư đó để tự tạo mật khẩu mới.
+      </p>
+
+      <div style="text-align: center; margin-top: 25px;">
+        <a href="http://localhost:8099/index.html" class="btn" style="color:#ffffff;">Đăng Nhập Vào ThuysTalk Ngay</a>
+      </div>
+    </div>
+    <div class="footer">
+      <div>Người sáng lập &amp; Điều hành: <strong>Nguyễn Thị Ngọc Thúy</strong> (Giám đốc Eureka Logistics)</div>
+      <div>Hotline hỗ trợ kỹ thuật / Zalo: <strong>0767.648.862</strong> · Email: thuystalk.official@gmail.com</div>
+      <div style="margin-top: 6px;">Bảo mật theo tiêu chuẩn Nghị định 13/2023/NĐ-CP của Chính phủ.</div>
+    </div>
+  </div>
+</body>
+</html>"""
+                msg.attach(MIMEText(html_content, "html", "utf-8"))
+
+                server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=12)
+                server.login(sender_email, sender_pwd)
+                server.send_message(msg)
+                server.quit()
+                smtp_success = True
+                smtp_notice = "Đã gửi email mật khẩu mặc định thành công qua Gmail SMTP"
+                print(f"[SMTP THÀNH CÔNG] Đã gửi mật khẩu mặc định tới {email}")
+            except Exception as smtp_err:
+                smtp_success = False
+                smtp_notice = str(smtp_err)
+                print(f"[SMTP LỖI] Gửi mật khẩu mặc định thất bại: {smtp_err}")
+
+            self._send_json(200, {
+                "ok": True,
+                "delivered": smtp_success,
+                "defaultPassword": default_pwd,
+                "message": f"Hệ thống đã gửi mật khẩu mặc định mới về hộp thư {email}!" if smtp_success else f"Đã ghi nhận yêu cầu khôi phục mật khẩu cho {email}.",
+                "recipient": email
+            })
+        except Exception as exc:
+            self._send_json(500, {"ok": False, "error": f"Lỗi xử lý khôi phục mật khẩu: {exc}"})
 
     def handle_parse_excel(self):
         try:
