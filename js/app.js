@@ -734,7 +734,7 @@
     const content = [
       "====================================================================",
       "THUYSTALK E-LEARNING RESOURCE KIT & MINI-TEST WORKBOOK",
-      "Chuyên gia: Nguyễn Thị Ngọc Thúy (9+ Năm Thực Chiến XNK, Hải Quan & AI)",
+      "Chuyên gia: Nguyễn Thị Ngọc Thúy (9+ Năm Kinh Nghiệm Thực Tế XNK, Hải Quan & AI)",
       "====================================================================",
       "",
       "KHÓA HỌC: " + cTitleVi,
@@ -931,7 +931,11 @@
       </div>`;
 
     document.getElementById("videoRequestChecklistBtn").addEventListener("click", () => {
-      handleSendCourseKit(state.courses[0].id);
+      openEmailMaterialModal({
+        docTitle: "Checklist hành động từ video: " + vTitle,
+        docType: "Video Checklist",
+        courseOrItem: state.courses[0]
+      });
     });
 
     document.getElementById("articleModal").classList.add("open");
@@ -1057,7 +1061,11 @@
       </div>`;
 
     document.getElementById("artSendTemplateBtn").addEventListener("click", () => {
-      handleSendCourseKit(state.courses[0].id);
+      openEmailMaterialModal({
+        docTitle: "Biểu mẫu & Công văn trích dẫn bài viết: " + aTitle,
+        docType: "Article Template",
+        courseOrItem: state.courses[0]
+      });
     });
     document.getElementById("artGoConsultBtn").addEventListener("click", () => {
       document.getElementById("articleModal").classList.remove("open");
@@ -1546,7 +1554,7 @@
       },
       correctIndex: 1,
       explanation: {
-        vi: `Đúng vậy! Giải pháp thực chiến cần áp dụng ngay là: ${s2}`,
+        vi: `Đúng vậy! Giải pháp thực tế cần áp dụng ngay là: ${s2}`,
         en: `Spot on! The recommended practical safeguard is: ${s2}`
       }
     });
@@ -1985,7 +1993,7 @@
           let snippet = "";
           if (tagType === "h3") snippet = `\n<h3>Tiêu đề mục chính trong bài học</h3>\n`;
           else if (tagType === "p") snippet = `\n<p>Nội dung phân tích chi tiết...</p>\n`;
-          else if (tagType === "ul") snippet = `\n<ul>\n  <li>Điểm lưu ý thực chiến số 1</li>\n  <li>Điểm lưu ý thực chiến số 2</li>\n</ul>\n`;
+          else if (tagType === "ul") snippet = `\n<ul>\n  <li>Điểm lưu ý thực tế số 1</li>\n  <li>Điểm lưu ý thực tế số 2</li>\n</ul>\n`;
           else if (tagType === "quote")
             snippet = `\n<blockquote style="border-left:4px solid #0E8C6B; background:#EAFBF5; padding:12px 16px; border-radius:8px; font-weight:700; margin:12px 0;">Lưu ý pháp lý quan trọng: Đối chiếu kỹ chứng từ gốc trước khi truyền tờ khai.</blockquote>\n`;
           const start = textarea.selectionStart || textarea.value.length;
@@ -2047,8 +2055,782 @@
     }
   }
 
+  
+  // ==========================================================================
+  // WORD-STYLE RICH TEXT EDITOR (WYSIWYG CANVAS WITH INTUITIVE TOOLBAR)
+  // Supports: Bold, Italic, Underline, Strikethrough, Headings (H2, H3, P),
+  // Text & Highlight Color, Align (Left, Center, Right, Justify),
+  // Bullets & Numbers, +Image/Video (Firebase Storage/DataURL), +Link, +Table,
+  // +Note Box (Blockquote), Clear Format (Tx), Import HTML/Text file.
+  // ==========================================================================
+
+  function renderWordEditorMarkup(editorCanvasId, placeholder = "Nhập nội dung...") {
+    return `
+      <div class="word-editor-container" data-editor-canvas-id="${editorCanvasId}">
+        <div class="word-toolbar">
+          <!-- Undo / Redo -->
+          <div class="word-tool-group">
+            <button type="button" class="word-tool-btn" data-cmd="undo" title="Hoàn tác (Ctrl+Z)">↺</button>
+            <button type="button" class="word-tool-btn" data-cmd="redo" title="Làm lại (Ctrl+Y)">↻</button>
+          </div>
+
+          <!-- Format / Headings -->
+          <div class="word-tool-group">
+            <select class="word-tool-select" data-role="format-block" title="Định dạng đoạn">
+              <option value="p">Đoạn văn (Normal)</option>
+              <option value="h2">Tiêu đề lớn (H2)</option>
+              <option value="h3">Tiêu đề phụ (H3)</option>
+              <option value="blockquote">Trích dẫn / Lưu ý</option>
+            </select>
+          </div>
+
+          <!-- Font Styles -->
+          <div class="word-tool-group">
+            <button type="button" class="word-tool-btn" data-cmd="bold" title="In đậm (Ctrl+B)"><strong>B</strong></button>
+            <button type="button" class="word-tool-btn" data-cmd="italic" title="In nghiêng (Ctrl+I)"><em>I</em></button>
+            <button type="button" class="word-tool-btn" data-cmd="underline" title="Gạch chân (Ctrl+U)"><u>U</u></button>
+            <button type="button" class="word-tool-btn" data-cmd="strikeThrough" title="Gạch ngang"><s>S</s></button>
+          </div>
+
+          <!-- Text Color & Highlight -->
+          <div class="word-tool-group">
+            <label title="Màu chữ" style="display:inline-flex; align-items:center; gap:2px; padding:0 3px; cursor:pointer; font-size:0.75rem; font-weight:800;">
+              <span style="border-bottom:2.5px solid #0D4738; padding-bottom:1px;">A</span>
+              <input type="color" class="word-tool-color" data-role="foreColor" value="#0F172A" />
+            </label>
+            <label title="Tô màu nền (Highlight)" style="display:inline-flex; align-items:center; gap:2px; padding:0 3px; cursor:pointer; font-size:0.75rem; font-weight:800;">
+              <span style="background:#FEF08A; padding:1px 3px; border-radius:3px;">HL</span>
+              <input type="color" class="word-tool-color" data-role="hiliteColor" value="#FEF08A" />
+            </label>
+          </div>
+
+          <!-- Alignment -->
+          <div class="word-tool-group">
+            <button type="button" class="word-tool-btn" data-cmd="justifyLeft" title="Căn trái">≡</button>
+            <button type="button" class="word-tool-btn" data-cmd="justifyCenter" title="Căn giữa">≣</button>
+            <button type="button" class="word-tool-btn" data-cmd="justifyRight" title="Căn phải">≡</button>
+            <button type="button" class="word-tool-btn" data-cmd="justifyFull" title="Căn đều hai bên">☰</button>
+          </div>
+
+          <!-- Lists -->
+          <div class="word-tool-group">
+            <button type="button" class="word-tool-btn" data-cmd="insertUnorderedList" title="Danh sách gạch đầu dòng">• List</button>
+            <button type="button" class="word-tool-btn" data-cmd="insertOrderedList" title="Danh sách đánh số">1. List</button>
+          </div>
+
+          <!-- Inserts (Media, Link, Table, Callout) -->
+          <div class="word-tool-group">
+            <label class="word-tool-btn" style="cursor:pointer; display:inline-flex; align-items:center; gap:3px;" title="Chèn Ảnh hoặc Video từ máy tính">
+              <span>+ Ảnh/Video</span>
+              <input type="file" class="word-media-upload-input" accept="image/*,video/mp4,video/webm" multiple style="display:none;" />
+            </label>
+            <button type="button" class="word-tool-btn" data-role="insert-link" title="Chèn liên kết web">Link</button>
+            <button type="button" class="word-tool-btn" data-role="insert-table" title="Chèn bảng 3x3">+ Bảng</button>
+            <button type="button" class="word-tool-btn" data-role="insert-callout" title="Chèn khung ghi chú pháp lý">+ Khung Lưu Ý</button>
+          </div>
+
+          <!-- Clear format & file import -->
+          <div class="word-tool-group">
+            <button type="button" class="word-tool-btn" data-cmd="removeFormat" title="Xóa toàn bộ định dạng (Tx)">Tx</button>
+            <label class="word-tool-btn" style="cursor:pointer;" title="Nạp nhanh bài viết từ tệp HTML/Word có sẵn">
+              Nạp tệp .html
+              <input type="file" class="word-file-import-input" accept=".html,.htm,.txt,.md" style="display:none;" />
+            </label>
+          </div>
+        </div>
+
+        <!-- Editable Paper Canvas -->
+        <div id="${editorCanvasId}" class="word-paper-canvas" contenteditable="true" data-placeholder="${escapeHtml(placeholder)}"></div>
+
+        <!-- Status Bar -->
+        <div class="word-status-bar">
+          <span>Chế độ soạn thảo trực quan kiểu Word · Hỗ trợ định dạng, chèn ảnh & dán văn bản tức thì</span>
+          <span class="word-stat-counter" id="${editorCanvasId}_counter">0 từ · 0 ký tự</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function initWordEditor(containerEl, editorCanvasId) {
+    if (!containerEl) return null;
+    const canvas = containerEl.querySelector("#" + editorCanvasId) || containerEl.querySelector(".word-paper-canvas");
+    if (!canvas) return null;
+    const counter = containerEl.querySelector(".word-stat-counter");
+
+    function updateStats() {
+      const text = (canvas.innerText || "").trim();
+      const chars = text.length;
+      const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+      if (counter) {
+        counter.textContent = `${words} từ · ${chars} ký tự`;
+      }
+    }
+
+    canvas.addEventListener("input", updateStats);
+    canvas.addEventListener("keyup", updateStats);
+
+    // Command buttons
+    containerEl.querySelectorAll("[data-cmd]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        canvas.focus();
+        document.execCommand(btn.dataset.cmd, false, null);
+        updateStats();
+      });
+    });
+
+    // Format Block select
+    const formatSelect = containerEl.querySelector("[data-role='format-block']");
+    if (formatSelect) {
+      formatSelect.addEventListener("change", () => {
+        canvas.focus();
+        const tag = formatSelect.value;
+        document.execCommand("formatBlock", false, "<" + tag + ">");
+        updateStats();
+      });
+    }
+
+    // Colors
+    const foreInput = containerEl.querySelector("[data-role='foreColor']");
+    if (foreInput) {
+      foreInput.addEventListener("input", () => {
+        canvas.focus();
+        document.execCommand("foreColor", false, foreInput.value);
+      });
+    }
+    const hiliteInput = containerEl.querySelector("[data-role='hiliteColor']");
+    if (hiliteInput) {
+      hiliteInput.addEventListener("input", () => {
+        canvas.focus();
+        document.execCommand("hiliteColor", false, hiliteInput.value);
+      });
+    }
+
+    // Insert Link
+    const linkBtn = containerEl.querySelector("[data-role='insert-link']");
+    if (linkBtn) {
+      linkBtn.addEventListener("click", () => {
+        const url = window.prompt("Nhập đường dẫn trang web (URL):", "https://");
+        if (url && url !== "https://") {
+          canvas.focus();
+          document.execCommand("createLink", false, url);
+        }
+      });
+    }
+
+    // Insert Table
+    const tableBtn = containerEl.querySelector("[data-role='insert-table']");
+    if (tableBtn) {
+      tableBtn.addEventListener("click", () => {
+        const tableHtml = `
+          <table style="width:100%; border-collapse:collapse; margin:16px 0; font-size:0.88rem;">
+            <thead style="background:#F1F5F9;">
+              <tr>
+                <th style="border:1px solid #CBD5E1; padding:8px 12px; text-align:left;">Hạng mục</th>
+                <th style="border:1px solid #CBD5E1; padding:8px 12px; text-align:left;">Nội dung kiểm tra</th>
+                <th style="border:1px solid #CBD5E1; padding:8px 12px; text-align:left;">Lưu ý rủi ro</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="border:1px solid #CBD5E1; padding:8px 12px;">Mục 1</td>
+                <td style="border:1px solid #CBD5E1; padding:8px 12px;">Nội dung phân tích...</td>
+                <td style="border:1px solid #CBD5E1; padding:8px 12px;">Cần đối soát chứng từ gốc</td>
+              </tr>
+              <tr>
+                <td style="border:1px solid #CBD5E1; padding:8px 12px;">Mục 2</td>
+                <td style="border:1px solid #CBD5E1; padding:8px 12px;">Nội dung phân tích...</td>
+                <td style="border:1px solid #CBD5E1; padding:8px 12px;">Kiểm tra kỹ trước khi truyền tờ khai</td>
+              </tr>
+            </tbody>
+          </table>
+          <p><br></p>
+        `;
+        canvas.focus();
+        document.execCommand("insertHTML", false, tableHtml);
+        updateStats();
+      });
+    }
+
+    // Insert Callout Note Box
+    const calloutBtn = containerEl.querySelector("[data-role='insert-callout']");
+    if (calloutBtn) {
+      calloutBtn.addEventListener("click", () => {
+        const noteHtml = `
+          <blockquote style="border-left:4px solid #F97316; background:#FFF7ED; padding:12px 18px; border-radius:0 8px 8px 0; margin:14px 0; color:#9A3412; font-weight:600;">
+            <p style="margin:0;">Lưu ý thực tế: [Nhập kinh nghiệm thực tế hoặc quy định pháp lý cần ghi nhớ tại đây...]</p>
+          </blockquote>
+          <p><br></p>
+        `;
+        canvas.focus();
+        document.execCommand("insertHTML", false, noteHtml);
+        updateStats();
+      });
+    }
+
+    // Media upload (Image & Video)
+    const mediaInput = containerEl.querySelector(".word-media-upload-input");
+    if (mediaInput) {
+      mediaInput.addEventListener("change", async (ev) => {
+        const files = Array.from(ev.target.files || []);
+        if (!files.length) return;
+        showToast("Đang xử lý và tải tệp phương tiện lên...");
+        for (const file of files) {
+          const isVideo = file.type.startsWith("video/") || /\.(webm|mp4|mov)$/i.test(file.name);
+          let mediaUrl = "";
+          // If Firebase Storage is ready, upload to Firebase Storage!
+          if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isStorageReady()) {
+            try {
+              const res = await window.ThuysTalkFirebase.uploadFile(file, isVideo ? "videos" : "articles");
+              mediaUrl = res.url;
+            } catch (err) {
+              console.warn("Storage upload fallback:", err);
+            }
+          }
+
+          if (!mediaUrl) {
+            // Local fallback
+            mediaUrl = await new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onload = (e) => resolve(e.target.result);
+              reader.readAsDataURL(file);
+            });
+          }
+
+          canvas.focus();
+          if (isVideo) {
+            const vHtml = `
+              <figure style="margin:16px 0; text-align:center;">
+                <video controls playsinline preload="metadata" style="max-width:100%; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+                  <source src="${mediaUrl}" type="${file.type || 'video/mp4'}" />
+                </video>
+                <figcaption style="font-size:0.8rem; color:#64748B; margin-top:6px;">Video: ${escapeHtml(file.name)}</figcaption>
+              </figure>
+              <p><br></p>
+            `;
+            document.execCommand("insertHTML", false, vHtml);
+          } else {
+            const imgHtml = `
+              <figure style="margin:16px 0; text-align:center;">
+                <img src="${mediaUrl}" alt="${escapeHtml(file.name)}" style="max-width:100%; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1);" />
+                <figcaption style="font-size:0.8rem; color:#64748B; margin-top:6px;">${escapeHtml(file.name)}</figcaption>
+              </figure>
+              <p><br></p>
+            `;
+            document.execCommand("insertHTML", false, imgHtml);
+          }
+          updateStats();
+        }
+        showToast("Đã chèn tệp phương tiện thành công vào nội dung!");
+        mediaInput.value = "";
+      });
+    }
+
+    // Import HTML / Text file
+    const fileImportInput = containerEl.querySelector(".word-file-import-input");
+    if (fileImportInput) {
+      fileImportInput.addEventListener("change", (ev) => {
+        const file = ev.target.files && ev.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          let text = String(e.target.result || "").trim();
+          const bodyMatch = text.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+          if (bodyMatch) text = bodyMatch[1].trim();
+          if (!/<[a-z][\s\S]*>/i.test(text)) {
+            text = text.split(/\n+/).map(line => `<p>${escapeHtml(line)}</p>`).join("");
+          }
+          canvas.innerHTML = canvas.innerHTML ? canvas.innerHTML + "<br />" + text : text;
+          updateStats();
+          showToast(`Đã nạp nội dung từ tệp "${file.name}" vào trình soạn thảo!`);
+        };
+        reader.readAsText(file, "utf-8");
+        fileImportInput.value = "";
+      });
+    }
+
+    return {
+      getHtml: () => canvas.innerHTML.trim(),
+      setHtml: (val) => {
+        canvas.innerHTML = val || "";
+        updateStats();
+      },
+      clear: () => {
+        canvas.innerHTML = "";
+        updateStats();
+      },
+      focus: () => canvas.focus()
+    };
+  }
+
+  // ==========================================================================
+  // INTERACTIVE EMAIL MATERIAL DELIVERY MODAL (#emailMaterialModal)
+  // Handles: Video Checklists, Article Templates & Regulatory Files, Course Kits
+  // Saves lead to Firestore 'leads' collection + Auto-downloads checklist workbook
+  // ==========================================================================
+  let activeMaterialPayload = null;
+
+  function ensureGlobalModals() {
+    // 1. Email Material Modal
+    if (!document.getElementById("emailMaterialModal")) {
+      const div = document.createElement("div");
+      div.className = "modal-backdrop";
+      div.id = "emailMaterialModal";
+      div.setAttribute("role", "dialog");
+      div.setAttribute("aria-modal", "true");
+      div.innerHTML = `
+        <div class="modal-card" style="max-width:520px;">
+          <div class="modal-head">
+            <h3 id="materialModalHeading" style="color:var(--jade-900);">Nhận Tài Liệu &amp; Checklist Qua Email</h3>
+            <button class="modal-close" data-close-modal="emailMaterialModal" aria-label="Đóng">&times;</button>
+          </div>
+          <div class="modal-body" style="padding:20px 24px;">
+            <div class="material-delivery-target">
+              <span style="font-size:0.75rem; font-weight:800; color:var(--orange-600); text-transform:uppercase; letter-spacing:0.5px; display:block; margin-bottom:4px;">
+                Tài liệu bạn đang yêu cầu:
+              </span>
+              <h4 id="materialDeliveryDocTitle" style="color:var(--jade-950); margin:0; font-size:0.98rem; line-height:1.45;">
+                Checklist Hành Động
+              </h4>
+            </div>
+
+            <div id="materialSuccessAlertBox" style="display:none;" class="auth-success-banner">
+              <h4 style="color:var(--jade-900); margin-bottom:6px; font-weight:800;">Gửi Tài Liệu Thành Công!</h4>
+              <p style="font-size:0.85rem; margin:0; line-height:1.5;" id="materialSuccessAlertText">
+                Tài liệu đã được gửi về email của bạn. Đồng thời tệp Checklist cũng đang được tự động tải về máy.
+              </p>
+            </div>
+
+            <form id="materialDeliveryForm">
+              <div class="form-group">
+                <label>Họ và tên của bạn *</label>
+                <input type="text" id="materialUserNameInp" class="form-control" required placeholder="VD: Nguyễn Văn An" />
+              </div>
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label>Địa chỉ Email nhận tài liệu *</label>
+                  <input type="email" id="materialUserEmailInp" class="form-control" required placeholder="VD: an.nguyen@congty.com" />
+                </div>
+                <div class="form-group">
+                  <label>Số điện thoại / Zalo</label>
+                  <input type="tel" id="materialUserPhoneInp" class="form-control" placeholder="VD: 0912 345 678" />
+                </div>
+              </div>
+              <p style="font-size:0.78rem; color:var(--ink-500); margin-bottom:16px;">
+                Hệ thống cam kết bảo mật 100% thông tin doanh nghiệp. Sau khi gửi, bạn sẽ nhận được bản mềm tài liệu ngay lập tức.
+              </p>
+              <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button type="button" class="btn btn-outline btn-sm" data-close-modal="emailMaterialModal">Đóng</button>
+                <button type="submit" class="btn btn-primary btn-sm" id="materialSubmitBtn">
+                  Gửi tài liệu vào Email ngay
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(div);
+
+      // Bind close button
+      div.querySelectorAll("[data-close-modal]").forEach((b) => {
+        b.addEventListener("click", () => div.classList.remove("open"));
+      });
+      div.addEventListener("click", (e) => {
+        if (e.target === div) div.classList.remove("open");
+      });
+
+      // Bind form submit
+      const form = div.querySelector("#materialDeliveryForm");
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const name = div.querySelector("#materialUserNameInp").value.trim();
+        const email = div.querySelector("#materialUserEmailInp").value.trim();
+        const phone = div.querySelector("#materialUserPhoneInp").value.trim() || "-";
+
+        if (!name || !email || !email.includes("@")) {
+          showToast("Vui lòng nhập Họ tên và Email hợp lệ.");
+          return;
+        }
+
+        const docTitle = (activeMaterialPayload && activeMaterialPayload.docTitle) || "Tài liệu chuyên môn ThuysTalk";
+        const docType = (activeMaterialPayload && activeMaterialPayload.docType) || "Resource Material";
+
+        // Save learner info
+        state.learnerEmail = email;
+        localStorage.setItem(STORAGE_KEYS.LEARNER_EMAIL, email);
+        localStorage.setItem(STORAGE_KEYS.LEARNER_NAME, name);
+        if (phone && phone !== "-") localStorage.setItem(STORAGE_KEYS.LEARNER_PHONE, phone);
+
+        // Record lead locally and Firestore
+        recordLeadOrMaterial({
+          type: docType,
+          name: name,
+          email: email,
+          phone: phone,
+          topic: docTitle
+        });
+
+        // Trigger auto checklist file download
+        if (activeMaterialPayload && activeMaterialPayload.courseOrItem) {
+          triggerChecklistDownload(activeMaterialPayload.courseOrItem);
+        } else if (state.courses && state.courses[0]) {
+          triggerChecklistDownload(state.courses[0]);
+        }
+
+        // Display green success alert
+        const alertBox = div.querySelector("#materialSuccessAlertBox");
+        const alertText = div.querySelector("#materialSuccessAlertText");
+        alertText.innerHTML = `Tài liệu <strong>"${escapeHtml(docTitle)}"</strong> đã được gửi thành công về hộp thư: <strong>${escapeHtml(email)}</strong>.<br />Đồng thời, tệp Checklist dự phòng đã được tự động tải về máy tính của bạn.`;
+        alertBox.style.display = "block";
+        div.querySelector("#materialSubmitBtn").textContent = "Đã gửi tài liệu!";
+        div.querySelector("#materialSubmitBtn").disabled = true;
+
+        showToast(`Đã gửi tài liệu tới ${email} và tải file về máy!`);
+        renderElearningSection(window.THUYSTALK_I18N[state.lang]);
+        updateHeaderLearnerStatus();
+      });
+    }
+
+    // 2. Learner Auth Modal with Firebase Email Verification
+    if (!document.getElementById("learnerAuthModal")) {
+      const authDiv = document.createElement("div");
+      authDiv.className = "modal-backdrop";
+      authDiv.id = "learnerAuthModal";
+      authDiv.setAttribute("role", "dialog");
+      authDiv.setAttribute("aria-modal", "true");
+      authDiv.innerHTML = `
+        <div class="modal-card" style="max-width:480px;">
+          <div class="modal-head">
+            <h3 id="authModalTitle" style="color:var(--jade-900);">Tài Khoản Học Viên ThuysTalk</h3>
+            <button class="modal-close" data-close-modal="learnerAuthModal" aria-label="Đóng">&times;</button>
+          </div>
+          <div class="modal-body" style="padding:20px 24px;">
+            <div class="auth-tabs-nav">
+              <button type="button" class="auth-tab-btn active" id="authTabRegisterBtn">Đăng Ký Tài Khoản</button>
+              <button type="button" class="auth-tab-btn" id="authTabLoginBtn">Đăng Nhập</button>
+            </div>
+
+            <!-- Tab 1: Registration Form -->
+            <div id="authRegisterPane">
+              <div class="auth-notice-box">
+                Đăng ký tài khoản miễn phí để lưu tiến độ học tập, nhận trọn bộ biểu mẫu pháp lý và mở khóa không giới hạn Hệ thống Tra cứu AI Hải quan. Google Firebase sẽ gửi email xác thực đến hộp thư của bạn.
+              </div>
+
+              <div id="authRegisterSuccessBox" style="display:none;" class="auth-success-banner">
+                <h4 style="color:var(--jade-900); margin-bottom:6px; font-weight:800;">Đã Gửi Email Xác Thực!</h4>
+                <p style="font-size:0.84rem; margin-bottom:10px; line-height:1.5;" id="authRegisterSuccessMsg">
+                  Một thư xác thực từ Google Firebase đã được gửi tới hộp thư của bạn. Vui lòng mở email và nhấn vào liên kết kích hoạt trước khi đăng nhập.
+                </p>
+                <button type="button" class="btn btn-primary btn-sm" id="authGoToLoginAfterRegisterBtn">Chuyển sang Đăng Nhập</button>
+              </div>
+
+              <form id="authRegisterForm">
+                <div class="form-group">
+                  <label>Họ và tên của bạn *</label>
+                  <input type="text" id="authRegName" class="form-control" required placeholder="VD: Nguyễn Thị Lan" />
+                </div>
+                <div class="form-group">
+                  <label>Địa chỉ Email nhận thư xác thực *</label>
+                  <input type="email" id="authRegEmail" class="form-control" required placeholder="VD: lan.nguyen@gmail.com" />
+                </div>
+                <div class="form-row-2">
+                  <div class="form-group">
+                    <label>Mật khẩu (tối thiểu 6 ký tự) *</label>
+                    <input type="password" id="authRegPass" class="form-control" required minlength="6" placeholder="Mật khẩu bảo mật" />
+                  </div>
+                  <div class="form-group">
+                    <label>Số điện thoại / Zalo *</label>
+                    <input type="tel" id="authRegPhone" class="form-control" required placeholder="VD: 0912 345 678" />
+                  </div>
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
+                  <button type="button" class="btn btn-outline btn-sm" data-close-modal="learnerAuthModal">Hủy</button>
+                  <button type="submit" class="btn btn-primary btn-sm" id="authRegSubmitBtn">
+                    Tạo Tài Khoản &amp; Gửi Email Xác Thực
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Tab 2: Login Form -->
+            <div id="authLoginPane" style="display:none;">
+              <div id="authLoginNoticeBox" style="display:none;" class="auth-notice-box"></div>
+
+              <form id="authLoginForm">
+                <div class="form-group">
+                  <label>Địa chỉ Email học viên *</label>
+                  <input type="email" id="authLogEmail" class="form-control" required placeholder="VD: lan.nguyen@gmail.com" />
+                </div>
+                <div class="form-group">
+                  <label>Mật khẩu *</label>
+                  <input type="password" id="authLogPass" class="form-control" required placeholder="Mật khẩu của bạn" />
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                  <button type="button" id="authForgotPassBtn" style="border:none; background:transparent; font-size:0.8rem; color:var(--jade-700); font-weight:700; cursor:pointer; padding:0;">
+                    Quên mật khẩu?
+                  </button>
+                  <button type="button" id="authResendVerifyBtn" style="border:none; background:transparent; font-size:0.8rem; color:var(--orange-600); font-weight:700; cursor:pointer; padding:0; display:none;">
+                    Gửi lại email xác thực
+                  </button>
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:10px;">
+                  <button type="button" class="btn btn-outline btn-sm" data-close-modal="learnerAuthModal">Đóng</button>
+                  <button type="submit" class="btn btn-primary btn-sm" id="authLogSubmitBtn">
+                    Đăng Nhập
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(authDiv);
+
+      authDiv.querySelectorAll("[data-close-modal]").forEach((b) => {
+        b.addEventListener("click", () => authDiv.classList.remove("open"));
+      });
+      authDiv.addEventListener("click", (e) => {
+        if (e.target === authDiv) authDiv.classList.remove("open");
+      });
+
+      // Tabs switching
+      const tabReg = authDiv.querySelector("#authTabRegisterBtn");
+      const tabLog = authDiv.querySelector("#authTabLoginBtn");
+      const paneReg = authDiv.querySelector("#authRegisterPane");
+      const paneLog = authDiv.querySelector("#authLoginPane");
+
+      tabReg.addEventListener("click", () => {
+        tabReg.classList.add("active");
+        tabLog.classList.remove("active");
+        paneReg.style.display = "block";
+        paneLog.style.display = "none";
+      });
+
+      tabLog.addEventListener("click", () => {
+        tabLog.classList.add("active");
+        tabReg.classList.remove("active");
+        paneLog.style.display = "block";
+        paneReg.style.display = "none";
+      });
+
+      authDiv.querySelector("#authGoToLoginAfterRegisterBtn").addEventListener("click", () => {
+        tabLog.click();
+      });
+
+      // Handle Register with Firebase Email Verification
+      authDiv.querySelector("#authRegisterForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = authDiv.querySelector("#authRegName").value.trim();
+        const email = authDiv.querySelector("#authRegEmail").value.trim();
+        const pass = authDiv.querySelector("#authRegPass").value;
+        const phone = authDiv.querySelector("#authRegPhone").value.trim();
+
+        const btn = authDiv.querySelector("#authRegSubmitBtn");
+        btn.disabled = true;
+        btn.textContent = "Đang tạo tài khoản & gửi email...";
+
+        try {
+          if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isAuthReady()) {
+            await window.ThuysTalkFirebase.registerLearnerWithVerification(name, email, pass, phone);
+          } else {
+            recordLeadOrMaterial({
+              type: "Learner Registered (Offline)",
+              name, email, phone, topic: "Kích hoạt tài khoản học viên"
+            });
+          }
+
+          authDiv.querySelector("#authRegisterForm").style.display = "none";
+          authDiv.querySelector("#authRegisterSuccessBox").style.display = "block";
+          authDiv.querySelector("#authRegisterSuccessMsg").innerHTML = `
+            Một thư xác thực từ <strong>Google Firebase</strong> đã được gửi tới: <strong>${escapeHtml(email)}</strong>.<br />
+            Vui lòng mở hộp thư email của bạn (kiểm tra cả mục Hộp thư đến và Spam) và bấm vào liên kết xác nhận để kích hoạt tài khoản.
+          `;
+          authDiv.querySelector("#authLogEmail").value = email;
+          showToast(`Đã gửi email xác thực tới ${email}! Vui lòng kích hoạt tài khoản.`);
+        } catch (err) {
+          alert("Lỗi đăng ký tài khoản: " + (err.message || err));
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Tạo Tài Khoản & Gửi Email Xác Thực";
+        }
+      });
+
+      // Handle Login with Email & Password
+      authDiv.querySelector("#authLoginForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const email = authDiv.querySelector("#authLogEmail").value.trim();
+        const pass = authDiv.querySelector("#authLogPass").value;
+        const btn = authDiv.querySelector("#authLogSubmitBtn");
+        const noticeBox = authDiv.querySelector("#authLoginNoticeBox");
+        const resendBtn = authDiv.querySelector("#authResendVerifyBtn");
+
+        btn.disabled = true;
+        btn.textContent = "Đang kiểm tra đăng nhập...";
+        noticeBox.style.display = "none";
+
+        try {
+          let userRes = null;
+          if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isAuthReady()) {
+            userRes = await window.ThuysTalkFirebase.loginLearner(email, pass);
+            if (userRes && userRes.emailVerified === false) {
+              noticeBox.style.display = "block";
+              noticeBox.innerHTML = `
+                <strong>Tài khoản chưa được kích hoạt qua Email!</strong><br />
+                Google Firebase yêu cầu bạn bấm vào liên kết trong thư xác thực đã gửi tới <strong>${escapeHtml(email)}</strong> trước khi đăng nhập.
+              `;
+              resendBtn.style.display = "inline-block";
+              btn.disabled = false;
+              btn.textContent = "Đăng Nhập";
+              return;
+            }
+          }
+
+          state.learnerEmail = email;
+          localStorage.setItem(STORAGE_KEYS.LEARNER_EMAIL, email);
+          if (userRes && userRes.name) {
+            localStorage.setItem(STORAGE_KEYS.LEARNER_NAME, userRes.name);
+          }
+
+          authDiv.classList.remove("open");
+          showToast(`Chào mừng bạn trở lại! Đăng nhập thành công.`);
+          renderElearningSection(window.THUYSTALK_I18N[state.lang]);
+          updateHeaderLearnerStatus();
+
+          // Clear any active chat gate
+          const gate = document.querySelector(".chat-login-gate-card");
+          if (gate) gate.remove();
+        } catch (err) {
+          noticeBox.style.display = "block";
+          noticeBox.textContent = "Lỗi đăng nhập: " + (err.message || "Email hoặc mật khẩu chưa chính xác.");
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "Đăng Nhập";
+        }
+      });
+
+      // Resend verification email
+      authDiv.querySelector("#authResendVerifyBtn").addEventListener("click", async () => {
+        try {
+          if (window.ThuysTalkFirebase) {
+            await window.ThuysTalkFirebase.resendVerificationEmail();
+            showToast("Đã gửi lại email xác thực thành công!");
+          }
+        } catch (e) {
+          alert("Lỗi gửi lại thư: " + e.message);
+        }
+      });
+
+      // Password reset
+      authDiv.querySelector("#authForgotPassBtn").addEventListener("click", async () => {
+        const email = authDiv.querySelector("#authLogEmail").value.trim();
+        if (!email || !email.includes("@")) {
+          showToast("Vui lòng nhập Email học viên ở ô trên để nhận link đặt lại mật khẩu.");
+          authDiv.querySelector("#authLogEmail").focus();
+          return;
+        }
+        try {
+          if (window.ThuysTalkFirebase) {
+            await window.ThuysTalkFirebase.sendPasswordReset(email);
+            showToast(`Đã gửi email đặt lại mật khẩu tới ${email}!`);
+          }
+        } catch (e) {
+          alert("Lỗi: " + e.message);
+        }
+      });
+    }
+  }
+
+  function openEmailMaterialModal(payload) {
+    ensureGlobalModals();
+    activeMaterialPayload = payload || {};
+    const div = document.getElementById("emailMaterialModal");
+    if (!div) return;
+
+    div.querySelector("#materialDeliveryDocTitle").textContent = activeMaterialPayload.docTitle || "Tài Liệu Chuyên Môn ThuysTalk";
+    div.querySelector("#materialUserNameInp").value = localStorage.getItem(STORAGE_KEYS.LEARNER_NAME) || "";
+    div.querySelector("#materialUserEmailInp").value = state.learnerEmail || "";
+    div.querySelector("#materialUserPhoneInp").value = localStorage.getItem(STORAGE_KEYS.LEARNER_PHONE) || "";
+
+    div.querySelector("#materialSuccessAlertBox").style.display = "none";
+    div.querySelector("#materialDeliveryForm").style.display = "block";
+    div.querySelector("#materialSubmitBtn").textContent = "Gửi tài liệu vào Email ngay";
+    div.querySelector("#materialSubmitBtn").disabled = false;
+
+    div.classList.add("open");
+  }
+
+  function openLearnerAuthModal(tab = "register") {
+    ensureGlobalModals();
+    const div = document.getElementById("learnerAuthModal");
+    if (!div) return;
+    if (tab === "login") {
+      div.querySelector("#authTabLoginBtn").click();
+    } else {
+      div.querySelector("#authTabRegisterBtn").click();
+    }
+    div.classList.add("open");
+  }
+
+  function updateHeaderLearnerStatus() {
+    document.querySelectorAll(".header-actions").forEach((container) => {
+      let authBtn = container.querySelector("#learnerAuthHeaderBtn");
+      if (!authBtn) {
+        authBtn = document.createElement("div");
+        authBtn.id = "learnerAuthHeaderBtn";
+        const adminBtn = container.querySelector("#adminToggleBtn");
+        if (adminBtn) {
+          container.insertBefore(authBtn, adminBtn);
+        } else {
+          container.appendChild(authBtn);
+        }
+      }
+
+      if (state.learnerEmail) {
+        const displayName = localStorage.getItem(STORAGE_KEYS.LEARNER_NAME) || state.learnerEmail.split("@")[0];
+        authBtn.innerHTML = `
+          <div style="display:inline-flex; align-items:center; gap:8px; background:var(--jade-50); border:1.5px solid var(--jade-400); padding:4px 12px; border-radius:20px; font-size:0.78rem; font-weight:700; color:var(--jade-900);">
+            <span style="width:7px; height:7px; border-radius:50%; background:#10B981; display:inline-block;"></span>
+            <span title="${escapeHtml(state.learnerEmail)}">Học viên: ${escapeHtml(displayName)}</span>
+            <button type="button" id="headerLogoutLearnerBtn" style="border:none; background:transparent; font-size:0.75rem; color:#EF4444; font-weight:800; cursor:pointer; padding:0 2px;" title="Đăng xuất tài khoản">
+              Thoát
+            </button>
+          </div>
+        `;
+        const logoutBtn = authBtn.querySelector("#headerLogoutLearnerBtn");
+        if (logoutBtn) {
+          logoutBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            if (window.ThuysTalkFirebase) {
+              await window.ThuysTalkFirebase.logoutLearner();
+            }
+            state.learnerEmail = "";
+            localStorage.removeItem(STORAGE_KEYS.LEARNER_EMAIL);
+            updateHeaderLearnerStatus();
+            renderElearningSection(window.THUYSTALK_I18N[state.lang]);
+            showToast("Đã đăng xuất tài khoản học viên.");
+          });
+        }
+      } else {
+        authBtn.innerHTML = `
+          <button type="button" class="btn btn-outline btn-sm" id="headerOpenAuthModalBtn" style="padding:6px 14px; font-size:0.78rem;">
+            Tài Khoản Học Viên
+          </button>
+        `;
+        const openBtn = authBtn.querySelector("#headerOpenAuthModalBtn");
+        if (openBtn) {
+          openBtn.addEventListener("click", () => {
+            openLearnerAuthModal("register");
+          });
+        }
+      }
+    });
+  }
+
+
   // --- TAB 2: WRITE & MANAGE ARTICLES ---
   function renderAdminArticlesTab(body) {
+    let editingArtId = null;
+
     const rows = state.articles
       .map((a, idx) => {
         const titleVi = typeof a.title === "object" ? a.title.vi : a.title;
@@ -2058,16 +2840,24 @@
           <td><span class="exp-tag">${escapeHtml(a.pillar)}</span></td>
           <td style="font-weight:700;">${escapeHtml(titleVi)}</td>
           <td>${escapeHtml(a.date)}</td>
-          <td>
-            <button type="button" class="btn btn-danger btn-sm" data-del-art="${a.id}">Xóa</button>
+          <td style="white-space:nowrap;">
+            <button type="button" class="btn btn-outline btn-xs" data-edit-art="${a.id}" style="margin-right:6px; padding:4px 8px; font-size:0.75rem;">Sửa</button>
+            <button type="button" class="btn btn-danger btn-xs" data-del-art="${a.id}" style="padding:4px 8px; font-size:0.75rem;">Xóa</button>
           </td>
         </tr>`;
       })
       .join("");
 
     body.innerHTML = `
-      <div class="cms-panel-box">
-        <h4 style="margin-bottom:12px; color:var(--jade-900);">Soạn Bài Viết Chuyên Sâu Mới (Hỗ Trợ Viết Bài / Tải File HTML &amp; Chèn Ảnh JPG, PNG, WEBP, WEBM)</h4>
+      <div class="cms-panel-box" id="cmsArticleFormCard">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+          <h4 id="cmsArtFormHeading" style="margin:0; color:var(--jade-900);">
+            Soạn Bài Viết Chuyên Sâu Mới (Trình Soạn Thảo Kiểu Word Trực Quan)
+          </h4>
+          <span id="cmsArtEditModeBadge" style="display:none; background:var(--orange-100); color:var(--orange-800); font-size:0.75rem; font-weight:800; padding:4px 10px; border-radius:12px;">
+            ĐANG Ở CHẾ ĐỘ CHỈNH SỬA
+          </span>
+        </div>
         <form id="cmsNewArticleForm">
           <div class="form-row-2">
             <div class="form-group">
@@ -2083,9 +2873,9 @@
             <div class="form-group">
               <label>Chuyên mục *</label>
               <select id="cmsArtPillar" class="form-control">
-                <option value="CS">Case Study (CS)</option>
+                <option value="CS">Case Study · Bài Học Thực Tế (CS)</option>
                 <option value="TN">Tin Ngành &amp; Chính Sách (TN)</option>
-                <option value="HT">Học Thực Chiến (HT)</option>
+                <option value="HT">Kinh Nghiệm Thực Tế (HT)</option>
               </select>
             </div>
             <div class="form-group">
@@ -2103,25 +2893,17 @@
             <input type="text" id="cmsArtExcerpt" class="form-control" required placeholder="Tóm tắt 1-2 câu về vấn đề cốt lõi và giải pháp trong bài..." />
           </div>
           <div class="form-group">
-            <label>Nội dung toàn văn bài viết (Viết trực tiếp, dán mã HTML hoặc tải ảnh/video minh họa) *</label>
-            <div class="rich-editor-toolbar" id="cmsArtToolbar">
-              <button type="button" class="rich-tool-btn" data-insert-tag="h3">+ Tiêu đề mục (H3)</button>
-              <button type="button" class="rich-tool-btn" data-insert-tag="p">+ Đoạn văn (&lt;p&gt;)</button>
-              <button type="button" class="rich-tool-btn" data-insert-tag="ul">+ Danh sách gạch đầu dòng</button>
-              <button type="button" class="rich-tool-btn" data-insert-tag="quote">+ Khung lưu ý pháp lý</button>
-              <label class="rich-tool-btn rich-tool-upload" style="cursor:pointer;">
-                Tải tệp Bài viết / HTML (.html, .txt, .md)
-                <input type="file" id="cmsArtHtmlUpload" accept=".html,.htm,.txt,.md" style="display:none;" />
-              </label>
-              <label class="rich-tool-btn rich-tool-upload" style="cursor:pointer;">
-                Chèn Ảnh / Video (.jpg, .png, .webp, .webm, .mp4)
-                <input type="file" id="cmsArtMediaUpload" accept=".jpg,.jpeg,.png,.webp,.gif,.svg,.webm,.mp4,image/*,video/webm,video/mp4" multiple style="display:none;" />
-              </label>
-            </div>
-            <textarea id="cmsArtBody" class="form-control" rows="6" required style="border-radius:0 0 12px 12px;" placeholder="Nhập nội dung phân tích, dán HTML hoặc bấm nút 'Chèn Ảnh / Video' ở thanh công cụ phía trên..."></textarea>
-            <div class="lesson-visual-preview" id="cmsArtVisualPreview"></div>
+            <label>Nội dung toàn văn bài viết (Gõ trực tiếp kiểu Word, căn lề, chèn bảng, chèn ảnh/video .jpg, .png, .webp, .webm, .mp4) *</label>
+            ${renderWordEditorMarkup("cmsArtEditor", "Nhập nội dung bài viết trực tiếp tại đây như trong Word, căn lề, bôi màu và chèn ảnh dễ dàng...")}
           </div>
-          <button type="submit" class="btn btn-primary btn-sm">Xuất bản bài viết ngay lên Web</button>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button type="submit" class="btn btn-primary btn-sm" id="cmsArtSubmitBtn">
+              Xuất bản bài viết ngay lên Web
+            </button>
+            <button type="button" class="btn btn-outline btn-sm" id="cmsArtCancelBtn" style="display:none;">
+              Hủy Bỏ Sửa
+            </button>
+          </div>
         </form>
       </div>
 
@@ -2140,14 +2922,50 @@
       </table>
     `;
 
-    bindRichEditorToolbar(
-      "cmsArtBody",
-      "cmsArtVisualPreview",
-      "cmsArtHtmlUpload",
-      "cmsArtMediaUpload",
-      "cmsArtToolbar"
-    );
+    const artEditor = initWordEditor(body.querySelector(".word-editor-container"), "cmsArtEditor");
 
+    // Bind Edit Button
+    body.querySelectorAll("[data-edit-art]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.editArt;
+        const target = state.articles.find((a) => a.id === id);
+        if (!target) return;
+        editingArtId = target.id;
+
+        document.getElementById("cmsArtTitleVi").value = typeof target.title === "object" ? target.title.vi : target.title;
+        document.getElementById("cmsArtTitleEn").value = (target.title && target.title.en) || "";
+        document.getElementById("cmsArtPillar").value = target.pillar || "CS";
+        document.getElementById("cmsArtPhotoSlot").value = target.photoSlot || "heroPortrait";
+        document.getElementById("cmsArtExcerpt").value = typeof target.excerpt === "object" ? target.excerpt.vi : target.excerpt || "";
+
+        const bodyContent = typeof target.body === "object" ? (target.body.vi || target.body) : target.body;
+        artEditor.setHtml(bodyContent);
+
+        document.getElementById("cmsArtFormHeading").textContent = "Chỉnh Sửa Bài Viết: " + (typeof target.title === "object" ? target.title.vi : target.title);
+        document.getElementById("cmsArtEditModeBadge").style.display = "inline-block";
+        const submitBtn = document.getElementById("cmsArtSubmitBtn");
+        submitBtn.textContent = "Lưu Thay Đổi Bài Viết";
+        submitBtn.className = "btn btn-jade btn-sm";
+        document.getElementById("cmsArtCancelBtn").style.display = "inline-flex";
+
+        document.getElementById("cmsArticleFormCard").scrollIntoView({ behavior: "smooth" });
+      });
+    });
+
+    // Bind Cancel Edit Button
+    document.getElementById("cmsArtCancelBtn").addEventListener("click", () => {
+      editingArtId = null;
+      document.getElementById("cmsNewArticleForm").reset();
+      artEditor.clear();
+      document.getElementById("cmsArtFormHeading").textContent = "Soạn Bài Viết Chuyên Sâu Mới (Trình Soạn Thảo Kiểu Word Trực Quan)";
+      document.getElementById("cmsArtEditModeBadge").style.display = "none";
+      const submitBtn = document.getElementById("cmsArtSubmitBtn");
+      submitBtn.textContent = "Xuất bản bài viết ngay lên Web";
+      submitBtn.className = "btn btn-primary btn-sm";
+      document.getElementById("cmsArtCancelBtn").style.display = "none";
+    });
+
+    // Bind Form Submit (Create or Update)
     document.getElementById("cmsNewArticleForm").addEventListener("submit", (e) => {
       e.preventDefault();
       const titleVi = document.getElementById("cmsArtTitleVi").value.trim();
@@ -2155,33 +2973,58 @@
       const pillar = document.getElementById("cmsArtPillar").value;
       const photoSlot = document.getElementById("cmsArtPhotoSlot").value;
       const excerpt = document.getElementById("cmsArtExcerpt").value.trim();
-      const rawBody = document.getElementById("cmsArtBody").value.trim();
+      const formattedBody = artEditor.getHtml();
+
+      if (!formattedBody) {
+        showToast("Vui lòng nhập nội dung bài viết.");
+        return;
+      }
 
       const pillarMap = {
-        CS: { vi: "Case Study · Thực Chiến", en: "Case Study · Practical" },
+        CS: { vi: "Case Study · Bài Học Thực Tế", en: "Case Study · Practical" },
         TN: { vi: "Tin Ngành · Chính Sách", en: "Regulatory News" },
-        HT: { vi: "Học Thực Chiến · Hướng Dẫn", en: "Practical Guide" }
+        HT: { vi: "Kinh Nghiệm Thực Tế · Hướng Dẫn", en: "Practical Guide" }
       };
 
-      const formattedBody = formatRawOrHtmlContent(rawBody);
-
-      const newArt = {
-        id: "art-custom-" + Date.now(),
-        pillar,
-        pillarLabel: pillarMap[pillar] || pillarMap.CS,
-        date: new Date().toLocaleDateString("vi-VN"),
-        readTime: { vi: "6 phút đọc", en: "6 min read" },
-        photoSlot,
-        title: { vi: titleVi, en: titleEn },
-        excerpt: { vi: excerpt, en: excerpt },
-        body: { vi: formattedBody, en: formattedBody }
-      };
-
-      state.articles.unshift(newArt);
-      saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
-      renderAll();
-      renderAdminStudioModal();
-      showToast("Đã xuất bản bài viết mới lên trang chủ!");
+      if (editingArtId) {
+        const art = state.articles.find((a) => a.id === editingArtId);
+        if (art) {
+          art.title = { vi: titleVi, en: titleEn };
+          art.pillar = pillar;
+          art.pillarLabel = pillarMap[pillar] || pillarMap.CS;
+          art.photoSlot = photoSlot;
+          art.excerpt = { vi: excerpt, en: excerpt };
+          art.body = { vi: formattedBody, en: formattedBody };
+          art.updatedAt = new Date().toLocaleDateString("vi-VN");
+          saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
+          if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
+            window.ThuysTalkFirebase.syncCollection("articles", state.articles);
+          }
+          renderAll();
+          renderAdminStudioModal();
+          showToast("Đã cập nhật bài viết thành công!");
+        }
+      } else {
+        const newArt = {
+          id: "art-custom-" + Date.now(),
+          pillar,
+          pillarLabel: pillarMap[pillar] || pillarMap.CS,
+          date: new Date().toLocaleDateString("vi-VN"),
+          readTime: { vi: "6 phút đọc", en: "6 min read" },
+          photoSlot,
+          title: { vi: titleVi, en: titleEn },
+          excerpt: { vi: excerpt, en: excerpt },
+          body: { vi: formattedBody, en: formattedBody }
+        };
+        state.articles.unshift(newArt);
+        saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
+        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
+          window.ThuysTalkFirebase.syncCollection("articles", state.articles);
+        }
+        renderAll();
+        renderAdminStudioModal();
+        showToast("Đã xuất bản bài viết mới lên trang chủ!");
+      }
     });
 
     body.querySelectorAll("[data-del-art]").forEach((btn) => {
@@ -2189,6 +3032,9 @@
         const id = btn.dataset.delArt;
         state.articles = state.articles.filter((a) => a.id !== id);
         saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
+        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
+          window.ThuysTalkFirebase.syncCollection("articles", state.articles);
+        }
         renderAll();
         renderAdminStudioModal();
         showToast("Đã xóa bài viết.");
@@ -2196,8 +3042,10 @@
     });
   }
 
-  // --- TAB 3: YOUTUBE VIDEO EMBED CMS (Supports full <iframe ...> code & URLs + Live Preview) ---
+  // --- TAB 3: YOUTUBE VIDEO EMBED CMS (Supports full <iframe ...> code & URLs + Live Preview + Sửa Button) ---
   function renderAdminVideosTab(body) {
+    let editingVidId = null;
+
     const rows = state.videos
       .map((v, idx) => {
         const vTitle = typeof v.title === "object" ? v.title.vi : v.title;
@@ -2212,16 +3060,24 @@
               ? `<span style="color:var(--jade-700);font-weight:800;">Đã nhúng YouTube (ID: ${ytId})</span>`
               : "Kịch bản Studio"
           }</td>
-          <td>
-            <button type="button" class="btn btn-danger btn-sm" data-del-vid="${v.id}">Xóa</button>
+          <td style="white-space:nowrap;">
+            <button type="button" class="btn btn-outline btn-xs" data-edit-vid="${v.id}" style="margin-right:6px; padding:4px 8px; font-size:0.75rem;">Sửa</button>
+            <button type="button" class="btn btn-danger btn-xs" data-del-vid="${v.id}" style="padding:4px 8px; font-size:0.75rem;">Xóa</button>
           </td>
         </tr>`;
       })
       .join("");
 
     body.innerHTML = `
-      <div class="cms-panel-box">
-        <h4 style="margin-bottom:8px; color:var(--jade-900);">Nhúng Video YouTube Mới Lên Website (Hỗ Trợ Dán Nguyên Thẻ &lt;iframe&gt; Hoặc Link)</h4>
+      <div class="cms-panel-box" id="cmsVideoFormCard">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
+          <h4 id="cmsVidFormHeading" style="margin:0; color:var(--jade-900);">
+            Nhúng Video YouTube Mới Lên Website (Hỗ Trợ Dán Nguyên Thẻ &lt;iframe&gt; Hoặc Link)
+          </h4>
+          <span id="cmsVidEditModeBadge" style="display:none; background:var(--orange-100); color:var(--orange-800); font-size:0.75rem; font-weight:800; padding:4px 10px; border-radius:12px;">
+            ĐANG Ở CHẾ ĐỘ CHỈNH SỬA
+          </span>
+        </div>
         <p style="font-size:0.82rem; color:var(--ink-600); margin-bottom:14px;">
           Chị có thể bấm <strong>Share -&gt; Embed</strong> trên YouTube rồi copy toàn bộ đoạn mã <code>&lt;iframe width="560" height="315" src="https://www.youtube.com/embed/..." ...&gt;&lt;/iframe&gt;</code> dán thẳng vào ô bên dưới (giống hệt Ảnh 2), hoặc dán đường link YouTube bình thường.
         </p>
@@ -2249,7 +3105,7 @@
                   <option value="CM1">CM1 · Văn bản nóng</option>
                   <option value="CM2">CM2 · Dịch luật ra tiếng người</option>
                   <option value="CM3" selected>CM3 · Ký sự thương mại</option>
-                  <option value="CM4">CM4 · Tâm tình thực chiến</option>
+                  <option value="CM4">CM4 · Tâm tình nghề thực tế</option>
                 </select>
               </div>
             </div>
@@ -2267,7 +3123,14 @@
               <label>Toàn văn kịch bản thuyết minh / Ghi chú bài học đi kèm video</label>
               <textarea id="cmsVidScript" class="form-control" rows="3" placeholder="Dán lời thoại thuyết minh hoặc tóm tắt các ý chính để độc giả đọc trực tiếp trên web..."></textarea>
             </div>
-            <button type="submit" class="btn btn-primary btn-sm">Lưu &amp; Nhúng Video Lên Trang Chủ Ngay</button>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <button type="submit" class="btn btn-primary btn-sm" id="cmsVidSubmitBtn">
+                Lưu &amp; Nhúng Video Lên Trang Chủ Ngay
+              </button>
+              <button type="button" class="btn btn-outline btn-sm" id="cmsVidCancelBtn" style="display:none;">
+                Hủy Bỏ Sửa
+              </button>
+            </div>
           </form>
 
           <!-- Live Embed Preview Card -->
@@ -2326,6 +3189,52 @@
       }
     });
 
+    // Bind Edit Video Button
+    body.querySelectorAll("[data-edit-vid]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.editVid;
+        const target = state.videos.find((v) => v.id === id);
+        if (!target) return;
+        editingVidId = target.id;
+
+        const embedCode = target.youtubeEmbedSrc
+          ? `<iframe width="560" height="315" src="${target.youtubeEmbedSrc}" title="YouTube video player" frameborder="0" allowfullscreen></iframe>`
+          : (target.youtubeUrl || "");
+        document.getElementById("cmsVidUrl").value = embedCode;
+        document.getElementById("cmsVidTitle").value = typeof target.title === "object" ? target.title.vi : target.title;
+        document.getElementById("cmsVidCm").value = target.cm || "CM3";
+        document.getElementById("cmsVidDesc").value = typeof target.desc === "object" ? target.desc.vi : target.desc || "";
+        document.getElementById("cmsVidDuration").value = target.duration || "10:15";
+
+        const scriptVal = target.script && (typeof target.script === "object" ? target.script.vi : target.script);
+        document.getElementById("cmsVidScript").value = scriptVal ? scriptVal.replace(/<[^>]+>/g, "\n").trim() : "";
+
+        document.getElementById("cmsVidUrl").dispatchEvent(new Event("input"));
+
+        document.getElementById("cmsVidFormHeading").textContent = "Chỉnh Sửa Video: " + (typeof target.title === "object" ? target.title.vi : target.title);
+        document.getElementById("cmsVidEditModeBadge").style.display = "inline-block";
+        const submitBtn = document.getElementById("cmsVidSubmitBtn");
+        submitBtn.textContent = "Lưu Thay Đổi Video";
+        submitBtn.className = "btn btn-jade btn-sm";
+        document.getElementById("cmsVidCancelBtn").style.display = "inline-flex";
+
+        document.getElementById("cmsVideoFormCard").scrollIntoView({ behavior: "smooth" });
+      });
+    });
+
+    // Bind Cancel Edit Video
+    document.getElementById("cmsVidCancelBtn").addEventListener("click", () => {
+      editingVidId = null;
+      document.getElementById("cmsNewVideoForm").reset();
+      document.getElementById("cmsVidFormHeading").textContent = "Nhúng Video YouTube Mới Lên Website (Hỗ Trợ Dán Nguyên Thẻ <iframe> Hoặc Link)";
+      document.getElementById("cmsVidEditModeBadge").style.display = "none";
+      const submitBtn = document.getElementById("cmsVidSubmitBtn");
+      submitBtn.textContent = "Lưu & Nhúng Video Lên Trang Chủ Ngay";
+      submitBtn.className = "btn btn-primary btn-sm";
+      document.getElementById("cmsVidCancelBtn").style.display = "none";
+    });
+
+    // Form Submit (Create or Update)
     document.getElementById("cmsNewVideoForm").addEventListener("submit", (e) => {
       e.preventDefault();
       const rawInput = document.getElementById("cmsVidUrl").value.trim();
@@ -2341,7 +3250,7 @@
         CM1: { vi: "CM1 · Văn bản nóng", en: "CM1 · Hot Regulations" },
         CM2: { vi: "CM2 · Dịch luật ra tiếng người", en: "CM2 · Law in Plain Language" },
         CM3: { vi: "CM3 · Ký sự thương mại", en: "CM3 · Trade Chronicles" },
-        CM4: { vi: "CM4 · Tâm tình thực chiến", en: "CM4 · Real-World Stories" }
+        CM4: { vi: "CM4 · Tâm tình nghề thực tế", en: "CM4 · Real-World Stories" }
       };
 
       const formattedScript = rawScript
@@ -2349,31 +3258,57 @@
         .map((line) => `<p>${escapeHtml(line)}</p>`)
         .join("");
 
-      const newVid = {
-        id: "vid-custom-" + Date.now(),
-        cm,
-        cmLabel: cmLabels[cm] || cmLabels.CM1,
-        duration,
-        date: new Date().toLocaleDateString("vi-VN"),
-        thumbSlot: "aboutSpeaker",
-        youtubeUrl: ytId ? `https://www.youtube.com/watch?v=${ytId}` : rawInput,
-        youtubeEmbedId: ytId,
-        youtubeEmbedSrc: embedSrc,
-        title: { vi: title, en: title },
-        desc: { vi: desc, en: desc },
-        script: { vi: formattedScript, en: formattedScript }
-      };
+      if (editingVidId) {
+        const vid = state.videos.find((v) => v.id === editingVidId);
+        if (vid) {
+          vid.cm = cm;
+          vid.cmLabel = cmLabels[cm] || cmLabels.CM1;
+          vid.duration = duration;
+          vid.youtubeUrl = ytId ? `https://www.youtube.com/watch?v=${ytId}` : rawInput;
+          vid.youtubeEmbedId = ytId;
+          vid.youtubeEmbedSrc = embedSrc;
+          vid.title = { vi: title, en: title };
+          vid.desc = { vi: desc, en: desc };
+          vid.script = { vi: formattedScript, en: formattedScript };
+          vid.updatedAt = new Date().toLocaleDateString("vi-VN");
+          saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
+          if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
+            window.ThuysTalkFirebase.syncCollection("videos", state.videos);
+          }
+          renderAll();
+          renderAdminStudioModal();
+          showToast("Đã cập nhật video thành công!");
+        }
+      } else {
+        const newVid = {
+          id: "vid-custom-" + Date.now(),
+          cm,
+          cmLabel: cmLabels[cm] || cmLabels.CM1,
+          duration,
+          date: new Date().toLocaleDateString("vi-VN"),
+          thumbSlot: "aboutSpeaker",
+          youtubeUrl: ytId ? `https://www.youtube.com/watch?v=${ytId}` : rawInput,
+          youtubeEmbedId: ytId,
+          youtubeEmbedSrc: embedSrc,
+          title: { vi: title, en: title },
+          desc: { vi: desc, en: desc },
+          script: { vi: formattedScript, en: formattedScript }
+        };
 
-      state.videos.unshift(newVid);
-      state.activeVideoId = newVid.id;
-      saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
-      renderAll();
-      renderAdminStudioModal();
-      showToast(
-        ytId
-          ? `Đã nhúng thành công Video YouTube (ID: ${ytId}) lên trang chủ!`
-          : "Đã thêm Video mới vào thư viện!"
-      );
+        state.videos.unshift(newVid);
+        state.activeVideoId = newVid.id;
+        saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
+        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
+          window.ThuysTalkFirebase.syncCollection("videos", state.videos);
+        }
+        renderAll();
+        renderAdminStudioModal();
+        showToast(
+          ytId
+            ? `Đã nhúng thành công Video YouTube (ID: ${ytId}) lên trang chủ!`
+            : "Đã thêm Video mới vào thư viện!"
+        );
+      }
     });
 
     body.querySelectorAll("[data-del-vid]").forEach((btn) => {
@@ -2382,6 +3317,9 @@
         state.videos = state.videos.filter((v) => v.id !== id);
         if (state.videos.length) state.activeVideoId = state.videos[0].id;
         saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
+        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
+          window.ThuysTalkFirebase.syncCollection("videos", state.videos);
+        }
         renderAll();
         renderAdminStudioModal();
         showToast("Đã xóa video.");
@@ -2870,7 +3808,7 @@
       });
 
       course.meta = {
-        vi: `${course.lessons.length} Bài học · Bộ Mini Test ${miniTest.length} câu · Thực chiến`,
+        vi: `${course.lessons.length} Bài học · Bộ Mini Test ${miniTest.length} câu · Thực hành`,
         en: `${course.lessons.length} Lessons · ${miniTest.length}-Question Mini Test · Practical`
       };
 
@@ -3285,6 +4223,8 @@
       return;
     }
 
+    ensureGlobalModals();
+    updateHeaderLearnerStatus();
     renderAll();
     initConsultForm();
     bindPhotoTriggers(document);

@@ -21,6 +21,7 @@
 
   let db = null;
   let storage = null;
+  let auth = null;
   let isInitialized = false;
 
   function getStoredConfig() {
@@ -54,6 +55,9 @@
 
       if (firebase.apps && firebase.apps.length) {
         const app = firebase.apps[0];
+        if (typeof firebase.auth === "function") {
+          auth = firebase.auth();
+        }
         if (typeof firebase.firestore === "function") {
           db = firebase.firestore();
         }
@@ -84,20 +88,126 @@
     isReady: function () {
       return !!(isInitialized && db);
     },
+    isAuthReady: function () {
+      return !!(isInitialized && auth);
+    },
     isStorageReady: function () {
       return !!(isInitialized && storage);
     },
     getStatus: function () {
       const cfg = getStoredConfig();
       const ready = !!(isInitialized && db);
+      const authReady = !!(isInitialized && auth);
       const stReady = !!(isInitialized && storage);
       return {
         ready: ready,
+        authReady: authReady,
         storageReady: stReady,
         projectId: cfg.projectId || "thuystalk",
         storageBucket: cfg.storageBucket || "thuystalk.firebasestorage.app",
         hasApiKey: !!cfg.apiKey
       };
+    },
+
+    // 1. REGISTER NEW LEARNER WITH EMAIL & PASSWORD + SEND VERIFICATION EMAIL
+    registerLearnerWithVerification: async function (name, email, password, phone) {
+      initFirebase();
+      if (!auth) {
+        throw new Error("Dịch vụ Firebase Auth chưa sẵn sàng trên trình duyệt.");
+      }
+      // Create user with email and password
+      const userCred = await auth.createUserWithEmailAndPassword(email, password);
+      const user = userCred.user;
+
+      // Update displayName
+      if (user && name) {
+        try {
+          await user.updateProfile({ displayName: name });
+        } catch (e) {
+          // Non-critical
+        }
+      }
+
+      // Send email verification
+      if (user && typeof user.sendEmailVerification === "function") {
+        await user.sendEmailVerification({
+          url: window.location.origin + window.location.pathname,
+          handleCodeInApp: false
+        });
+      }
+
+      // Save learner doc in Firestore
+      if (db && user) {
+        try {
+          await db.collection("learners").doc(user.uid).set({
+            uid: user.uid,
+            name: name || "",
+            email: email,
+            phone: phone || "",
+            emailVerified: false,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            source: "ThuysTalk Registration Portal"
+          }, { merge: true });
+        } catch (e) {
+          console.warn("Firestore save on register:", e);
+        }
+      }
+
+      return {
+        uid: user ? user.uid : null,
+        email: email,
+        name: name,
+        emailVerified: false
+      };
+    },
+
+    // 2. LOGIN LEARNER WITH EMAIL & PASSWORD
+    loginLearner: async function (email, password) {
+      initFirebase();
+      if (!auth) {
+        throw new Error("Dịch vụ Firebase Auth chưa sẵn sàng.");
+      }
+      const userCred = await auth.signInWithEmailAndPassword(email, password);
+      const user = userCred.user;
+      return {
+        uid: user.uid,
+        email: user.email,
+        name: user.displayName || email.split("@")[0],
+        emailVerified: user.emailVerified
+      };
+    },
+
+    // 3. RESEND VERIFICATION EMAIL
+    resendVerificationEmail: async function () {
+      initFirebase();
+      if (auth && auth.currentUser) {
+        await auth.currentUser.sendEmailVerification({
+          url: window.location.origin + window.location.pathname,
+          handleCodeInApp: false
+        });
+        return true;
+      }
+      return false;
+    },
+
+    // 4. PASSWORD RESET EMAIL
+    sendPasswordReset: async function (email) {
+      initFirebase();
+      if (!auth) throw new Error("Firebase Auth chưa sẵn sàng.");
+      await auth.sendPasswordResetEmail(email);
+      return true;
+    },
+
+    // 5. CURRENT LEARNER STATE
+    getCurrentUser: function () {
+      return auth ? auth.currentUser : null;
+    },
+
+    // 6. LOGOUT
+    logoutLearner: async function () {
+      if (auth) {
+        await auth.signOut();
+      }
     },
 
     // Save Consultation Inquiry (Lead) to Firestore

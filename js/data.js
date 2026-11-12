@@ -17,7 +17,7 @@ window.THUYSTALK_DEFAULT_MEDIA = {
   aboutSpeaker: {
     id: "aboutSpeaker",
     label: "2. Ảnh Khu Vực Về Tôi (Diễn giả / Chia sẻ)",
-    desc: "Hiển thị kèm huy hiệu 9+ Năm Kinh Nghiệm Thực Chiến",
+    desc: "Hiển thị kèm huy hiệu 9+ Năm Kinh Nghiệm Thực Tế",
     url: "assets/images/about-speaker.webp",
     fallback: "assets/images/about-speaker.jpg",
     posX: 50,
@@ -223,18 +223,18 @@ window.THUYSTALK_I18N = {
       greeting: "XIN CHÀO, MÌNH LÀ",
       firstName: "Nguyễn Thị Ngọc",
       highlightName: "Thúy",
-      role: "Chuyên gia Thực chiến Xuất Nhập Khẩu – Logistics & Ứng dụng AI",
-      bio: "Hơn 9 năm tự tay thực hiện từng khâu trong chuỗi cung ứng quốc tế — từ đàm phán ngoại thương, áp mã HS, mở tờ khai hải quan đến tự động hóa quy trình bằng AI. Mình xây dựng ThuysTalk để chia sẻ kiến thức thực chiến miễn phí, gửi tặng biểu mẫu gốc và đồng hành cùng bạn kinh doanh chính ngạch an toàn, bền vững.",
+      role: "Chuyên gia Tư vấn Xuất Nhập Khẩu – Logistics & Ứng dụng AI",
+      bio: "Hơn 9 năm tự tay thực hiện từng khâu trong chuỗi cung ứng quốc tế — từ đàm phán ngoại thương, áp mã HS, mở tờ khai hải quan đến tự động hóa quy trình bằng AI. Mình xây dựng ThuysTalk để chia sẻ kiến thức thực tế miễn phí, gửi tặng biểu mẫu gốc và đồng hành cùng bạn kinh doanh chính ngạch an toàn, bền vững.",
       btnPrimary: "Vào học E-Learning miễn phí",
       btnSecondary: "Tra cứu AI Pháp lý & Mã HS",
-      scriptNote: "Thực chiến – Minh bạch – Bền vững",
-      floatingTitle: "9+ Năm Thực Chiến",
+      scriptNote: "Tận tâm – Minh bạch – Bền vững",
+      floatingTitle: "9+ Năm Kinh Nghiệm Thực Tế",
       floatingSub: "100% Chính ngạch · Hải quan · AI",
       hsToolTag: "Công cụ Tra cứu Mã HS miễn phí"
     },
     expertise: {
       eyebrow: "LĨNH VỰC CHUYÊN MÔN & ĐÀO TẠO",
-      title: "Kiến Thức Thực Chiến Bảo Vệ Dòng Tiền & Pháp Lý",
+      title: "Kiến Thức Thực Tế Bảo Vệ Dòng Tiền & Pháp Lý",
       desc: "Không lý thuyết suông. Mọi chủ đề trên ThuysTalk đều đính kèm quy trình từng bước, văn bản pháp lý đối chiếu và biểu mẫu thực tế để bạn áp dụng ngay.",
       btnExplore: "Khám phá khóa học miễn phí",
       cards: [
@@ -271,20 +271,20 @@ window.THUYSTALK_I18N = {
     about: {
       scriptCallout: "Làm đúng, làm đủ, làm rõ ràng",
       expYears: "9+",
-      expLabel: "Năm kinh nghiệm thực chiến",
+      expLabel: "Năm kinh nghiệm thực tế",
       miniCaption: "Hội nghị Đối thoại Hải quan – Doanh nghiệp 2026",
       eyebrow: "VỀ TÔI · CÂU CHUYỆN THUYTALK",
       title: "Mình là Nguyễn Thị Ngọc Thúy",
-      subtitle: "Chuyên gia Thực chiến XNK – Logistics & Tiên phong Ứng dụng AI",
+      subtitle: "Chuyên gia Tư vấn XNK – Logistics & Tiên phong Ứng dụng AI",
       p1: "Tốt nghiệp Học viện Ngân hàng chuyên ngành Thương mại Quốc tế, hơn 9 năm qua mình đã trực tiếp đi qua từng mắt xích của ngành xuất nhập khẩu: từ đàm phán giá, soạn thảo hợp đồng ngoại thương, chuẩn bị bộ chứng từ, tự mở tờ khai hải quan cho đến làm việc trực tiếp khi kiểm hóa và kiểm tra sau thông quan.",
       p2: "Tiếp xúc với hàng ngàn chủ doanh nghiệp và người làm nghề, mình thấu hiểu nỗi lo lớn nhất không nằm ở việc thiếu thông tin, mà là thông tin rời rạc và những chiếc bẫy ngầm có thể khiến lô hàng bị đình trệ hàng tuần lễ. Đó là lý do mình lập nên ThuysTalk — nơi chia sẻ thẳng thắn, minh bạch với triết lý: Làm đúng, làm đủ, làm rõ ràng.",
       milestones: [
-        "Thực chiến toàn trình: Đàm phán quốc tế – Thủ tục Hải quan – Kiểm soát rủi ro pháp lý & thuế quan.",
+        "Đồng hành toàn trình: Đàm phán quốc tế – Thủ tục Hải quan – Kiểm soát rủi ro pháp lý & thuế quan.",
         "Tiên phong công nghệ: Thiết kế hệ thống AI Agent & Tự động hóa giúp rút ngắn 70% thời gian xử lý chứng từ.",
         "Trao giá trị thật: Học viên đăng ký miễn phí được lưu tiến độ học tập và nhận trọn bộ biểu mẫu, checklist qua Email."
       ],
       stats: [
-        { val: "9<span>+</span>", lbl: "Năm kinh nghiệm thực chiến XNK & Hải quan" },
+        { val: "9<span>+</span>", lbl: "Năm kinh nghiệm thực tế XNK & Hải quan" },
         { val: "100<span>%</span>", lbl: "Kiến thức chính ngạch, minh bạch & kèm biểu mẫu" },
         { val: "Miễn phí", lbl: "E-Learning lưu tiến độ & nhận tài liệu qua Email" }
       ],
@@ -292,7 +292,7 @@ window.THUYSTALK_I18N = {
     },
     elearning: {
       eyebrow: "HỌC VIỆN E-LEARNING THUYTALK",
-      title: "Khóa Học Thực Chiến Miễn Phí & Nhận Tài Liệu Qua Email",
+      title: "Khóa Học Thực Hành Miễn Phí & Nhận Tài Liệu Qua Email",
       desc: "Học từng bước ngắn gọn, làm bộ Mini Test & Bài tập tình huống để kiểm tra độ hiểu bài, tự động lưu tiến độ học tập và nhận bộ biểu mẫu thực tế gửi thẳng về Email của bạn.",
       bannerTitleGuest: "Đăng nhập Email miễn phí để lưu tiến độ học & nhận bộ tài liệu gốc",
       bannerDescGuest: "Nhập địa chỉ Email của bạn để hệ thống lưu lại các bài đã học và gửi biểu mẫu, checklist của từng khóa học.",
@@ -305,34 +305,34 @@ window.THUYSTALK_I18N = {
     },
     video: {
       eyebrow: "KÊNH YOUTUBE @THUYSTALK",
-      title: "Video Phân Tích & Chia Sẻ Thực Chiến",
+      title: "Video Phân Tích & Chia Sẻ Kinh Nghiệm Thực Tế",
       desc: "Hệ thống 4 chuyên mục video từ phân tích văn bản hải quan mới nhất, giải thích luật dễ hiểu đến các câu chuyện thực tế trên thương trường quốc tế. Có thể nhúng thêm video YouTube mới bất kỳ lúc nào từ Quản trị.",
       tabs: [
         { id: "all", label: "Tất cả video" },
         { id: "CM1", label: "CM1 · Văn bản nóng" },
         { id: "CM2", label: "CM2 · Dịch luật ra tiếng người" },
         { id: "CM3", label: "CM3 · Ký sự thương mại" },
-        { id: "CM4", label: "CM4 · Tâm tình thực chiến" }
+        { id: "CM4", label: "CM4 · Chuyện nghề & Thực tế" }
       ],
       btnReadScript: "Đọc toàn văn kịch bản & Tải tài liệu",
       btnYoutubeChannel: "Xem kênh YouTube @thuystalk"
     },
     articles: {
       eyebrow: "BÀI VIẾT CHUYÊN SÂU · ĐĂNG TOÀN VĂN TRÊN WEB",
-      title: "Góc Nhìn Pháp Lý Hải Quan, Case Study & Quản Trị",
+      title: "Góc Nhìn Pháp Lý Hải Quan, Tình Huống Thực Tế & Quản Trị",
       desc: "Mỗi bài viết đều bắt đầu từ vấn đề thực tế của doanh nghiệp, đối chiếu căn cứ pháp lý mới nhất và đưa ra giải pháp từng bước rõ ràng.",
       tabs: [
         { id: "all", label: "Tất cả bài viết" },
-        { id: "CS", label: "Case Study (CS)" },
+        { id: "CS", label: "Tình huống thực tế (CS)" },
         { id: "TN", label: "Tin Ngành (TN)" },
-        { id: "HT", label: "Học Thực Chiến (HT)" }
+        { id: "HT", label: "Hướng Dẫn Thực Hành (HT)" }
       ],
       readFull: "Đọc toàn văn bài viết"
     },
     notebook: {
       eyebrow: "TRỢ LÝ AI TRA CỨU PHÁP LÝ & HẢI QUAN THUYTALK",
       title: "Tra Cứu Nhanh Mã HS, Chính Sách Hải Quan & Kiểm Soát Xuất Nhập Khẩu",
-      desc: "Hệ thống AI tra cứu chuyên sâu được huấn luyện từ kho văn bản pháp quy Hải quan, Biểu thuế XNK và Case Study thực chiến của Nguyễn Thị Ngọc Thúy.",
+      desc: "Hệ thống AI tra cứu chuyên sâu được huấn luyện từ kho văn bản pháp quy Hải quan, Biểu thuế XNK và các tình huống thực tế của Nguyễn Thị Ngọc Thúy.",
       inputPlaceholder: "Nhập câu hỏi tra cứu (VD: HS code máy giặt? Quy tắc 3b áp mã HS? Quyết định 31/2026 cấm hàng nào về ICD?)...",
       sendBtn: "Tra cứu ngay",
       liveNotebookBtn: "Phân tích chuyên sâu AI"
@@ -342,10 +342,10 @@ window.THUYSTALK_I18N = {
       title: "Bạn Cần Tư Vấn Kỹ Hơn Cho Lô Hàng Hoặc Doanh Nghiệp Của Mình?",
       desc: "Sau khi học E-Learning hoặc tra cứu trên hệ thống, nếu bạn đang gặp vướng mắc thực tế về mã HS, thủ tục thông quan, kiểm tra sau thông quan hay muốn ứng dụng AI vào quy trình làm việc, hãy để lại thông tin để Thúy hỗ trợ trực tiếp.",
       hostName: "Nguyễn Thị Ngọc Thúy",
-      hostRole: "9+ Năm Thực Chiến XNK, Hải Quan & Tự Động Hóa AI",
+      hostRole: "9+ Năm Kinh Nghiệm Thực Tế XNK, Hải Quan & Tự Động Hóa AI",
       securityNote: "Bảo mật 3 lớp theo chuẩn /secure-hybrid-web-architect & Nghị định 13/2023/NĐ-CP",
       formTitle: "Đăng Ký Tư Vấn Kỹ Hơn & Nhận Tài Liệu",
-      formSub: "Thông tin của bạn được mã hóa bảo mật và phản hồi qua Email / Zalo trong 24h.",
+      formSub: "Thông tin của bạn được mã hóa bảo mật và phản hồi qua Email / Zalo (https://zalo.me/84767648862) trong 24h.",
       lblName: "Họ và tên của bạn *",
       lblPhone: "Số điện thoại / Zalo *",
       lblEmail: "Địa chỉ Email nhận tài liệu *",
@@ -531,7 +531,7 @@ window.THUYSTALK_COURSES = [
     id: "course-xnk-chinh-ngach",
     photoSlot: "aboutSpeaker",
     badge: { vi: "MIỄN PHÍ · KÈM BIỂU MẪU", en: "FREE · WITH TEMPLATES" },
-    meta: { vi: "2 Bài học · Bộ Mini Test 3 câu · Thực chiến", en: "2 Lessons · 3-Question Mini Test · Practical" },
+    meta: { vi: "2 Bài học · Bộ Mini Test 3 câu · Thực hành", en: "2 Lessons · 3-Question Mini Test · Practical" },
     title: {
       vi: "Lộ Trình Xuất Nhập Khẩu Chính Ngạch & Phòng Vệ Rủi Ro Tại Cửa Khẩu",
       en: "Official Import-Export Roadmap & Port Clearance Risk Defense"
@@ -806,7 +806,7 @@ window.THUYSTALK_COURSES = [
   {
     id: "course-ai-agent-xnk",
     photoSlot: "consultHost",
-    badge: { vi: "CÔNG NGHỆ · AI THỰC CHIẾN", en: "TECH · PRACTICAL AI" },
+    badge: { vi: "CÔNG NGHỆ · ỨNG DỤNG AI", en: "TECH · PRACTICAL AI" },
     meta: { vi: "1 Chuyên đề · Bộ Mini Test · Có Workflow", en: "1 Module · Mini Test · Workflow Included" },
     title: {
       vi: "Ứng Dụng AI Agent & Tự Động Hóa Rà Soát Chứng Từ Xuất Nhập Khẩu",
@@ -916,7 +916,7 @@ window.THUYSTALK_VIDEOS = [
   {
     id: "vid-cm4-scam-ep1",
     cm: "CM4",
-    cmLabel: { vi: "CM4 · Tâm tình thực chiến", en: "CM4 · Real-World Stories" },
+    cmLabel: { vi: "CM4 · Chuyện nghề & Thực tế", en: "CM4 · Real-World Stories" },
     duration: "09:45",
     date: "11/2026",
     thumbSlot: "aboutSpeaker",
@@ -1169,7 +1169,7 @@ window.THUYSTALK_ARTICLES = [
   {
     id: "art-tam-giac-vang-bcqt-m15",
     pillar: "HT",
-    pillarLabel: { vi: "Học Thực Chiến · Thanh Khoản", en: "Practical Guide · Audit Defense" },
+    pillarLabel: { vi: "Hướng Dẫn Thực Hành · Thanh Khoản", en: "Practical Guide · Audit Defense" },
     date: "05/11/2026",
     readTime: { vi: "8 phút đọc", en: "8 min read" },
     photoSlot: "consultHost",
