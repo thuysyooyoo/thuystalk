@@ -225,7 +225,7 @@ window.THUYSTALK_I18N = {
       highlightName: "Thúy",
       role: "Chuyên gia Tư vấn Xuất Nhập Khẩu – Logistics & Ứng dụng AI",
       bio: "Hơn 9 năm tự tay thực hiện từng khâu trong chuỗi cung ứng quốc tế — từ đàm phán ngoại thương, áp mã HS, mở tờ khai hải quan đến tự động hóa quy trình bằng AI. Mình xây dựng ThuysTalk để chia sẻ kiến thức thực tế miễn phí, gửi tặng biểu mẫu gốc và đồng hành cùng bạn kinh doanh chính ngạch an toàn, bền vững.",
-      btnPrimary: "Vào học E-Learning miễn phí",
+      btnPrimary: "Xem Tài Liệu & Mini Test",
       btnSecondary: "Tra cứu AI Pháp lý & Mã HS",
       scriptNote: "Tận tâm – Minh bạch – Bền vững",
       floatingTitle: "9+ Năm Kinh Nghiệm Thực Tế",
@@ -233,10 +233,10 @@ window.THUYSTALK_I18N = {
       hsToolTag: "Công cụ Tra cứu Mã HS miễn phí"
     },
     expertise: {
-      eyebrow: "LĨNH VỰC CHUYÊN MÔN & ĐÀO TẠO",
+      eyebrow: "LĨNH VỰC CHUYÊN MÔN THỰC CHIẾN",
       title: "Kiến Thức Thực Tế Bảo Vệ Dòng Tiền & Pháp Lý",
       desc: "Không lý thuyết suông. Mọi chủ đề trên ThuysTalk đều đính kèm quy trình từng bước, văn bản pháp lý đối chiếu và biểu mẫu thực tế để bạn áp dụng ngay.",
-      btnExplore: "Khám phá khóa học miễn phí",
+      btnExplore: "Khám phá tài liệu & Mini Test",
       cards: [
         {
           code: "01",
@@ -281,26 +281,26 @@ window.THUYSTALK_I18N = {
       milestones: [
         "Đồng hành toàn trình: Đàm phán quốc tế – Thủ tục Hải quan – Kiểm soát rủi ro pháp lý & thuế quan.",
         "Tiên phong công nghệ: Thiết kế hệ thống AI Agent & Tự động hóa giúp rút ngắn 70% thời gian xử lý chứng từ.",
-        "Trao giá trị thật: Học viên đăng ký miễn phí được lưu tiến độ học tập và nhận trọn bộ biểu mẫu, checklist qua Email."
+        "Trao giá trị thật: Đăng ký miễn phí được lưu tiến độ Mini Test và nhận trọn bộ biểu mẫu, checklist qua Email."
       ],
       stats: [
         { val: "9<span>+</span>", lbl: "Năm kinh nghiệm thực tế XNK & Hải quan" },
         { val: "100<span>%</span>", lbl: "Kiến thức chính ngạch, minh bạch & kèm biểu mẫu" },
-        { val: "Miễn phí", lbl: "E-Learning lưu tiến độ & nhận tài liệu qua Email" }
+        { val: "Miễn phí", lbl: "Tài liệu & Mini Test lưu tiến độ trực tuyến" }
       ],
       btnConnect: "Đăng ký tư vấn chuyên sâu cùng Thúy"
     },
     elearning: {
-      eyebrow: "HỌC VIỆN E-LEARNING THUYTALK",
-      title: "Khóa Học Thực Hành Miễn Phí & Tải Tài Liệu Trực Tiếp",
-      desc: "Học từng bước ngắn gọn, làm bộ Mini Test & Bài tập tình huống để kiểm tra độ hiểu bài, tự động lưu tiến độ học tập và tải bộ biểu mẫu thực tế trực tiếp về máy của bạn.",
-      bannerTitleGuest: "Đăng nhập Email miễn phí để lưu tiến độ học & tải bộ tài liệu gốc",
-      bannerDescGuest: "Nhập địa chỉ Email của bạn để hệ thống lưu lại các bài đã học và tải biểu mẫu, checklist của từng khóa học.",
+      eyebrow: "KHO TÀI LIỆU CHUYÊN ĐỀ & MINI TEST",
+      title: "Tài Liệu Chuyên Môn Thực Chiến & Mini Test",
+      desc: "Đọc tài liệu cô đọng, làm bộ Mini Test tình huống để tự đánh giá mức độ nắm bắt, tự động lưu tiến độ và tải trọn bộ biểu mẫu thực tế trực tiếp về máy.",
+      bannerTitleGuest: "Đăng nhập Email để lưu tiến độ Mini Test & tải bộ tài liệu gốc",
+      bannerDescGuest: "Nhập địa chỉ Email để hệ thống lưu lại các chuyên đề đã xem và tải biểu mẫu, checklist đính kèm.",
       bannerPlaceholder: "Nhập email của bạn (VD: lan.nguyen@company.com)...",
       bannerBtn: "Kích hoạt & Lưu tiến độ",
-      bannerTitleLogged: "Học viên đang kích hoạt:",
-      bannerDescLogged: "Tiến độ học tập của bạn đang được tự động lưu. Bạn có thể bấm Tải tài liệu ở bất kỳ khóa học nào để tải ngay về máy.",
-      btnStartCourse: "Vào học & Làm Mini Test",
+      bannerTitleLogged: "Tài khoản đang hoạt động:",
+      bannerDescLogged: "Tiến độ đang được tự động lưu. Có thể bấm Tải tài liệu ở bất kỳ chuyên đề nào để tải ngay về máy.",
+      btnStartCourse: "Xem tài liệu & Làm Mini Test",
       btnSendMaterial: "Tải tài liệu"
     },
     video: {
@@ -450,7 +450,7 @@ window.THUYSTALK_I18N = {
     },
     elearning: {
       eyebrow: "THUYTALK E-LEARNING ACADEMY",
-      title: "Free Practical Courses · Save Progress & Receive Templates via Email",
+      title: "Practical Materials · Mini Test & Direct Template Download",
       desc: "Learn through structured micro-lessons, complete multi-question Mini Tests & practical exercises, track your completion percentage, and receive downloadable templates via Email.",
       bannerTitleGuest: "Sign in with your Email (Free) to save course progress & receive templates",
       bannerDescGuest: "Enter your Email address to automatically save completed lessons and receive checklists & templates for each course.",
@@ -531,7 +531,7 @@ window.THUYSTALK_COURSES = [
     id: "course-xnk-chinh-ngach",
     photoSlot: "aboutSpeaker",
     badge: { vi: "MIỄN PHÍ · KÈM BIỂU MẪU", en: "FREE · WITH TEMPLATES" },
-    meta: { vi: "2 Bài học · Bộ Mini Test 3 câu · Thực hành", en: "2 Lessons · 3-Question Mini Test · Practical" },
+    meta: { vi: "Tài liệu chuyên đề · Bộ Mini Test 3 câu · Thực hành", en: "Specialized Materials · 3-Question Mini Test · Practical" },
     title: {
       vi: "Lộ Trình Xuất Nhập Khẩu Chính Ngạch & Phòng Vệ Rủi Ro Tại Cửa Khẩu",
       en: "Official Import-Export Roadmap & Port Clearance Risk Defense"
@@ -548,7 +548,7 @@ window.THUYSTALK_COURSES = [
       {
         id: "c1-l1",
         title: {
-          vi: "Bài 1: 4 Điểm tử huyệt khi đối chiếu Hợp đồng, Invoice, Packing List và Vận đơn (B/L)",
+          vi: "Tài liệu 1: 4 Điểm tử huyệt khi đối chiếu Hợp đồng, Invoice, Packing List và Vận đơn (B/L)",
           en: "Lesson 1: 4 Critical Checkpoints Across Contract, Invoice, Packing List & Bill of Lading"
         },
         duration: "09:30",
@@ -649,7 +649,7 @@ window.THUYSTALK_COURSES = [
       {
         id: "c1-l2",
         title: {
-          vi: "Bài 2: Quy trình 4 bước lấy hàng qua Cảng biển số (Smart Port) với eDO & eEIR",
+          vi: "Tài liệu 2: Quy trình 4 bước lấy hàng qua Cảng biển số (Smart Port) với eDO & eEIR",
           en: "Lesson 2: 4-Step Container Release at Smart Ports via eDO & eEIR"
         },
         duration: "08:45",
@@ -709,7 +709,7 @@ window.THUYSTALK_COURSES = [
     id: "course-dncx-bcqt-hscode",
     photoSlot: "customsAward",
     badge: { vi: "CHUYÊN SÂU · PHÁP LÝ HẢI QUAN", en: "ADVANCED · CUSTOMS COMPLIANCE" },
-    meta: { vi: "1 Chuyên đề · Bộ Mini Test 2 câu · Có Bài tập", en: "1 Module · 2-Question Mini Test · With Exercise" },
+    meta: { vi: "Tài liệu chuyên đề · Bộ Mini Test 2 câu · Thực hành", en: "Specialized Materials · 2-Question Mini Test · Practical" },
     title: {
       vi: "Áp Mã HS Chuẩn 6 Quy Tắc & Công Thức Tam Giác Vàng Báo Cáo Quyết Toán DNCX",
       en: "6-Rule HS Classification & Golden Triangle EPE Final Settlement (Form 15)"
@@ -726,7 +726,7 @@ window.THUYSTALK_COURSES = [
       {
         id: "c2-l1",
         title: {
-          vi: "Bài 1: Khử Tam Giác Quỷ lệch số liệu Kho – Kế toán – XNK trước kỳ Kiểm tra sau thông quan",
+          vi: "Tài liệu 1: Khử Tam Giác Quỷ lệch số liệu Kho – Kế toán – XNK trước kỳ Kiểm tra sau thông quan",
           en: "Lesson 1: Eliminating the Warehouse–Accounting–Customs Discrepancy Triangle Before PCA"
         },
         duration: "14:20",
@@ -807,7 +807,7 @@ window.THUYSTALK_COURSES = [
     id: "course-ai-agent-xnk",
     photoSlot: "consultHost",
     badge: { vi: "CÔNG NGHỆ · ỨNG DỤNG AI", en: "TECH · PRACTICAL AI" },
-    meta: { vi: "1 Chuyên đề · Bộ Mini Test · Có Workflow", en: "1 Module · Mini Test · Workflow Included" },
+    meta: { vi: "Tài liệu chuyên đề · Bộ Mini Test · Kèm Workflow", en: "Specialized Materials · Mini Test · Workflow Included" },
     title: {
       vi: "Ứng Dụng AI Agent & Tự Động Hóa Rà Soát Chứng Từ Xuất Nhập Khẩu",
       en: "Deploying AI Agents & Automation for Trade Document QC"
@@ -824,7 +824,7 @@ window.THUYSTALK_COURSES = [
       {
         id: "c3-l1",
         title: {
-          vi: "Bài 1: Thiết kế Trợ lý QC Chứng từ đối chiếu tự động B/L – Invoice – Packing List",
+          vi: "Tài liệu 1: Thiết kế Trợ lý QC Chứng từ đối chiếu tự động B/L – Invoice – Packing List",
           en: "Lesson 1: Designing an AI Document QC Agent for B/L – Invoice – Packing List"
         },
         duration: "11:15",
@@ -905,7 +905,7 @@ window.THUYSTALK_VIDEOS = [
     script: {
       vi: `<h4>1. Sự ra đời của Đường sắt và Cuộc cách mạng Logistics trên bộ</h4>
            <p>Trước khi có đường sắt, việc vận chuyển hàng hóa nặng sâu trong lục địa tốn kém gấp nhiều lần đường biển. Sự xuất hiện của đầu máy hơi nước và hệ thống khổ đường ray tiêu chuẩn (1.435 mm) đã mở ra kỷ nguyên vận tải khối lượng lớn xuyên lục địa với chi phí và thời gian định trước chính xác.</p>
-           <h4>2. Bài học cho Vận tải Đa phương thức & Liên vận Quốc tế hiện đại</h4>
+           <h4>2. Đúc kết kinh nghiệm cho Vận tải Đa phương thức & Liên vận Quốc tế hiện đại</h4>
            <p>Ngày nay, kết hợp vận tải đường sắt liên vận quốc tế với đường biển và đường bộ giúp doanh nghiệp xuất nhập khẩu tối ưu thời gian giao hàng và giảm thiểu rủi ro đứt gãy chuỗi cung ứng.</p>`,
       en: `<h4>1. The Birth of Railways and the Inland Logistics Revolution</h4>
            <p>The standardization of rail gauges (1,435 mm) unlocked predictable, high-volume continental freight movement.</p>

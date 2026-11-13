@@ -31,7 +31,7 @@
     return [
       {
         q: {
-          vi: "Câu 1: Theo quy định tại bài học, nguyên tắc quan trọng nhất khi kiểm tra bộ chứng từ hải quan là gì?",
+          vi: "Câu 1: Theo quy định và tài liệu đối chiếu, nguyên tắc quan trọng nhất khi kiểm tra bộ chứng từ hải quan là gì?",
           en: "Q1: According to this lesson, what is the primary rule when verifying customs documents?"
         },
         options: {
@@ -597,7 +597,7 @@
           </div>
           <div class="learner-email-form" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <button type="button" class="btn btn-jade btn-sm" id="bannerProfileBtn">
-              Hồ Sơ &amp; Tiến Trình
+              Hồ Sơ Cá Nhân
             </button>
             <button type="button" class="btn btn-outline btn-sm" id="bannerLogoutBtn">
               Đăng Xuất
@@ -618,7 +618,7 @@
             updateHeaderLearnerStatus();
             updateConsultFormStatus();
             renderElearningSection(window.THUYSTALK_I18N[state.lang]);
-            showToast("Đã đăng xuất tài khoản học viên.");
+            showToast("Đã đăng xuất tài khoản thành công.");
           });
         }
       } else {
@@ -627,7 +627,7 @@
             <div class="learner-badge-code">EDU</div>
             <div>
               <h4>Đăng ký hoặc Đăng nhập để lưu tiến độ học &amp; tải bộ tài liệu gốc</h4>
-              <p style="font-size:0.83rem; margin:0; line-height:1.45;">Tài khoản học viên hoàn toàn miễn phí. Đăng nhập để lưu bài đã học, làm mini test và tải biểu mẫu, checklist chuyên ngành.</p>
+              <p style="font-size:0.83rem; margin:0; line-height:1.45;">Tài khoản hoàn toàn miễn phí. Đăng nhập để lưu tiến độ, làm Mini Test và tải biểu mẫu, checklist chuyên ngành.</p>
             </div>
           </div>
           <div class="learner-email-form" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -837,7 +837,7 @@
             ${
               isDone
                 ? state.lang === "vi"
-                  ? "Đã hoàn thành bài học"
+                  ? "Đã hoàn thành Mini Test"
                   : "Lesson Completed"
                 : state.lang === "vi"
                 ? "Đánh dấu hoàn thành & Lưu tiến độ"
@@ -895,7 +895,7 @@
       renderElearningSection(window.THUYSTALK_I18N[state.lang]);
       showToast(
         state.lang === "vi"
-          ? "Đã cập nhật tiến độ bài học"
+          ? "Đã cập nhật tiến độ Mini Test"
           : "Lesson progress updated"
       );
     });
@@ -913,11 +913,11 @@
     triggerChecklistDownload(course);
     showToast(
       state.lang === "vi"
-        ? "Đang tải bộ tài liệu & Checklist khóa học về máy..."
+        ? "Đang tải bộ tài liệu & Checklist chuyên đề về máy..."
         : "Downloading course resource kit & checklist..."
     );
 
-    // Nếu học viên đã đăng nhập email, ghi nhận tiến độ học tập vào hệ thống
+    // Nếu đã đăng nhập email, ghi nhận tiến độ vào hệ thống
     if (state.learnerEmail) {
       const cTitleVi = typeof course.title === "object" ? course.title.vi : course.title;
       recordLeadOrMaterial({
@@ -939,7 +939,7 @@
       "Chuyên gia: Nguyễn Thị Ngọc Thúy (9+ Năm Kinh Nghiệm Thực Tế XNK, Hải Quan & AI)",
       "====================================================================",
       "",
-      "KHÓA HỌC: " + cTitleVi,
+      "CHUYÊN ĐỀ & TÀI LIỆU: " + cTitleVi,
       cDelivVi,
       "",
       "--- TÓM TẮT NỘI DUNG & BỘ MINI TEST ---",
@@ -1614,13 +1614,13 @@
     div.className = "chat-login-gate-card";
     div.id = gateId;
     div.innerHTML = `
-      <h4>Đăng Nhập Tài Khoản Học Viên Để Tiếp Tục Tra Cứu Miễn Phí</h4>
+      <h4>Đăng Nhập Tài Khoản Để Tiếp Tục Tra Cứu Miễn Phí</h4>
       <p>
-        Vui lòng đăng nhập hoặc kích hoạt nhanh Tài khoản Học viên ThuysTalk (hoàn toàn miễn phí) để tiếp tục sử dụng không giới hạn Hệ thống Tra cứu Pháp lý Hải quan &amp; Mã HS, đồng thời lưu lịch sử học tập và nhận tài liệu qua Email.
+        Vui lòng đăng nhập hoặc kích hoạt nhanh Tài khoản ThuysTalk (hoàn toàn miễn phí) để tiếp tục sử dụng không giới hạn Hệ thống Tra cứu Pháp lý Hải quan &amp; Mã HS, đồng thời lưu lịch sử và tải tài liệu trực tuyến.
       </p>
       <form class="gate-login-form" style="display:grid; grid-template-columns: 1fr 1fr 1fr auto; gap:8px; align-items:center;">
         <input type="text" required class="form-control gate-name-inp" placeholder="Họ và tên của bạn *" style="padding:9px 12px; font-size:0.82rem;" />
-        <input type="email" required class="form-control gate-email-inp" placeholder="Địa chỉ Email học viên *" style="padding:9px 12px; font-size:0.82rem;" />
+        <input type="email" required class="form-control gate-email-inp" placeholder="Địa chỉ Email của bạn *" style="padding:9px 12px; font-size:0.82rem;" />
         <input type="tel" required class="form-control gate-phone-inp" placeholder="Số điện thoại / Zalo *" style="padding:9px 12px; font-size:0.82rem;" />
         <button type="submit" class="btn btn-primary btn-sm" style="white-space:nowrap;">
           Đăng nhập &amp; Tiếp tục tra cứu
@@ -1650,12 +1650,12 @@
         name: nameVal,
         email: emailVal,
         phone: phoneVal,
-        topic: `Kích hoạt tài khoản học viên khi tra cứu: ${pendingQuery}`
+        topic: `Kích hoạt tài khoản khi tra cứu: ${pendingQuery}`
       });
 
       renderElearningSection(window.THUYSTALK_I18N[state.lang]);
       div.remove();
-      showToast(`Chào mừng học viên ${nameVal}! Bạn đã được mở khóa tra cứu miễn phí không giới hạn.`);
+      showToast(`Chào mừng ${nameVal}! Đã mở khóa tra cứu miễn phí không giới hạn.`);
       executeAiQuery(pendingQuery, forceDeepLookup);
     });
   }
@@ -1770,7 +1770,7 @@
 
     questions.push({
       q: {
-        vi: `Câu 1: Theo nội dung bài học "${titleText}", nhận định nào sau đây là CHÍNH XÁC NHẤT về quy định và nguyên tắc thực hiện?`,
+        vi: `Câu 1: Theo nội dung tài liệu "${titleText}", nhận định nào sau đây là CHÍNH XÁC NHẤT về quy định và nguyên tắc thực hiện?`,
         en: `Q1: According to "${titleText}", which statement below is MOST ACCURATE?`
       },
       options: {
@@ -1787,7 +1787,7 @@
       },
       correctIndex: 0,
       explanation: {
-        vi: `Chính xác! Căn cứ trực tiếp theo bài học: "${s1}"`,
+        vi: `Chính xác! Căn cứ trực tiếp theo tài liệu: "${s1}"`,
         en: `Correct! Directly from the lesson material: "${s1}"`
       }
     });
@@ -2120,7 +2120,7 @@
       },
       {
         id: "elearning",
-        label: "04 · Tạo Bài Học & Mini Test",
+        label: "04 · Tài Liệu & Mini Test",
         count: `${totalLessons} bài`,
         title: "04 · Tạo Bài Giảng (HTML / Ảnh / WebM) & Đẩy File Excel Bộ Mini Test",
         desc: "Soạn bài giảng HTML kèm ảnh/video minh họa (.jpg, .png, .webp, .webm) và đẩy file Excel (.xlsx, .csv) lên để điền nhanh toàn bộ câu hỏi Mini Test."
@@ -2134,10 +2134,10 @@
       },
       {
         id: "leads",
-        label: "06 · Học Viên & Sao Lưu",
+        label: "06 · Người Dùng & Sao Lưu",
         count: `${leadsCount} lượt`,
-        title: "06 · Danh Sách Học Viên Nhận Tài Liệu & Sao Lưu Hệ Thống",
-        desc: "Xuất danh sách học viên/khách hàng đăng ký tư vấn ra file Excel CSV hoặc sao lưu toàn bộ cấu hình CMS."
+        title: "06 · Danh Sách Đăng Ký Tài Liệu & Sao Lưu Hệ Thống",
+        desc: "Xuất danh sách người dùng đăng ký tải tài liệu / tư vấn ra file Excel CSV hoặc sao lưu toàn bộ cấu hình CMS."
       }
     ];
 
@@ -2332,7 +2332,7 @@
         btn.addEventListener("click", () => {
           const tagType = btn.dataset.insertTag;
           let snippet = "";
-          if (tagType === "h3") snippet = `\n<h3>Tiêu đề mục chính trong bài học</h3>\n`;
+          if (tagType === "h3") snippet = `\n<h3>Tiêu đề mục chính trong tài liệu</h3>\n`;
           else if (tagType === "p") snippet = `\n<p>Nội dung phân tích chi tiết...</p>\n`;
           else if (tagType === "ul") snippet = `\n<ul>\n  <li>Điểm lưu ý thực tế số 1</li>\n  <li>Điểm lưu ý thực tế số 2</li>\n</ul>\n`;
           else if (tagType === "quote")
@@ -2995,7 +2995,7 @@
       authDiv.innerHTML = `
         <div class="modal-card" style="max-width:480px; background:#FFFFFF !important; color:#0F172A !important; border-radius:18px; box-shadow:0 30px 70px rgba(0,0,0,0.45); border:1.5px solid #E2E8F0; overflow:hidden;">
           <div class="modal-head" style="padding:18px 24px; background:#FFFFFF !important; border-bottom:1.5px solid #E2E8F0; display:flex; align-items:center; justify-content:space-between;">
-            <h3 id="authModalTitle" style="color:#064E3B !important; font-size:1.05rem; font-weight:800; margin:0;">Tài Khoản Học Viên ThuysTalk</h3>
+            <h3 id="authModalTitle" style="color:#064E3B !important; font-size:1.05rem; font-weight:800; margin:0;">Tài Khoản ThuysTalk</h3>
             <button class="modal-close" data-close-modal="learnerAuthModal" aria-label="Đóng" style="background:#F1F5F9 !important; color:#475569 !important; border:1px solid #CBD5E1; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.25rem; cursor:pointer;">&times;</button>
           </div>
           <div class="modal-body" style="padding:22px 24px; background:#FFFFFF !important; color:#0F172A !important;">
@@ -3007,13 +3007,13 @@
             <!-- Tab 1: Registration Form -->
             <div id="authRegisterPane">
               <div class="auth-notice-box" style="background:#FFFBEB; border-left:3.5px solid #F59E0B; padding:12px 14px; border-radius:6px; margin-bottom:16px; font-size:0.83rem; color:#92400E; line-height:1.5;">
-                <strong>Lưu ý:</strong> Mỗi địa chỉ email chỉ được tạo <strong>1 tài khoản duy nhất</strong>. Sau khi đăng ký, Google Firebase sẽ gửi thư xác thực đến hộp thư của bạn. Bắt buộc nhấn kích hoạt trước khi đăng nhập.
+                <strong>Lưu ý:</strong> Mỗi địa chỉ email chỉ được tạo <strong>1 tài khoản duy nhất</strong>. Sau khi đăng ký, hệ thống sẽ gửi thư xác thực đến hộp thư của bạn. Bắt buộc nhấn kích hoạt trước khi đăng nhập.
               </div>
 
               <div id="authRegisterSuccessBox" style="display:none;" class="auth-success-banner" style="background:#F0FDF4; border:1.5px solid #86EFAC; border-radius:12px; padding:16px 20px; text-align:center; color:#064E3B; margin-bottom:14px;">
                 <h4 style="color:#064E3B; margin-bottom:6px; font-weight:800;">Đã Gửi Email Xác Thực!</h4>
                 <p style="font-size:0.84rem; margin-bottom:10px; line-height:1.5;" id="authRegisterSuccessMsg">
-                  Một thư xác thực từ Google Firebase đã được gửi tới hộp thư của bạn. Vui lòng mở email và nhấn vào liên kết kích hoạt trước khi đăng nhập.
+                  Một thư xác thực đã được gửi tới hộp thư của bạn. Vui lòng mở email và nhấn vào liên kết kích hoạt trước khi đăng nhập.
                 </p>
                 <button type="button" class="btn btn-primary btn-sm" id="authGoToLoginAfterRegisterBtn">Chuyển sang Đăng Nhập</button>
               </div>
@@ -3052,7 +3052,7 @@
 
               <form id="authLoginForm">
                 <div class="form-group">
-                  <label>Địa chỉ Email học viên *</label>
+                  <label>Địa chỉ Email *</label>
                   <input type="email" id="authLogEmail" class="form-control" required placeholder="VD: lan.nguyen@gmail.com" />
                 </div>
                 <div class="form-group">
@@ -3129,21 +3129,21 @@
           } else {
             recordLeadOrMaterial({
               type: "Learner Registered (Offline)",
-              name, email, phone, topic: "Kích hoạt tài khoản học viên"
+              name, email, phone, topic: "Kích hoạt tài khoản"
             });
           }
 
           authDiv.querySelector("#authRegisterForm").style.display = "none";
           authDiv.querySelector("#authRegisterSuccessBox").style.display = "block";
           authDiv.querySelector("#authRegisterSuccessMsg").innerHTML = `
-            Một thư xác thực từ <strong>Google Firebase</strong> đã được gửi tới: <strong>${escapeHtml(email)}</strong>.<br />
+            Một thư xác thực đã được gửi tới: <strong>${escapeHtml(email)}</strong>.<br />
             Theo quy định, bạn <strong>bắt buộc phải mở email và nhấn kích hoạt</strong> trước khi đăng nhập.
           `;
           authDiv.querySelector("#authLogEmail").value = email;
           showToast(`Đã gửi email xác thực tới ${email}! Vui lòng kích hoạt tài khoản.`);
         } catch (err) {
           if (err.code === "auth/email-already-in-use" || (err.message && err.message.includes("email-already-in-use"))) {
-            alert("Email này đã được đăng ký tài khoản trên hệ thống! Mỗi địa chỉ email chỉ được tạo duy nhất 1 tài khoản học viên. Nếu bạn quên mật khẩu, vui lòng nhấn 'Quên mật khẩu' để nhận lại mật khẩu mới qua email.");
+            alert("Email này đã được đăng ký tài khoản trên hệ thống! Mỗi địa chỉ email chỉ được tạo duy nhất 1 tài khoản. Vui lòng nhấn 'Quên mật khẩu' nếu cần nhận lại mật khẩu mới qua email.");
             tabLog.click();
             authDiv.querySelector("#authLogEmail").value = email;
             return;
@@ -3183,7 +3183,7 @@
                 <div style="background:#FEF2F2; border:1.5px solid #F87171; border-radius:8px; padding:12px; margin-bottom:8px;">
                   <strong style="color:#DC2626; font-size:0.9rem;">Tài khoản chưa được kích hoạt qua Email!</strong><br />
                   <span style="color:#7F1D1D; font-size:0.84rem; line-height:1.5; display:block; margin-top:4px;">
-                    Theo quy định, bạn <strong>bắt buộc phải kích hoạt tài khoản</strong> trước khi đăng nhập. Vui lòng mở hộp thư email <strong>${escapeHtml(email)}</strong> và nhấn vào liên kết xác nhận của Google Firebase.
+                    Theo quy định, bạn <strong>bắt buộc phải kích hoạt tài khoản</strong> trước khi đăng nhập. Vui lòng mở hộp thư email <strong>${escapeHtml(email)}</strong> và nhấn vào liên kết kích hoạt tài khoản.
                   </span>
                 </div>
               `;
@@ -3257,7 +3257,7 @@
       authDiv.querySelector("#authForgotPassBtn").addEventListener("click", async () => {
         const email = authDiv.querySelector("#authLogEmail").value.trim();
         if (!email || !email.includes("@")) {
-          showToast("Vui lòng nhập Email học viên ở ô trên để nhận mật khẩu mặc định mới.");
+          showToast("Vui lòng nhập Email ở ô trên để nhận mật khẩu mặc định mới.");
           authDiv.querySelector("#authLogEmail").focus();
           return;
         }
@@ -3315,21 +3315,21 @@
       profDiv.innerHTML = `
         <div class="modal-card" style="max-width:580px; background:#FFFFFF !important; color:#0F172A !important; border-radius:18px; box-shadow:0 30px 70px rgba(0,0,0,0.45); border:1.5px solid #E2E8F0; overflow:hidden;">
           <div class="modal-head" style="padding:18px 24px; background:#FFFFFF !important; border-bottom:1.5px solid #E2E8F0; display:flex; align-items:center; justify-content:space-between;">
-            <h3 style="color:#064E3B !important; font-size:1.05rem; font-weight:800; margin:0;">Hồ Sơ &amp; Tiến Trình Học Tập Cá Nhân</h3>
+            <h3 style="color:#064E3B !important; font-size:1.05rem; font-weight:800; margin:0;">Hồ Sơ Cá Nhân &amp; Tiến Độ Mini Test</h3>
             <button class="modal-close" data-close-modal="userProfileModal" aria-label="Đóng" style="background:#F1F5F9 !important; color:#475569 !important; border:1px solid #CBD5E1; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.25rem; cursor:pointer;">&times;</button>
           </div>
           <div class="modal-body" style="padding:22px 24px; background:#FFFFFF !important; color:#0F172A !important;">
             <div class="auth-tabs-nav profile-tabs-3" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; background:#F1F5F9; border-radius:10px; padding:4px; margin-bottom:20px;">
               <button type="button" class="auth-tab-btn active" id="profileTabInfoBtn" style="padding:9px 12px; font-size:0.82rem;">Thông Tin Cá Nhân</button>
               <button type="button" class="auth-tab-btn" id="profileTabPassBtn" style="padding:9px 12px; font-size:0.82rem;">Đổi Mật Khẩu</button>
-              <button type="button" class="auth-tab-btn" id="profileTabProgressBtn" style="padding:9px 12px; font-size:0.82rem;">Tiến Trình Học Tập</button>
+              <button type="button" class="auth-tab-btn" id="profileTabProgressBtn" style="padding:9px 12px; font-size:0.82rem;">Tiến Độ Mini Test &amp; Tài Liệu</button>
             </div>
 
             <!-- Pane 1: Thông tin cá nhân -->
             <div id="profilePaneInfo">
               <form id="profileInfoForm">
                 <div class="form-group" style="margin-bottom:12px;">
-                  <label style="font-size:0.82rem; font-weight:700; color:var(--ink-700);">Email tài khoản (Google Firebase ID)</label>
+                  <label style="font-size:0.82rem; font-weight:700; color:var(--ink-700);">Email tài khoản</label>
                   <input type="email" id="profileEmailInp" class="form-control" readonly style="background:#F1F5F9; color:var(--ink-700); cursor:not-allowed;" />
                 </div>
                 <div class="form-row-2">
@@ -3359,7 +3359,7 @@
             <!-- Pane 2: Đổi mật khẩu -->
             <div id="profilePanePass" style="display:none;">
               <div class="auth-notice-box" style="margin-bottom:14px;">
-                Mật khẩu mới cần tối thiểu 6 ký tự để bảo vệ tài khoản học viên và dữ liệu tiến trình E-Learning của bạn.
+                Mật khẩu mới cần tối thiểu 6 ký tự để bảo vệ tài khoản và dữ liệu cá nhân.
               </div>
               <form id="profileChangePassForm">
                 <div class="form-group">
@@ -3386,8 +3386,8 @@
             <div id="profilePaneProgress" style="display:none;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                 <div>
-                  <strong style="color:var(--jade-900); font-size:0.92rem;">Tiến Độ Học Tập Đã Ghi Nhận</strong>
-                  <p style="font-size:0.8rem; color:var(--ink-600); margin:2px 0 0;">Tiến trình tự động đồng bộ 2 chiều với Cloud Firestore.</p>
+                  <strong style="color:var(--jade-900); font-size:0.92rem;">Tiến Độ Mini Test &amp; Tài Liệu Đã Lưu</strong>
+                  <p style="font-size:0.8rem; color:var(--ink-600); margin:2px 0 0;">Dữ liệu tự động đồng bộ đám mây an toàn.</p>
                 </div>
                 <button type="button" class="btn btn-outline btn-xs" id="profileSyncCloudProgressBtn" style="font-size:0.75rem;">
                   Đồng bộ Cloud ngay
@@ -3538,7 +3538,7 @@
         if (window.ThuysTalkFirebase) {
           const ok = await window.ThuysTalkFirebase.saveLearnerProgress(state.learnerEmail, state.completedLessons);
           if (ok) {
-            showToast("Đã đồng bộ tiến trình học tập lên Cloud Firestore thành công!");
+            showToast("Đã đồng bộ tiến trình thành công!");
           } else {
             showToast("Đã lưu tiến trình cục bộ.");
           }
@@ -3561,7 +3561,7 @@
           </div>
           <div class="modal-body" style="padding:22px 24px; overflow-y:auto; font-size:0.88rem; line-height:1.65; color:#1E293B !important; background:#FFFFFF !important;">
             <div style="background:#F0FDF4; border:1.5px solid #86EFAC; border-radius:10px; padding:14px 18px; margin-bottom:18px;">
-              <strong style="color:#064E3B;">Cam kết của ThuysTalk:</strong> Hệ thống tôn trọng và bảo vệ tuyệt đối dữ liệu cá nhân của học viên và doanh nghiệp theo đúng quy định tại <strong>Nghị định số 13/2023/NĐ-CP</strong> của Chính phủ về bảo vệ dữ liệu cá nhân.
+              <strong style="color:#064E3B;">Cam kết của ThuysTalk:</strong> Hệ thống tôn trọng và bảo vệ tuyệt đối dữ liệu cá nhân của người dùng và doanh nghiệp theo đúng quy định tại <strong>Nghị định số 13/2023/NĐ-CP</strong> của Chính phủ về bảo vệ dữ liệu cá nhân.
             </div>
 
             <h4 style="color:#064E3B; margin:16px 0 6px; font-size:0.95rem; font-weight:800;">1. Mục Đích Thu Thập Dữ Liệu</h4>
@@ -3576,17 +3576,17 @@
             <ul style="margin:0 0 14px 20px; padding:0; color:#334155;">
               <li>Thông tin cơ bản: Họ và tên, địa chỉ email, số điện thoại / Zalo.</li>
               <li>Thông tin công việc (tự nguyện): Đơn vị công tác, chức vụ, câu hỏi / tình huống tư vấn.</li>
-              <li>Thông tin tiến độ: Lịch sử hoàn thành các bài học, lượt tải tài liệu.</li>
+              <li>Thông tin tiến độ: Lịch sử làm Mini Test và lượt tải tài liệu chuyên đề.</li>
             </ul>
 
             <h4 style="color:#064E3B; margin:16px 0 6px; font-size:0.95rem; font-weight:800;">3. Tiêu Chuẩn Bảo Mật &amp; Cam Kết Không Chia Sẻ</h4>
             <p style="margin:0 0 12px; color:#334155;">
-              Dữ liệu được lưu trữ an toàn trên nền tảng <strong>Google Cloud Firestore &amp; Firebase Authentication</strong> (đạt chứng chỉ an ninh ISO/IEC 27001, SOC 1/2/3). Mã hóa đường truyền SSL/TLS 256-bit. ThuysTalk <strong>tuyệt đối không chia sẻ, mua bán hoặc chuyển giao</strong> thông tin của bạn cho bất kỳ bên thứ ba nào vì mục đích quảng cáo thương mại.
+              Dữ liệu được lưu trữ an toàn trên hạ tầng đám mây đạt tiêu chuẩn an ninh quốc tế (ISO/IEC 27001, SOC 1/2/3). Mã hóa đường truyền SSL/TLS 256-bit. ThuysTalk <strong>tuyệt đối không chia sẻ, mua bán hoặc chuyển giao</strong> thông tin của bạn cho bất kỳ bên thứ ba nào vì mục đích quảng cáo thương mại.
             </p>
 
             <h4 style="color:#064E3B; margin:16px 0 6px; font-size:0.95rem; font-weight:800;">4. Quyền Của Bạn Đối Với Dữ Liệu Cá Nhân</h4>
             <ul style="margin:0 0 14px 20px; padding:0; color:#334155;">
-              <li><strong>Quyền xem &amp; chỉnh sửa:</strong> Bạn có toàn quyền xem và sửa đổi thông tin cá nhân bất kỳ lúc nào tại mục <em>Hồ sơ học viên</em>.</li>
+              <li><strong>Quyền xem &amp; chỉnh sửa:</strong> Bạn có toàn quyền xem và sửa đổi thông tin cá nhân bất kỳ lúc nào tại mục <em>Hồ sơ cá nhân</em>.</li>
               <li><strong>Quyền yêu cầu xóa:</strong> Bạn có quyền yêu cầu xóa vĩnh viễn toàn bộ tài khoản và dữ liệu đã lưu bằng cách gửi email hoặc nhắn tin Hotline / Zalo.</li>
               <li><strong>Quyền rút lại sự đồng ý:</strong> Bạn có quyền hủy nhận email tài liệu bất cứ lúc nào.</li>
             </ul>
@@ -3618,7 +3618,7 @@
     const container = modalDiv.querySelector("#profileCoursesProgressList");
     if (!container) return;
     if (!state.courses || state.courses.length === 0) {
-      container.innerHTML = `<p style="font-size:0.85rem; color:var(--ink-500); text-align:center;">Chưa có dữ liệu khóa học.</p>`;
+      container.innerHTML = `<p style="font-size:0.85rem; color:var(--ink-500); text-align:center;">Chưa có dữ liệu tài liệu & chuyên đề.</p>`;
       return;
     }
     container.innerHTML = state.courses.map((course) => {
@@ -3634,7 +3634,7 @@
         <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <strong style="font-size:0.88rem; color:var(--jade-950);">${escapeHtml(course.title && (course.title.vi || course.title))}</strong>
-            <span style="font-size:0.78rem; font-weight:800; color:${percent === 100 ? '#059669' : 'var(--orange-600)'};">${done}/${total} bài (${percent}%)</span>
+            <span style="font-size:0.78rem; font-weight:800; color:${percent === 100 ? '#059669' : 'var(--orange-600)'};">${done}/${total} tài liệu (${percent}%)</span>
           </div>
           <div style="width:100%; height:8px; background:#E2E8F0; border-radius:4px; overflow:hidden;">
             <div style="width:${percent}%; height:100%; background:${percent === 100 ? '#059669' : 'var(--orange-500)'}; transition:width 0.3s ease;"></div>
@@ -3729,7 +3729,7 @@
           <div style="display:inline-flex; align-items:center; gap:6px; background:var(--jade-50); border:1.5px solid var(--jade-400); padding:3px 10px; border-radius:20px; font-size:0.78rem; font-weight:700; color:var(--jade-900);">
             <span style="width:7px; height:7px; border-radius:50%; background:#10B981; display:inline-block;"></span>
             <button type="button" id="headerProfileTriggerBtn" style="border:none; background:transparent; font-size:0.78rem; color:var(--jade-900); font-weight:700; cursor:pointer; padding:0; text-decoration:none;" title="Xem &amp; sửa thông tin cá nhân, đổi mật khẩu">
-              Học viên: <strong style="color:var(--jade-950); text-decoration:underline;">${escapeHtml(displayName)}</strong>
+              <strong style="color:var(--jade-950); text-decoration:underline;">${escapeHtml(displayName)}</strong>
             </button>
             <button type="button" id="headerLogoutLearnerBtn" style="border:none; background:transparent; font-size:0.75rem; color:#EF4444; font-weight:800; cursor:pointer; padding:0 2px; margin-left:4px;" title="Đăng xuất tài khoản">
               Thoát
@@ -3752,13 +3752,13 @@
             updateHeaderLearnerStatus();
             updateConsultFormStatus();
             renderElearningSection(window.THUYSTALK_I18N[state.lang]);
-            showToast("Đã đăng xuất tài khoản học viên.");
+            showToast("Đã đăng xuất tài khoản thành công.");
           });
         }
       } else {
         authBtn.innerHTML = `
           <button type="button" class="btn btn-outline btn-sm" id="headerOpenAuthModalBtn" style="padding:6px 14px; font-size:0.78rem;">
-            Tài Khoản Học Viên
+            Tài Khoản
           </button>
         `;
         const openBtn = authBtn.querySelector("#headerOpenAuthModalBtn");
@@ -3787,7 +3787,7 @@
           <td>${escapeHtml(a.date)}</td>
           <td style="white-space:nowrap;">
             <button type="button" class="btn btn-outline btn-xs" data-edit-art="${a.id}" style="margin-right:6px; padding:4px 8px; font-size:0.75rem;">Sửa</button>
-            <button type="button" class="btn btn-jade btn-xs" data-bulk-email-art="${a.id}" style="margin-right:6px; padding:4px 8px; font-size:0.75rem; background:#047857; color:#fff;" title="Gửi tài liệu bài viết này qua email tới tất cả học viên & khách hàng đã đăng ký">Gửi email hàng loạt</button>
+            <button type="button" class="btn btn-jade btn-xs" data-bulk-email-art="${a.id}" style="margin-right:6px; padding:4px 8px; font-size:0.75rem; background:#047857; color:#fff;" title="Gửi tài liệu bài viết này qua email tới tất cả người dùng & khách hàng đã đăng ký">Gửi email hàng loạt</button>
             <button type="button" class="btn btn-danger btn-xs" data-del-art="${a.id}" style="padding:4px 8px; font-size:0.75rem;">Xóa</button>
           </td>
         </tr>`;
@@ -3819,7 +3819,7 @@
             <div class="form-group">
               <label>Chuyên mục *</label>
               <select id="cmsArtPillar" class="form-control">
-                <option value="CS">Case Study · Bài Học Thực Tế (CS)</option>
+                <option value="CS">Case Study · Tình Huống Thực Tế (CS)</option>
                 <option value="TN">Tin Ngành &amp; Chính Sách (TN)</option>
                 <option value="HT">Kinh Nghiệm Thực Tế (HT)</option>
               </select>
@@ -3847,7 +3847,7 @@
               Xuất bản bài viết ngay lên Web
             </button>
             <button type="button" class="btn btn-jade btn-sm" id="cmsArtBulkEmailFormBtn" style="display:none; background:#047857; color:#fff;">
-              Gửi email bài viết này cho tất cả học viên
+              Gửi email bài viết này cho tất cả người dùng đã đăng ký
             </button>
             <button type="button" class="btn btn-outline btn-sm" id="cmsArtCancelBtn" style="display:none;">
               Hủy Bỏ Sửa
@@ -3947,7 +3947,7 @@
       }
 
       const pillarMap = {
-        CS: { vi: "Case Study · Bài Học Thực Tế", en: "Case Study · Practical" },
+        CS: { vi: "Case Study · Tình Huống Thực Tế", en: "Case Study · Practical" },
         TN: { vi: "Tin Ngành · Chính Sách", en: "Regulatory News" },
         HT: { vi: "Kinh Nghiệm Thực Tế · Hướng Dẫn", en: "Practical Guide" }
       };
@@ -4045,12 +4045,12 @@
 
     const recipients = Array.from(emailMap.values());
     if (!recipients.length) {
-      alert("Hệ thống chưa tìm thấy tài khoản học viên hoặc khách hàng nào đã đăng ký trong hệ thống!");
+      alert("Hệ thống chưa tìm thấy tài khoản người dùng hoặc khách hàng nào đã đăng ký trong hệ thống!");
       return;
     }
 
     const confirmed = window.confirm(
-      `Hệ thống tìm thấy ${recipients.length} tài khoản đã đăng ký (Học viên & Khách hàng).\n\n` +
+      `Hệ thống tìm thấy ${recipients.length} tài khoản đã đăng ký.\n\n` +
       `Bạn có chắc chắn muốn gửi email hàng loạt tài liệu bài viết:\n"${artTitle}"\n` +
       `tới toàn bộ ${recipients.length} tài khoản này qua thuystalk.official@gmail.com không?`
     );
@@ -4159,7 +4159,7 @@
               </div>
             </div>
             <div class="form-group">
-              <label>Toàn văn kịch bản thuyết minh / Ghi chú bài học đi kèm video</label>
+              <label>Toàn văn kịch bản thuyết minh / Ghi chú tài liệu đi kèm video</label>
               <textarea id="cmsVidScript" class="form-control" rows="3" placeholder="Dán lời thoại thuyết minh hoặc tóm tắt các ý chính để độc giả đọc trực tiếp trên web..."></textarea>
             </div>
             <div style="display:flex; gap:10px; align-items:center;">
@@ -4402,7 +4402,7 @@
       .map((c) => {
         const cTitle = typeof c.title === "object" ? c.title.vi : c.title;
         const selected = savedFormValues && savedFormValues.courseId === c.id ? "selected" : "";
-        return `<option value="${c.id}" ${selected}>${escapeHtml(cTitle)} (${(c.lessons || []).length} bài học)</option>`;
+        return `<option value="${c.id}" ${selected}>${escapeHtml(cTitle)} (${(c.lessons || []).length} tài liệu)</option>`;
       })
       .join("");
 
@@ -4452,7 +4452,7 @@
               </select>
             </div>
             <div class="form-group" style="margin-bottom:0;">
-              <label>Lời giải thích hiện ra khi học viên chọn đáp án *</label>
+              <label>Lời giải thích hiện ra khi chọn đáp án *</label>
               <input type="text" class="form-control mt-exp-input" required value="${escapeHtml(expVi)}" />
             </div>
           </div>
@@ -4483,16 +4483,16 @@
     body.innerHTML = `
       <div class="cms-panel-box">
         <form id="cmsNewLessonForm">
-          <!-- BƯỚC 1: THÔNG TIN BÀI HỌC & MEDIA UPLOADER -->
+          <!-- BƯỚC 1: THÔNG TIN TÀI LIỆU & MEDIA UPLOADER -->
           <div style="background:var(--surface-alt); border:1px solid var(--jade-200); border-radius:12px; padding:16px 18px; margin-bottom:18px;">
             <h4 style="color:var(--jade-900); margin-bottom:10px;">BƯỚC 1: SOẠN NỘI DUNG BÀI GIẢNG (VIẾT BÀI / TẢI FILE HTML &amp; CHÈN ẢNH JPG, PNG, WEBP, WEBM)</h4>
             <div class="form-row-2">
               <div class="form-group">
-                <label>Chọn Khóa học muốn thêm bài *</label>
+                <label>Chọn Chuyên đề tài liệu *</label>
                 <select id="cmsLessonCourseId" class="form-control">${courseOptions}</select>
               </div>
               <div class="form-group">
-                <label>Tiêu đề Bài học mới *</label>
+                <label>Tiêu đề Tài liệu mới *</label>
                 <input
                   type="text"
                   id="cmsLessonTitle"
@@ -4508,7 +4508,7 @@
               ${renderWordEditorMarkup("cmsLessonEditor", "Dán nội dung bài giảng, gõ trực tiếp kiểu Word hoặc chèn ảnh/video minh họa...")}
             </div>
             <div class="form-group" style="margin-bottom:0;">
-              <label>Đề bài Bài tập thực hành cuối bài học *</label>
+              <label>Đề bài Bài tập tình huống thực tế *</label>
               <input
                 type="text"
                 id="cmsLessonExercise"
@@ -4516,7 +4516,7 @@
                 required
                 value="${escapeHtml(
                   (savedFormValues && savedFormValues.exercise) ||
-                    "Bài tập thực hành: Đối chiếu 3 điểm rủi ro chính trong bài học với bộ chứng từ lô hàng thực tế của doanh nghiệp bạn."
+                    "Bài tập tình huống: Đối chiếu 3 điểm rủi ro chính trong tài liệu với bộ chứng từ lô hàng thực tế của doanh nghiệp bạn."
                 )}"
               />
             </div>
@@ -4574,18 +4574,18 @@
 
           <div style="margin-top:18px; display:flex; justify-content:flex-end;">
             <button type="submit" class="btn btn-primary">
-              Lưu Bài Học &amp; Bộ Mini Test (${state.generatedMiniTestDraft.length} câu) Vào Khóa Học Ngay
+              Lưu Tài Liệu &amp; Bộ Mini Test (${state.generatedMiniTestDraft.length} câu) Vào Chuyên Đề Ngay
             </button>
           </div>
         </form>
       </div>
 
-      <h4 style="margin:24px 0 10px;">Danh sách Bài học &amp; Bộ Mini Test đang có trên Web (${existingLessonsRows.length} bài)</h4>
+      <h4 style="margin:24px 0 10px;">Danh sách Tài Liệu &amp; Bộ Mini Test đang có trên Web (${existingLessonsRows.length} tài liệu)</h4>
       <table class="cms-list-table">
         <thead>
           <tr>
-            <th>Khóa học</th>
-            <th>Tên Bài học</th>
+            <th>Chuyên đề</th>
+            <th>Tên Tài liệu</th>
             <th>Số câu Mini Test</th>
             <th>Thao tác</th>
           </tr>
@@ -4649,7 +4649,7 @@
         const ansRaw = ((hasStt ? cols[5] : cols[4]) || "A").toUpperCase();
         const expText =
           (hasStt ? cols[6] : cols[5]) ||
-          "Chính xác! Căn cứ theo nội dung bài học và văn bản pháp lý.";
+          "Chính xác! Căn cứ theo nội dung tài liệu và văn bản pháp lý.";
         if (!qText) return;
         let cIdx = 0;
         if (ansRaw.includes("B") || ansRaw === "1" || ansRaw === "2") cIdx = ansRaw === "2" ? 1 : ansRaw.includes("B") ? 1 : 0;
@@ -4789,7 +4789,7 @@
         const vals = getCurrentLessonFormValues();
         const idx = parseInt(btn.dataset.delQindex, 10);
         if (state.generatedMiniTestDraft.length <= 1) {
-          showToast("Mỗi bài học cần có ít nhất 1 câu hỏi Mini Test.");
+          showToast("Mỗi chuyên đề cần có ít nhất 1 câu hỏi Mini Test.");
           return;
         }
         state.generatedMiniTestDraft.splice(idx, 1);
@@ -4823,7 +4823,7 @@
       });
 
       course.meta = {
-        vi: `${course.lessons.length} Bài học · Bộ Mini Test ${miniTest.length} câu · Thực hành`,
+        vi: `Tài liệu chuyên đề · Bộ Mini Test ${miniTest.length} câu · Thực hành`,
         en: `${course.lessons.length} Lessons · ${miniTest.length}-Question Mini Test · Practical`
       };
 
@@ -4831,7 +4831,7 @@
       saveCollection(STORAGE_KEYS.COURSES, state.courses);
       renderAll();
       renderAdminStudioModal();
-      showToast(`Đã lưu bài học "${title}" kèm Bộ Mini Test (${miniTest.length} câu) thành công!`);
+      showToast(`Đã lưu tài liệu "${title}" kèm Bộ Mini Test (${miniTest.length} câu) thành công!`);
     });
 
     body.querySelectorAll("[data-del-lesson]").forEach((btn) => {
@@ -4844,7 +4844,7 @@
         saveCollection(STORAGE_KEYS.COURSES, state.courses);
         renderAll();
         renderAdminStudioModal();
-        showToast("Đã xóa bài học.");
+        showToast("Đã xóa tài liệu.");
       });
     });
   }
@@ -5039,10 +5039,10 @@
       }
       return learners
         .map((l, i) => {
-          const name = l.name || l.displayName || "Học viên mới";
+          const name = l.name || l.displayName || "Người dùng";
           const email = l.email || "-";
           const phone = l.phone || "-";
-          const company = l.company || l.role || "Học viên ThuysTalk";
+          const company = l.company || l.role || "ThuysTalk Member";
           const dateStr =
             l.registeredAt ||
             (l.createdAt
@@ -5117,7 +5117,7 @@
       <div class="cms-panel-box" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
         <div>
           <strong style="color:var(--jade-900);">Sao lưu &amp; Khôi phục Toàn bộ Dữ liệu Quản trị Website (Full CMS JSON)</strong>
-          <p style="font-size:0.8rem; color:var(--ink-600);">Xuất toàn bộ Ảnh, Bài viết, Video YouTube, Khóa học E-Learning và Nguồn dữ liệu AI ra 1 tệp JSON duy nhất.</p>
+          <p style="font-size:0.8rem; color:var(--ink-600);">Xuất toàn bộ Ảnh, Bài viết, Video YouTube, Tài liệu & Mini Test và Nguồn dữ liệu AI ra 1 tệp JSON duy nhất.</p>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button type="button" class="btn btn-jade btn-sm" id="exportFullCmsBtn">Xuất toàn bộ cấu hình CMS (.json)</button>
@@ -5162,7 +5162,7 @@
           <h4 style="margin:0; color:var(--jade-950);" id="learnersTableHeading">
             1. Danh Sách Tài Khoản Người Dùng Đăng Ký Mới (0)
           </h4>
-          <span style="font-size:0.8rem; color:var(--ink-600);">Tài khoản học viên chính thức đăng ký qua hệ thống và xác thực với Google Firebase.</span>
+          <span style="font-size:0.8rem; color:var(--ink-600);">Tài khoản chính thức đăng ký qua hệ thống.</span>
         </div>
         <span id="firestoreLearnersStatus" style="font-size:0.8rem; color:var(--jade-700); font-weight:700;">Đang kết nối Cloud Firestore...</span>
       </div>
@@ -5171,7 +5171,7 @@
         <thead>
           <tr>
             <th>#</th>
-            <th>Họ tên học viên</th>
+            <th>Họ tên</th>
             <th>Email tài khoản</th>
             <th>SĐT / Zalo</th>
             <th>Doanh nghiệp / Vai trò</th>
@@ -5189,7 +5189,7 @@
           <h4 style="margin:0; color:var(--orange-800);" id="leadsTableHeading">
             2. Lịch Sử Người Học Tập Hay Lưu / Tải Tài Liệu Của Người Dùng (${currentLeads.length})
           </h4>
-          <span style="font-size:0.8rem; color:var(--ink-600);">Nhật ký tương tác: Học viên/khách hàng tải tài liệu chuyên môn hoặc gửi yêu cầu tư vấn 1-1.</span>
+          <span style="font-size:0.8rem; color:var(--ink-600);">Nhật ký tương tác: Người dùng / khách hàng tải tài liệu chuyên môn hoặc gửi yêu cầu tư vấn 1-1.</span>
         </div>
         <span id="firestoreLeadsStatus" style="font-size:0.8rem; color:var(--orange-700); font-weight:700;">Đồng bộ thời gian thực</span>
       </div>
@@ -5364,7 +5364,7 @@
           showToast("Đã đồng bộ toàn bộ Bài viết, Video, E-Learning lên Cloud Firestore (thuystalk) thành công!");
           loadFirestoreData();
         } else {
-          showToast("Cơ sở dữ liệu Firebase (thuystalk) đã được kết nối & sẵn sàng lưu trữ học viên!");
+          showToast("Cơ sở dữ liệu đám mây đã được kết nối & sẵn sàng lưu trữ!");
         }
       });
     }
