@@ -12,14 +12,18 @@ Hỗ trợ:
 import base64
 import csv
 import datetime
+import hashlib
+import hmac
 import http.server
 import io
 import json
 import os
+import secrets
 import shutil
 import smtplib
 import subprocess
 import sys
+import time
 import urllib.parse
 import webbrowser
 from email import encoders
@@ -30,6 +34,47 @@ from pathlib import Path
 
 PORT = 8099
 WEB_DIR = Path(__file__).resolve().parent
+PASSWORD_STORE_FILE = WEB_DIR / "backend" / "password_resets.json"
+
+
+def generate_random_password(length=10):
+    """Sinh mật khẩu ngẫu nhiên an toàn bằng secrets, tránh ký tự dễ nhầm lẫn (0/O, 1/l/I)."""
+    upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+    lower = "abcdefghijkmnopqrstuvwxyz"
+    digits = "23456789"
+    special = "@#$%&*"
+    all_chars = upper + lower + digits + special
+    chars = [
+        secrets.choice(upper),
+        secrets.choice(lower),
+        secrets.choice(digits),
+        secrets.choice(special),
+    ]
+    chars.extend(secrets.choice(all_chars) for _ in range(max(4, length - 4)))
+    secrets.SystemRandom().shuffle(chars)
+    return "".join(chars)
+
+
+def _hash_password(password, salt=None):
+    salt = salt or secrets.token_hex(16)
+    digest = hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
+    return salt, digest
+
+
+def _load_password_store():
+    if not PASSWORD_STORE_FILE.exists():
+        return {}
+    try:
+        return json.loads(PASSWORD_STORE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_password_store(store):
+    PASSWORD_STORE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = PASSWORD_STORE_FILE.with_suffix(".tmp.json")
+    tmp_path.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp_path, PASSWORD_STORE_FILE)
 
 ALLOWED_NOTEBOOK_IDS = {
     "c3b76775-2095-4866-b634-139c71e0df40": "Chuyên đề A · Phân loại & Tra cứu Mã HS Code",
@@ -153,6 +198,10 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_send_bulk_email()
         elif parsed.path == "/api/reset-password":
             self.handle_reset_password()
+        elif parsed.path == "/api/verify-temp-password":
+            self.handle_verify_temp_password()
+        elif parsed.path == "/api/update-local-password":
+            self.handle_update_local_password()
         else:
             self._send_json(404, {"error": "Endpoint Not Found"})
 
@@ -452,7 +501,20 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json(400, {"ok": False, "error": "Địa chỉ Email không hợp lệ."})
                 return
 
-            default_pwd = "ThuyTalk@2026"
+            # Sinh mật khẩu ngẫu nhiên hoàn toàn mới cho mỗi yêu cầu (không dùng mật khẩu cố định)
+            temp_pwd = generate_random_password(10)
+            salt, pwd_hash = _hash_password(temp_pwd)
+
+            store = _load_password_store()
+            store[email.lower()] = {
+                "salt": salt,
+                "hash": pwd_hash,
+                "is_temp": True,
+                "expires_at": time.time() + 86400,  # Có hiệu lực 24 giờ
+                "updated_at": datetime.datetime.now().isoformat()
+            }
+            _save_password_store(store)
+
             smtp_success = False
             smtp_notice = ""
 
@@ -463,7 +525,7 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
                 sender_pwd = "oysz mggj whtp hsij"
 
                 msg = MIMEMultipart("alternative")
-                msg["Subject"] = f"[ThuysTalk] Mật Khẩu Mặc Định Mới & Khôi Phục Tài Khoản ({email})"
+                msg["Subject"] = f"[ThuysTalk] Mật Khẩu Mới Khôi Phục Tài Khoản ({email})"
                 msg["From"] = f"ThuysTalk Official <{sender_email}>"
                 msg["To"] = email
 
@@ -486,23 +548,23 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
   <div class="card">
     <div class="head">
       <h2 style="margin:0; font-size: 1.3rem;">THUYSTALK - KHÔI PHỤC MẬT KHẨU TÀI KHOẢN</h2>
-      <p style="margin: 4px 0 0; opacity: 0.85; font-size: 0.88rem;">Hệ thống E-Learning &amp; Tra cứu Pháp lý Hải quan</p>
+      <p style="margin: 4px 0 0; opacity: 0.85; font-size: 0.88rem;">Hệ thống Tài Liệu, Mini Test &amp; Tra Cứu Pháp Lý Hải Quan</p>
     </div>
     <div class="body">
-      <p>Kính gửi <strong>Quý học viên ({email})</strong>,</p>
-      <p>Hệ thống ThuysTalk đã nhận được yêu cầu khôi phục mật khẩu đăng nhập của bạn.</p>
-      
-      <p>Dưới đây là <strong>mật khẩu mặc định mới</strong> tạm thời được cấp để bạn đăng nhập ngay:</p>
+      <p>Kính chào <strong>{email}</strong>,</p>
+      <p>Hệ thống ThuysTalk đã tiếp nhận yêu cầu khôi phục mật khẩu đăng nhập.</p>
+
+      <p>Dưới đây là <strong>mật khẩu tạm thời</strong> được tạo ngẫu nhiên (có hiệu lực trong 24 giờ):</p>
       <div class="pwd-box">
-        <div style="font-size: 0.8rem; color: #047857; text-transform: uppercase; font-weight: bold; margin-bottom: 4px;">Mật Khẩu Mặc Định Tạm Thời:</div>
-        <div class="pwd-code">{default_pwd}</div>
+        <div style="font-size: 0.8rem; color: #047857; text-transform: uppercase; font-weight: bold; margin-bottom: 4px;">Mật Khẩu Tạm Thời:</div>
+        <div class="pwd-code">{temp_pwd}</div>
       </div>
 
       <p style="font-size: 0.88rem; color: #475569;">
-        <strong>Lưu ý quan trọng:</strong><br />
-        1. Bạn hãy dùng email này kèm mật khẩu <code>{default_pwd}</code> để đăng nhập lại hệ thống.<br />
-        2. Sau khi đăng nhập thành công, bạn vui lòng nhấp vào tên của mình trên thanh menu hoặc banner E-Learning để vào mục <strong>Hồ Sơ Cá Nhân &rarr; Đổi Mật Khẩu</strong> nhằm đổi sang mật khẩu riêng của bạn.<br />
-        3. Nếu bạn cũng nhận được email đặt lại mật khẩu từ Google Firebase, bạn có thể nhấp vào liên kết trong thư đó để tự tạo mật khẩu mới.
+        <strong>Hướng dẫn đăng nhập:</strong><br />
+        1. Dùng email này kèm mật khẩu <code>{temp_pwd}</code> để đăng nhập lại vào website.<br />
+        2. Sau khi đăng nhập thành công, vui lòng nhấp vào tên tài khoản trên thanh menu để vào mục <strong>Hồ Sơ Cá Nhân &rarr; Đổi Mật Khẩu</strong> và thiết lập mật khẩu riêng.<br />
+        3. Không chia sẻ mật khẩu này cho người khác.
       </p>
 
       <div style="text-align: center; margin-top: 25px;">
@@ -524,22 +586,81 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
                 server.send_message(msg)
                 server.quit()
                 smtp_success = True
-                smtp_notice = "Đã gửi email mật khẩu mặc định thành công qua Gmail SMTP"
-                print(f"[SMTP THÀNH CÔNG] Đã gửi mật khẩu mặc định tới {email}")
+                smtp_notice = "Đã gửi email mật khẩu ngẫu nhiên thành công qua Gmail SMTP"
+                print(f"[SMTP THÀNH CÔNG] Đã gửi mật khẩu tạm thời tới {email}")
             except Exception as smtp_err:
                 smtp_success = False
                 smtp_notice = str(smtp_err)
-                print(f"[SMTP LỖI] Gửi mật khẩu mặc định thất bại: {smtp_err}")
+                print(f"[SMTP LỖI] Gửi mật khẩu tạm thời thất bại: {smtp_err}")
 
+            # TUYỆT ĐỐI KHÔNG trả mật khẩu về JSON response để tránh lộ trên trình duyệt/network
             self._send_json(200, {
                 "ok": True,
                 "delivered": smtp_success,
-                "defaultPassword": default_pwd,
-                "message": f"Hệ thống đã gửi mật khẩu mặc định mới về hộp thư {email}!" if smtp_success else f"Đã ghi nhận yêu cầu khôi phục mật khẩu cho {email}.",
+                "message": f"Hệ thống đã gửi mật khẩu mới về hộp thư {email}." if smtp_success else f"Chưa thể gửi email tự động: {smtp_notice}",
                 "recipient": email
             })
         except Exception as exc:
             self._send_json(500, {"ok": False, "error": f"Lỗi xử lý khôi phục mật khẩu: {exc}"})
+
+    def handle_verify_temp_password(self):
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(length).decode("utf-8")
+            payload = json.loads(raw_body) if raw_body else {}
+
+            email = str(payload.get("email", "")).strip().lower()
+            password = str(payload.get("password", ""))
+            if not email or not password:
+                self._send_json(200, {"ok": True, "valid": False})
+                return
+
+            store = _load_password_store()
+            entry = store.get(email)
+            if not entry:
+                self._send_json(200, {"ok": True, "valid": False})
+                return
+
+            expires_at = entry.get("expires_at")
+            if expires_at is not None and time.time() > float(expires_at):
+                self._send_json(200, {"ok": True, "valid": False, "expired": True})
+                return
+
+            _, actual_hash = _hash_password(password, entry.get("salt", ""))
+            is_valid = hmac.compare_digest(str(entry.get("hash", "")), actual_hash)
+            self._send_json(200, {
+                "ok": True,
+                "valid": bool(is_valid),
+                "isTemp": bool(entry.get("is_temp", True)) if is_valid else False
+            })
+        except Exception as exc:
+            self._send_json(500, {"ok": False, "error": f"Lỗi kiểm tra mật khẩu: {exc}"})
+
+    def handle_update_local_password(self):
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(length).decode("utf-8")
+            payload = json.loads(raw_body) if raw_body else {}
+
+            email = str(payload.get("email", "")).strip().lower()
+            new_password = str(payload.get("newPassword", ""))
+            if not email or "@" not in email or len(new_password) < 6:
+                self._send_json(400, {"ok": False, "error": "Thông tin cập nhật mật khẩu không hợp lệ."})
+                return
+
+            salt, pwd_hash = _hash_password(new_password)
+            store = _load_password_store()
+            store[email] = {
+                "salt": salt,
+                "hash": pwd_hash,
+                "is_temp": False,
+                "expires_at": None,
+                "updated_at": datetime.datetime.now().isoformat()
+            }
+            _save_password_store(store)
+            self._send_json(200, {"ok": True})
+        except Exception as exc:
+            self._send_json(500, {"ok": False, "error": f"Lỗi cập nhật mật khẩu: {exc}"})
 
     def handle_parse_excel(self):
         try:

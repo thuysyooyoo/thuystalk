@@ -3221,9 +3221,9 @@
           updateHeaderLearnerStatus();
           updateConsultFormStatus();
 
-          // Nếu đăng nhập bằng mật khẩu mặc định mới do quên mật khẩu, nhắc đổi mật khẩu ngay
+          // Nếu đăng nhập bằng mật khẩu tạm thời do quên mật khẩu, nhắc đổi mật khẩu ngay
           if (userRes && userRes.isDefaultPasswordLogin) {
-            showToast("Bạn đã đăng nhập bằng mật khẩu mặc định mới (ThuyTalk@2026). Vui lòng cập nhật mật khẩu riêng trong Hồ Sơ!");
+            showToast("Đang đăng nhập bằng mật khẩu tạm thời. Vui lòng cập nhật mật khẩu riêng trong Hồ Sơ!");
             setTimeout(() => {
               openUserProfileModal("pass");
             }, 600);
@@ -3253,49 +3253,80 @@
         }
       });
 
-      // Password reset & Send Default Password via SMTP
+      // Password reset & Send auto-generated random temporary password via SMTP
       authDiv.querySelector("#authForgotPassBtn").addEventListener("click", async () => {
         const email = authDiv.querySelector("#authLogEmail").value.trim();
         if (!email || !email.includes("@")) {
-          showToast("Vui lòng nhập Email ở ô trên để nhận mật khẩu mặc định mới.");
+          showToast("Vui lòng nhập Email ở ô trên để nhận mật khẩu mới qua hộp thư.");
           authDiv.querySelector("#authLogEmail").focus();
           return;
         }
 
         const forgotBtn = authDiv.querySelector("#authForgotPassBtn");
-        forgotBtn.textContent = "Đang gửi mật khẩu mới...";
+        const noticeBox = authDiv.querySelector("#authLoginNoticeBox");
+        forgotBtn.textContent = "Đang tạo & gửi mật khẩu mới...";
         forgotBtn.disabled = true;
 
         try {
-          // 1. Gửi email mật khẩu mặc định mới qua SMTP daemon (thuystalk.official@gmail.com)
-          fetch("http://localhost:8099/api/reset-password", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: email })
-          }).catch((e) => console.warn("Reset email SMTP notice:", e));
+          let smtpDelivered = false;
+          let fallbackSent = false;
+          let errMsg = "";
 
-          // 2. Gửi link đặt lại mật khẩu của Google Firebase
-          if (window.ThuysTalkFirebase) {
+          // 1. Sinh mật khẩu ngẫu nhiên và gửi qua email (tuyệt đối không hiển thị mật khẩu lên màn hình)
+          try {
+            const resp = await fetch("http://localhost:8099/api/reset-password", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email: email })
+            });
+            if (resp.ok) {
+              const data = await resp.json();
+              smtpDelivered = !!(data && data.delivered);
+              if (!smtpDelivered && data && data.message) {
+                errMsg = data.message;
+              }
+            }
+          } catch (smtpErr) {
+            console.warn("Reset email SMTP notice:", smtpErr);
+          }
+
+          // 2. Fallback nếu dịch vụ email cục bộ chưa kết nối được
+          if (!smtpDelivered && window.ThuysTalkFirebase) {
             try {
               await window.ThuysTalkFirebase.sendPasswordReset(email);
+              fallbackSent = true;
             } catch (fbErr) {
-              console.warn("Firebase reset notice:", fbErr);
+              if (!errMsg) errMsg = fbErr && fbErr.message ? fbErr.message : "Không thể gửi email khôi phục.";
             }
           }
 
-          const noticeBox = authDiv.querySelector("#authLoginNoticeBox");
           noticeBox.style.display = "block";
-          noticeBox.innerHTML = `
-            <div style="background:#F0FDF4; border:1.5px solid #059669; border-radius:8px; padding:12px; margin-bottom:8px;">
-              <strong style="color:#065F46; font-size:0.9rem;">Đã Gửi Mật Khẩu Mặc Định Mới!</strong><br />
-              <span style="color:#047857; font-size:0.84rem; line-height:1.5; display:block; margin-top:4px;">
-                Hệ thống đã gửi email chứa <strong>mật khẩu mặc định mới (ThuyTalk@2026)</strong> về hộp thư: <strong>${escapeHtml(email)}</strong>.<br />
-                Vui lòng kiểm tra hộp thư, nhập mật khẩu mặc định để đăng nhập và đổi sang mật khẩu riêng tại mục Hồ sơ cá nhân.
-              </span>
-            </div>
-          `;
-          authDiv.querySelector("#authLogPass").value = "ThuyTalk@2026";
-          showToast(`Đã gửi email mật khẩu mặc định mới tới ${email}!`);
+          if (smtpDelivered || fallbackSent) {
+            noticeBox.innerHTML = `
+              <div style="background:#F0FDF4; border:1.5px solid #059669; border-radius:8px; padding:12px; margin-bottom:8px;">
+                <strong style="color:#065F46; font-size:0.9rem;">Đã Gửi Mật Khẩu Mới Qua Email!</strong><br />
+                <span style="color:#047857; font-size:0.84rem; line-height:1.5; display:block; margin-top:4px;">
+                  Hệ thống đã tự động tạo mật khẩu tạm thời mới và gửi về hộp thư: <strong>${escapeHtml(email)}</strong>.<br />
+                  Vui lòng kiểm tra hộp thư (kể cả mục Thư rác / Spam), nhập mật khẩu vừa nhận để đăng nhập và đổi sang mật khẩu riêng tại mục <strong>Hồ sơ cá nhân</strong>.
+                </span>
+              </div>
+            `;
+            const passInput = authDiv.querySelector("#authLogPass");
+            if (passInput) {
+              passInput.value = "";
+              passInput.focus();
+            }
+            showToast(`Đã gửi mật khẩu mới tới hộp thư ${email}. Vui lòng kiểm tra email!`);
+          } else {
+            noticeBox.innerHTML = `
+              <div style="background:#FEF2F2; border:1.5px solid #F87171; border-radius:8px; padding:12px; margin-bottom:8px;">
+                <strong style="color:#DC2626; font-size:0.9rem;">Chưa thể gửi email khôi phục mật khẩu</strong><br />
+                <span style="color:#7F1D1D; font-size:0.84rem; line-height:1.5; display:block; margin-top:4px;">
+                  ${escapeHtml(errMsg || "Vui lòng kiểm tra kết nối và thử lại sau ít phút.")}
+                </span>
+              </div>
+            `;
+          }
         } catch (e) {
           alert("Lỗi khôi phục mật khẩu: " + e.message);
         } finally {
@@ -3504,7 +3535,7 @@
 
         try {
           if (window.ThuysTalkFirebase) {
-            await window.ThuysTalkFirebase.changeLearnerPassword(newPass);
+            await window.ThuysTalkFirebase.changeLearnerPassword(newPass, state.learnerEmail);
             showToast("Đổi mật khẩu thành công!");
             profDiv.querySelector("#profileNewPassInp").value = "";
             profDiv.querySelector("#profileConfirmPassInp").value = "";

@@ -218,7 +218,7 @@
             name: name,
             emailVerified: true,
             localMode: true,
-            notice: "Tài khoản học viên đã được kích hoạt thành công trên hệ thống ThuysTalk!"
+            notice: "Tài khoản đã được kích hoạt thành công trên hệ thống ThuysTalk!"
           };
         }
         throw authErr;
@@ -229,7 +229,7 @@
     loginLearner: async function (email, password) {
       initFirebase();
       if (!auth) {
-        throw new Error("Dịch vụ Firebase Auth chưa sẵn sàng.");
+        throw new Error("Hệ thống xác thực chưa sẵn sàng.");
       }
 
       try {
@@ -247,6 +247,15 @@
           };
         }
 
+        if (db) {
+          try {
+            await safeFirestoreWrite(
+              db.collection("learners").doc(user.uid).set({ emailVerified: true }, { merge: true }),
+              1500
+            );
+          } catch (e) {}
+        }
+
         return {
           uid: user.uid,
           email: user.email,
@@ -254,24 +263,49 @@
           emailVerified: true
         };
       } catch (loginErr) {
-        // Hỗ trợ đăng nhập bằng mật khẩu mặc định mới (khi quên mật khẩu: ThuyTalk@2026)
-        if (password === "ThuyTalk@2026" && db) {
-          try {
-            const docId = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
-            const snap = await db.collection("learners").doc(docId).get();
-            if (snap.exists) {
-              const data = snap.data();
+        // Kiểm tra mật khẩu tạm thời / mật khẩu khôi phục được cấp ngẫu nhiên qua email
+        try {
+          const resp = await fetch("http://localhost:8099/api/verify-temp-password", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: email, password: password })
+          });
+          if (resp.ok) {
+            const vData = await resp.json();
+            if (vData && vData.valid) {
+              let profName = email.split("@")[0];
+              let profPhone = "";
+              let uidVal = email.toLowerCase().replace(/[^a-z0-9]/g, "_");
+              if (db) {
+                try {
+                  const snapByEmail = await db.collection("learners").where("email", "==", email).limit(1).get();
+                  if (!snapByEmail.empty) {
+                    const doc = snapByEmail.docs[0];
+                    const d = doc.data();
+                    uidVal = doc.id;
+                    profName = d.name || profName;
+                    profPhone = d.phone || "";
+                  } else {
+                    const snap = await db.collection("learners").doc(uidVal).get();
+                    if (snap.exists) {
+                      const d = snap.data();
+                      profName = d.name || profName;
+                      profPhone = d.phone || "";
+                    }
+                  }
+                } catch (e) {}
+              }
               return {
-                uid: docId,
+                uid: uidVal,
                 email: email,
-                name: data.name || email.split("@")[0],
-                phone: data.phone || "",
+                name: profName,
+                phone: profPhone,
                 emailVerified: true,
-                isDefaultPasswordLogin: true
+                isDefaultPasswordLogin: !!vData.isTemp
               };
             }
-          } catch (e) {}
-        }
+          }
+        } catch (verifyErr) {}
 
         if (
           loginErr.code === "auth/configuration-not-found" ||
@@ -307,7 +341,7 @@
     // 4. PASSWORD RESET EMAIL
     sendPasswordReset: async function (email) {
       initFirebase();
-      if (!auth) throw new Error("Firebase Auth chưa sẵn sàng.");
+      if (!auth) throw new Error("Hệ thống xác thực chưa sẵn sàng.");
       await auth.sendPasswordResetEmail(email);
       return true;
     },
@@ -347,13 +381,32 @@
     },
 
     // 5c. CHANGE LEARNER PASSWORD
-    changeLearnerPassword: async function (newPassword) {
+    changeLearnerPassword: async function (newPassword, emailOverride) {
       initFirebase();
-      if (!auth || !auth.currentUser) {
-        throw new Error("Vui lòng đăng nhập lại để thay đổi mật khẩu.");
+      const activeEmail = emailOverride || localStorage.getItem("thuystalk_learner_email_v3") || (auth && auth.currentUser ? auth.currentUser.email : "");
+      if (auth && auth.currentUser) {
+        await auth.currentUser.updatePassword(newPassword);
+        if (activeEmail) {
+          fetch("http://localhost:8099/api/update-local-password", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: activeEmail, newPassword: newPassword })
+          }).catch(() => {});
+        }
+        return true;
       }
-      await auth.currentUser.updatePassword(newPassword);
-      return true;
+      if (activeEmail) {
+        const resp = await fetch("http://localhost:8099/api/update-local-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: activeEmail, newPassword: newPassword })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && data.ok) return true;
+        }
+      }
+      throw new Error("Vui lòng đăng nhập lại để thay đổi mật khẩu.");
     },
 
     // 5d. SAVE & FETCH LEARNER PROGRESS (CLOUD SYNC)

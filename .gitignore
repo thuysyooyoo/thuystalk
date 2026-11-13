@@ -16,6 +16,7 @@ __pycache__/
 .env.*.local
 *.log
 sent_emails/
+backend/password_resets.json
 
 # Firebase & IDE Cache
 .firebase/
