@@ -3,6 +3,27 @@
 // Rule: 100% Plus Jakarta Sans Typography — ZERO Icons / ZERO Emojis
 // ============================================================================
 
+window.THUYSTALK_DEFAULT_SOCIALS = [
+  {
+    id: "social-yt",
+    platform: "youtube",
+    label: "YouTube @thuystalk",
+    url: "https://www.youtube.com/@thuystalk"
+  },
+  {
+    id: "social-fb",
+    platform: "facebook",
+    label: "Facebook Nguyễn Thị Ngọc Thúy",
+    url: "https://www.facebook.com/Th.xuatnhapkhau"
+  },
+  {
+    id: "social-zl",
+    platform: "zalo",
+    label: "Zalo: 0767.648.862",
+    url: "https://zalo.me/84767648862"
+  }
+];
+
 window.THUYSTALK_DEFAULT_MEDIA = {
   heroPortrait: {
     id: "heroPortrait",
@@ -214,7 +235,7 @@ window.THUYSTALK_I18N = {
       elearning: "E-Learning",
       video: "Video",
       articles: "Bài viết",
-      notebook: "Tra cứu AI Pháp lý",
+      notebook: "Tra cứu Pháp lý & Mã HS",
       consult: "Tư vấn 1-1",
       adminBtn: "Quản trị hệ thống",
       ctaTop: "Nhận tài liệu & Tư vấn"
@@ -226,11 +247,10 @@ window.THUYSTALK_I18N = {
       role: "Chuyên gia Tư vấn Xuất Nhập Khẩu – Logistics & Ứng dụng AI",
       bio: "Hơn 9 năm tự tay thực hiện từng khâu trong chuỗi cung ứng quốc tế — từ đàm phán ngoại thương, áp mã HS, mở tờ khai hải quan đến tự động hóa quy trình bằng AI. Mình xây dựng ThuysTalk để chia sẻ kiến thức thực tế miễn phí, gửi tặng biểu mẫu gốc và đồng hành cùng bạn kinh doanh chính ngạch an toàn, bền vững.",
       btnPrimary: "Xem Tài Liệu & Mini Test",
-      btnSecondary: "Tra cứu AI Pháp lý & Mã HS",
+      btnSecondary: "Tra cứu Pháp lý & Mã HS",
       scriptNote: "Tận tâm – Minh bạch – Bền vững",
       floatingTitle: "9+ Năm Kinh Nghiệm Thực Tế",
-      floatingSub: "100% Chính ngạch · Hải quan · AI",
-      hsToolTag: "Công cụ Tra cứu Mã HS miễn phí"
+      floatingSub: "100% Chính ngạch · Hải quan · AI"
     },
     expertise: {
       eyebrow: "LĨNH VỰC CHUYÊN MÔN THỰC CHIẾN",
@@ -372,7 +392,7 @@ window.THUYSTALK_I18N = {
       elearning: "E-Learning",
       video: "Videos",
       articles: "Articles",
-      notebook: "AI Legal Lookup",
+      notebook: "Legal & HS Lookup",
       consult: "1-on-1 Advisory",
       adminBtn: "CMS Admin Studio",
       ctaTop: "Get Templates & Advisory"
@@ -384,11 +404,10 @@ window.THUYSTALK_I18N = {
       role: "Practical International Trade, Customs Compliance & AI Automation Specialist",
       bio: "With over 9 years of hands-on experience across the international supply chain—from foreign trade contracts, HS classification, and customs declaration to AI workflow automation—I built ThuysTalk to share free e-learning courses, authentic templates, and practical advisory for sustainable global trade.",
       btnPrimary: "Start Free E-Learning",
-      btnSecondary: "AI Legal & HS Lookup",
+      btnSecondary: "Legal & HS Lookup",
       scriptNote: "Practical – Transparent – Sustainable",
       floatingTitle: "9+ Years Hands-On",
-      floatingSub: "Official Trade · Customs · AI",
-      hsToolTag: "Free Automated HS Code Lookup Tool"
+      floatingSub: "Official Trade · Customs · AI"
     },
     expertise: {
       eyebrow: "CORE EXPERTISE & TRAINING PILLARS",

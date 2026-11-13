@@ -20,6 +20,7 @@
     VIDEOS: "thuystalk_cms_videos_v3",
     COURSES: "thuystalk_cms_courses_v3",
     AI_KB: "thuystalk_cms_ai_kb_v3",
+    SOCIALS: "thuystalk_cms_social_links_v1",
     BRIDGE_URL: "thuystalk_notebook_bridge_url_v3"
   };
 
@@ -110,6 +111,7 @@
     videos: loadCollection(STORAGE_KEYS.VIDEOS, window.THUYSTALK_VIDEOS),
     courses: loadCollection(STORAGE_KEYS.COURSES, window.THUYSTALK_COURSES),
     aiKb: loadCollection(STORAGE_KEYS.AI_KB, window.THUYSTALK_DEFAULT_KB),
+    socialLinks: loadCollection(STORAGE_KEYS.SOCIALS, window.THUYSTALK_DEFAULT_SOCIALS || []),
     notebookBridgeUrl:
       localStorage.getItem(STORAGE_KEYS.BRIDGE_URL) || "http://localhost:8099/api/notebook-query",
     learnerEmail: localStorage.getItem(STORAGE_KEYS.LEARNER_EMAIL) || "",
@@ -190,6 +192,19 @@
     }
   }
 
+  function saveSocialLinks() {
+    try {
+      localStorage.setItem(STORAGE_KEYS.SOCIALS, JSON.stringify(state.socialLinks));
+    } catch (e) {}
+
+    // Auto-sync Social Links to Cloud Firestore
+    if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
+      window.ThuysTalkFirebase.saveSiteSettings("social_links", { items: state.socialLinks }).catch((err) => {
+        console.warn("Cloud Firestore auto-sync error for social_links:", err);
+      });
+    }
+  }
+
   let isHydratedFromFirestore = false;
   let isRealtimeListening = false;
   let hydrateRetryCount = 0;
@@ -203,8 +218,9 @@
       return;
     }
     try {
-      const [mediaRes, articlesRes, videosRes, coursesRes, aiKbRes] = await Promise.all([
+      const [mediaRes, socialRes, articlesRes, videosRes, coursesRes, aiKbRes] = await Promise.all([
         window.ThuysTalkFirebase.fetchSiteSettings("media_profile"),
+        window.ThuysTalkFirebase.fetchSiteSettings("social_links"),
         window.ThuysTalkFirebase.fetchCollection("articles"),
         window.ThuysTalkFirebase.fetchCollection("videos"),
         window.ThuysTalkFirebase.fetchCollection("courses"),
@@ -216,6 +232,12 @@
       if (mediaRes && typeof mediaRes === "object" && Object.keys(mediaRes).length > 0) {
         state.media = { ...state.media, ...mediaRes };
         localStorage.setItem(STORAGE_KEYS.MEDIA, JSON.stringify(state.media));
+        hasUpdates = true;
+      }
+
+      if (socialRes && Array.isArray(socialRes.items) && socialRes.items.length > 0) {
+        state.socialLinks = socialRes.items;
+        localStorage.setItem(STORAGE_KEYS.SOCIALS, JSON.stringify(state.socialLinks));
         hasUpdates = true;
       }
 
@@ -344,6 +366,24 @@
       }
     });
 
+    // 4b. Social Links Real-time Sync
+    window.ThuysTalkFirebase.listenSiteSettings("social_links", (socialRes) => {
+      if (socialRes && Array.isArray(socialRes.items)) {
+        const currentJson = JSON.stringify(state.socialLinks);
+        const newJson = JSON.stringify(socialRes.items);
+        if (currentJson !== newJson) {
+          state.socialLinks = socialRes.items;
+          localStorage.setItem(STORAGE_KEYS.SOCIALS, newJson);
+          if (document.getElementById("adminSidebarNav")) {
+            if (state.activeCmsTab === "photos") renderAdminPhotosTab(document.getElementById("adminStudioBody"));
+          } else {
+            renderSocialLinks();
+          }
+          console.log("[REALTIME SYNC] Social links updated across browsers via Firestore onSnapshot");
+        }
+      }
+    });
+
     // 5. Learners & Leads Real-time Sync (Admin Tab 06)
     window.ThuysTalkFirebase.listenCollection("learners", () => {
       if (document.getElementById("adminSidebarNav") && state.activeCmsTab === "leads") {
@@ -444,6 +484,65 @@
   }
 
   // ==========================================================================
+  // SOCIAL LINKS SVG ICONS & DYNAMIC RENDERER
+  // ==========================================================================
+  const SOCIAL_PLATFORM_META = {
+    youtube: { name: "YouTube", placeholder: "https://youtube.com/@thuystalk" },
+    facebook: { name: "Facebook", placeholder: "https://facebook.com/thuystalk" },
+    zalo: { name: "Zalo", placeholder: "https://zalo.me/84767648862" },
+    tiktok: { name: "TikTok", placeholder: "https://tiktok.com/@thuystalk" },
+    linkedin: { name: "LinkedIn", placeholder: "https://linkedin.com/in/thuystalk" },
+    instagram: { name: "Instagram", placeholder: "https://instagram.com/thuystalk" },
+    email: { name: "Email", placeholder: "mailto:thuystalk.official@gmail.com" },
+    website: { name: "Website", placeholder: "https://thuystalk.vn" }
+  };
+
+  function getSocialIconSvg(platform) {
+    const p = String(platform || "website").toLowerCase();
+    switch (p) {
+      case "youtube":
+        return `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>`;
+      case "facebook":
+        return `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22.675 0H1.325C.593 0 0 .593 0 1.325v21.351C0 23.407.593 24 1.325 24H12.82v-9.294H9.692v-3.622h3.128V8.413c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.099 2.795.143v3.24l-1.918.001c-1.504 0-1.795.715-1.795 1.763v2.313h3.587l-.467 3.622h-3.12V24h6.116c.73 0 1.323-.593 1.323-1.325V1.325C24 .593 23.407 0 22.675 0z"/></svg>`;
+      case "zalo":
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5C6.75 2.5 2.5 6.3 2.5 11c0 2.68 1.38 5.08 3.55 6.64-.26 1.56-.94 2.86-1.55 3.86 1.88-.18 3.64-.95 4.86-1.76.83.17 1.71.26 2.64.26 5.25 0 9.5-3.8 9.5-8.5S17.25 2.5 12 2.5z" fill="currentColor" stroke="none"/><path d="M7.6 8.6h4.2l-4.2 5.4h4.4" stroke="#fff" stroke-width="1.75"/><path d="M14.2 10.6v3.4m2.6-3.4v3.4" stroke="#fff" stroke-width="1.65"/></svg>`;
+      case "tiktok":
+        return `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/></svg>`;
+      case "linkedin":
+        return `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/></svg>`;
+      case "instagram":
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>`;
+      case "email":
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>`;
+      default:
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`;
+    }
+  }
+
+  function renderSocialLinks() {
+    const containers = document.querySelectorAll(".hero-socials");
+    if (!containers.length) return;
+    const links = Array.isArray(state.socialLinks) && state.socialLinks.length > 0
+      ? state.socialLinks
+      : (window.THUYSTALK_DEFAULT_SOCIALS || []);
+
+    const html = links
+      .filter((item) => item && item.url)
+      .map((item) => {
+        const platform = String(item.platform || "website").toLowerCase();
+        const label = escapeHtml(item.label || (SOCIAL_PLATFORM_META[platform] ? SOCIAL_PLATFORM_META[platform].name : "Link"));
+        const safeUrl = escapeHtml(item.url);
+        const isMail = safeUrl.startsWith("mailto:");
+        return `<a href="${safeUrl}" ${isMail ? "" : 'target="_blank" rel="noopener"'} class="social-pill" data-platform="${escapeHtml(platform)}" title="${label}" aria-label="${label}">${getSocialIconSvg(platform)}</a>`;
+      })
+      .join("");
+
+    containers.forEach((box) => {
+      box.innerHTML = html;
+    });
+  }
+
+  // ==========================================================================
   // RENDER ALL SECTIONS
   // ==========================================================================
   function renderAll() {
@@ -459,7 +558,6 @@
     setText("navArticles", t.nav.articles);
     setText("navNotebook", t.nav.notebook);
     setText("navConsult", t.nav.consult);
-    setText("adminToggleBtn", t.nav.adminBtn);
     setText("headerCtaBtn", t.nav.ctaTop);
 
     document.querySelectorAll(".lang-btn").forEach((btn) => {
@@ -477,7 +575,7 @@
     setText("heroScriptText", t.hero.scriptNote);
     setText("heroFloatingTitle", t.hero.floatingTitle);
     setText("heroFloatingSub", t.hero.floatingSub);
-    setText("heroHsToolTag", t.hero.hsToolTag);
+    renderSocialLinks();
 
     applySlotPhoto("heroPortraitImg", "heroPortrait");
     applySlotPhoto("aboutSpeakerImg", "aboutSpeaker");
@@ -2096,13 +2194,14 @@
     const totalLessons = state.courses.reduce((acc, c) => acc + (c.lessons ? c.lessons.length : 0), 0);
     const leadsCount = JSON.parse(localStorage.getItem(STORAGE_KEYS.LEADS) || "[]").length;
 
+    const socialCount = Array.isArray(state.socialLinks) ? state.socialLinks.length : 0;
     const tabs = [
       {
         id: "photos",
-        label: "01 · Đổi Ảnh Profile",
-        count: "4 ảnh",
-        title: "01 · Quản Lý & Căn Chỉnh 4 Vị Trí Ảnh Profile",
-        desc: "Thay ảnh mới từ máy tính và kéo thanh trượt X / Y / Zoom để căn khung trực quan."
+        label: "01 · Ảnh & Mạng Xã Hội",
+        count: `4 ảnh · ${socialCount} link`,
+        title: "01 · Quản Lý Ảnh Profile & Liên Kết Mạng Xã Hội",
+        desc: "Thay ảnh, căn khung X / Y / Zoom và thêm, sửa, xóa các nút icon Mạng xã hội trên đầu & chân trang."
       },
       {
         id: "articles",
@@ -2236,6 +2335,34 @@
       })
       .join("");
 
+    const platformOptionsHtml = (selectedPlatform) =>
+      Object.entries(SOCIAL_PLATFORM_META)
+        .map(
+          ([key, meta]) =>
+            `<option value="${key}" ${key === selectedPlatform ? "selected" : ""}>${escapeHtml(meta.name)}</option>`
+        )
+        .join("");
+
+    const socialRowsHtml = (Array.isArray(state.socialLinks) ? state.socialLinks : [])
+      .map(
+        (item, idx) => `
+        <div class="cms-item-card" data-social-row="${idx}" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 14px; background:#fff; border:1px solid var(--border-subtle); border-radius:12px;">
+          <span class="social-pill" data-platform="${escapeHtml(item.platform || "website")}" style="flex-shrink:0; pointer-events:none;">
+            ${getSocialIconSvg(item.platform)}
+          </span>
+          <select class="cms-social-platform" data-idx="${idx}" style="min-width:130px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:0.85rem; font-weight:700;">
+            ${platformOptionsHtml(item.platform)}
+          </select>
+          <input type="text" class="cms-social-label" data-idx="${idx}" value="${escapeHtml(item.label || "")}" placeholder="Tên hiển thị (VD: YouTube ThuysTalk)" style="flex:1; min-width:160px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:0.85rem;" />
+          <input type="text" class="cms-social-url" data-idx="${idx}" value="${escapeHtml(item.url || "")}" placeholder="https://..." style="flex:2; min-width:220px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:0.85rem;" />
+          <div style="display:flex; gap:6px; flex-shrink:0;">
+            <button type="button" class="btn btn-jade btn-sm" data-save-social="${idx}">Lưu</button>
+            <button type="button" class="btn btn-outline btn-sm" style="color:#b91c1c; border-color:#fecaca;" data-del-social="${idx}">Xóa</button>
+          </div>
+        </div>`
+      )
+      .join("");
+
     body.innerHTML = `
       <div class="cms-panel-box" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
         <div>
@@ -2245,7 +2372,95 @@
         <button type="button" class="btn btn-outline btn-sm" id="resetAllPhotosBtn">Đặt lại toàn bộ ảnh gốc</button>
       </div>
       <div class="admin-photos-grid">${slotsHtml}</div>
+
+      <div class="cms-panel-box" style="margin-top:26px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+          <div>
+            <strong style="color:var(--jade-900); font-size:1rem;">Quản Lý Nút Icon Mạng Xã Hội (Hero &amp; Chân Trang)</strong>
+            <p style="font-size:0.82rem; color:var(--ink-600);">Thêm, đổi link hoặc xóa các biểu tượng YouTube, Facebook, Zalo, TikTok, LinkedIn... đồng bộ thời gian thực lên toàn trang.</p>
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" id="resetDefaultSocialsBtn">Khôi phục mặc định (YT / FB / ZL)</button>
+        </div>
+
+        <div id="cmsSocialLinksList" style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
+          ${socialRowsHtml || '<p style="font-size:0.86rem; color:var(--ink-500);">Chưa có liên kết mạng xã hội nào.</p>'}
+        </div>
+
+        <form id="addSocialLinkForm" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:12px 14px; background:var(--jade-50); border:1px dashed var(--jade-400); border-radius:12px;">
+          <select id="newSocialPlatform" style="min-width:130px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:0.85rem; font-weight:700;">
+            ${platformOptionsHtml("tiktok")}
+          </select>
+          <input type="text" id="newSocialLabel" placeholder="Tên hiển thị (VD: TikTok ThuysTalk)" style="flex:1; min-width:160px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:0.85rem;" required />
+          <input type="text" id="newSocialUrl" placeholder="Đường dẫn URL (VD: https://tiktok.com/@thuystalk)" style="flex:2; min-width:220px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:0.85rem;" required />
+          <button type="submit" class="btn btn-primary btn-sm">+ Thêm Kênh Mới</button>
+        </form>
+      </div>
     `;
+
+    // Social Links handlers
+    body.querySelectorAll("[data-save-social]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.saveSocial, 10);
+        const row = body.querySelector(`[data-social-row="${idx}"]`);
+        if (!row || !state.socialLinks[idx]) return;
+        const platform = row.querySelector(".cms-social-platform").value;
+        const label = row.querySelector(".cms-social-label").value.trim() || (SOCIAL_PLATFORM_META[platform] ? SOCIAL_PLATFORM_META[platform].name : "Link");
+        const url = row.querySelector(".cms-social-url").value.trim();
+        if (!url) {
+          showToast("Vui lòng nhập đường dẫn URL hợp lệ!");
+          return;
+        }
+        state.socialLinks[idx] = { ...state.socialLinks[idx], platform, label, url };
+        saveSocialLinks();
+        renderSocialLinks();
+        renderAdminPhotosTab(body);
+        showToast(`Đã lưu liên kết ${label}!`);
+      });
+    });
+
+    body.querySelectorAll("[data-del-social]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.delSocial, 10);
+        if (isNaN(idx) || !state.socialLinks[idx]) return;
+        const removed = state.socialLinks.splice(idx, 1)[0];
+        saveSocialLinks();
+        renderSocialLinks();
+        renderAdminStudioModal();
+        showToast(`Đã xóa liên kết ${removed.label || removed.platform}.`);
+      });
+    });
+
+    const addSocialForm = document.getElementById("addSocialLinkForm");
+    if (addSocialForm) {
+      addSocialForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const platform = document.getElementById("newSocialPlatform").value;
+        const label = document.getElementById("newSocialLabel").value.trim();
+        const url = document.getElementById("newSocialUrl").value.trim();
+        if (!label || !url) return;
+        state.socialLinks.push({
+          id: "social-" + Date.now(),
+          platform,
+          label,
+          url
+        });
+        saveSocialLinks();
+        renderSocialLinks();
+        renderAdminStudioModal();
+        showToast(`Đã thêm nút icon ${label}!`);
+      });
+    }
+
+    const resetSocialsBtn = document.getElementById("resetDefaultSocialsBtn");
+    if (resetSocialsBtn) {
+      resetSocialsBtn.addEventListener("click", () => {
+        state.socialLinks = JSON.parse(JSON.stringify(window.THUYSTALK_DEFAULT_SOCIALS || []));
+        saveSocialLinks();
+        renderSocialLinks();
+        renderAdminStudioModal();
+        showToast("Đã khôi phục 3 kênh mặc định (YouTube, Facebook, Zalo).");
+      });
+    }
 
     body.querySelectorAll("[data-upload-slot]").forEach((inp) => {
       inp.addEventListener("change", (ev) => {
@@ -3747,8 +3962,11 @@
         authBtn = document.createElement("div");
         authBtn.id = "learnerAuthHeaderBtn";
         const adminBtn = container.querySelector("#adminToggleBtn");
+        const headerCta = container.querySelector("#headerCtaBtn");
         if (adminBtn) {
           container.insertBefore(authBtn, adminBtn);
+        } else if (headerCta) {
+          container.insertBefore(authBtn, headerCta);
         } else {
           container.appendChild(authBtn);
         }
@@ -5481,6 +5699,16 @@
     initConsultForm();
     bindPhotoTriggers(document);
     hydrateAllFromFirestore();
+
+    // Hidden Admin CMS shortcut (Ctrl+Shift+A)
+    document.addEventListener("keydown", (e) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === "A" || e.key === "a")) {
+        const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : "";
+        if (tag === "input" || tag === "textarea" || tag === "select") return;
+        e.preventDefault();
+        window.location.href = "admin.html";
+      }
+    });
 
     // Global click listener for Privacy Policy Modal (Nghị định 13/2023/NĐ-CP)
     document.addEventListener("click", (e) => {

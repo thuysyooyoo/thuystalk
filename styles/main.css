@@ -472,25 +472,54 @@ body.admin-mode .admin-toggle-btn {
 }
 
 .social-pill {
-  padding: 8px 14px;
-  border-radius: var(--radius-pill);
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
   border: 1px solid var(--ink-200);
   background: var(--surface);
-  color: var(--ink-800);
+  color: var(--ink-700);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
   font-size: 0.76rem;
-  letter-spacing: 0.04em;
   box-shadow: var(--shadow-xs);
+  transition: transform 0.2s ease, background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
+
+.social-pill svg {
+  width: 19px;
+  height: 19px;
+  display: block;
+}
+
+.social-pill[data-platform="youtube"] { color: #DC2626; }
+.social-pill[data-platform="facebook"] { color: #1877F2; }
+.social-pill[data-platform="zalo"] { color: #0068FF; }
+.social-pill[data-platform="tiktok"] { color: #0F172A; }
+.social-pill[data-platform="linkedin"] { color: #0A66C2; }
+.social-pill[data-platform="instagram"] { color: #E1306C; }
+.social-pill[data-platform="email"],
+.social-pill[data-platform="website"] { color: var(--jade-700); }
 
 .social-pill:hover {
   background: var(--jade-600);
   color: #FFFFFF;
   border-color: var(--jade-600);
   transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+}
+
+.social-pill[data-platform="youtube"]:hover { background: #FF0000; border-color: #FF0000; color: #FFFFFF; }
+.social-pill[data-platform="facebook"]:hover { background: #1877F2; border-color: #1877F2; color: #FFFFFF; }
+.social-pill[data-platform="zalo"]:hover { background: #0068FF; border-color: #0068FF; color: #FFFFFF; }
+.social-pill[data-platform="tiktok"]:hover { background: #0F172A; border-color: #0F172A; color: #FFFFFF; }
+.social-pill[data-platform="linkedin"]:hover { background: #0A66C2; border-color: #0A66C2; color: #FFFFFF; }
+.social-pill[data-platform="instagram"]:hover { background: #E1306C; border-color: #E1306C; color: #FFFFFF; }
+
+.admin-toggle-btn {
+  display: none !important;
 }
 
 .social-tag-link {
