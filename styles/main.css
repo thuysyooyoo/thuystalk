@@ -1657,6 +1657,86 @@ body.admin-mode .photo-change-trigger {
   color: var(--ink-900);
 }
 
+.chat-bubble-thinking {
+  background: #FFFFFF;
+  border: 1.5px solid var(--jade-300);
+  box-shadow: 0 6px 18px rgba(6, 78, 59, 0.08);
+}
+
+.ai-thinking-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ai-thinking-spinner {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 3px solid var(--jade-100);
+  border-top-color: var(--jade-700);
+  border-right-color: var(--orange-500);
+  animation: aiThinkingSpin 0.85s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes aiThinkingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ai-thinking-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ai-thinking-title {
+  font-weight: 800;
+  color: var(--jade-900);
+  font-size: 0.9rem;
+}
+
+.ai-thinking-timer {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--orange-50);
+  border: 1px solid var(--orange-200);
+  color: var(--orange-700);
+  font-size: 0.78rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-thinking-sub {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: var(--ink-600);
+}
+
+.profile-progress-card {
+  width: 100%;
+  text-align: left;
+  background: #F8FAFC;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  font-family: inherit;
+}
+
+.profile-progress-card:hover {
+  background: #FFFFFF;
+  border-color: var(--jade-500);
+  box-shadow: 0 6px 16px rgba(6, 78, 59, 0.09);
+  transform: translateY(-1px);
+}
+
 .chat-bubble-user {
   align-self: flex-end;
   background: var(--jade-800);

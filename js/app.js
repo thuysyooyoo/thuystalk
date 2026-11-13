@@ -21,6 +21,8 @@
     COURSES: "thuystalk_cms_courses_v3",
     AI_KB: "thuystalk_cms_ai_kb_v3",
     SOCIALS: "thuystalk_cms_social_links_v1",
+    VIDEO_CATS: "thuystalk_cms_video_categories_v1",
+    LAST_LESSON_MAP: "thuystalk_last_lesson_by_course_v1",
     BRIDGE_URL: "thuystalk_notebook_bridge_url_v3"
   };
 
@@ -112,12 +114,14 @@
     courses: loadCollection(STORAGE_KEYS.COURSES, window.THUYSTALK_COURSES),
     aiKb: loadCollection(STORAGE_KEYS.AI_KB, window.THUYSTALK_DEFAULT_KB),
     socialLinks: loadCollection(STORAGE_KEYS.SOCIALS, window.THUYSTALK_DEFAULT_SOCIALS || []),
+    videoCategories: loadCollection(STORAGE_KEYS.VIDEO_CATS, window.THUYSTALK_DEFAULT_VIDEO_CATEGORIES || []),
     notebookBridgeUrl:
       localStorage.getItem(STORAGE_KEYS.BRIDGE_URL) || "http://localhost:8099/api/notebook-query",
     learnerEmail: localStorage.getItem(STORAGE_KEYS.LEARNER_EMAIL) || "",
     learnerName: localStorage.getItem(STORAGE_KEYS.LEARNER_NAME) || "",
     learnerPhone: localStorage.getItem(STORAGE_KEYS.LEARNER_PHONE) || "",
     completedLessons: JSON.parse(localStorage.getItem(STORAGE_KEYS.PROGRESS) || "{}"),
+    lastLessonMap: JSON.parse(localStorage.getItem(STORAGE_KEYS.LAST_LESSON_MAP) || "{}"),
     activeVideoCat: "all",
     activeVideoId: null,
     activeArticleCat: "all",
@@ -205,6 +209,18 @@
     }
   }
 
+  function saveVideoCategories() {
+    try {
+      localStorage.setItem(STORAGE_KEYS.VIDEO_CATS, JSON.stringify(state.videoCategories));
+    } catch (e) {}
+
+    if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
+      window.ThuysTalkFirebase.saveSiteSettings("video_categories", { items: state.videoCategories }).catch((err) => {
+        console.warn("Cloud Firestore auto-sync error for video_categories:", err);
+      });
+    }
+  }
+
   let isHydratedFromFirestore = false;
   let isRealtimeListening = false;
   let hydrateRetryCount = 0;
@@ -218,9 +234,11 @@
       return;
     }
     try {
-      const [mediaRes, socialRes, articlesRes, videosRes, coursesRes, aiKbRes] = await Promise.all([
+      const [mediaRes, socialRes, videoCatsRes, bridgeRes, articlesRes, videosRes, coursesRes, aiKbRes] = await Promise.all([
         window.ThuysTalkFirebase.fetchSiteSettings("media_profile"),
         window.ThuysTalkFirebase.fetchSiteSettings("social_links"),
+        window.ThuysTalkFirebase.fetchSiteSettings("video_categories"),
+        window.ThuysTalkFirebase.fetchSiteSettings("ai_bridge"),
         window.ThuysTalkFirebase.fetchCollection("articles"),
         window.ThuysTalkFirebase.fetchCollection("videos"),
         window.ThuysTalkFirebase.fetchCollection("courses"),
@@ -239,6 +257,20 @@
         state.socialLinks = socialRes.items;
         localStorage.setItem(STORAGE_KEYS.SOCIALS, JSON.stringify(state.socialLinks));
         hasUpdates = true;
+      }
+
+      if (videoCatsRes && Array.isArray(videoCatsRes.items) && videoCatsRes.items.length > 0) {
+        state.videoCategories = videoCatsRes.items;
+        localStorage.setItem(STORAGE_KEYS.VIDEO_CATS, JSON.stringify(state.videoCategories));
+        hasUpdates = true;
+      }
+
+      if (bridgeRes && bridgeRes.url && typeof bridgeRes.url === "string") {
+        const isLocalOrigin = /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname);
+        if (!isLocalOrigin || !/^https?:\/\/(localhost|127\.0\.0\.1)/i.test(bridgeRes.url)) {
+          state.notebookBridgeUrl = bridgeRes.url.trim();
+          localStorage.setItem(STORAGE_KEYS.BRIDGE_URL, state.notebookBridgeUrl);
+        }
       }
 
       if (Array.isArray(articlesRes) && articlesRes.length > 0) {
@@ -380,6 +412,36 @@
             renderSocialLinks();
           }
           console.log("[REALTIME SYNC] Social links updated across browsers via Firestore onSnapshot");
+        }
+      }
+    });
+
+    // 4c. Video Categories (CM1..CMn) Real-time Sync
+    window.ThuysTalkFirebase.listenSiteSettings("video_categories", (videoCatsRes) => {
+      if (videoCatsRes && Array.isArray(videoCatsRes.items)) {
+        const currentJson = JSON.stringify(state.videoCategories);
+        const newJson = JSON.stringify(videoCatsRes.items);
+        if (currentJson !== newJson) {
+          state.videoCategories = videoCatsRes.items;
+          localStorage.setItem(STORAGE_KEYS.VIDEO_CATS, newJson);
+          if (document.getElementById("adminSidebarNav")) {
+            if (state.activeCmsTab === "videos") renderAdminVideosTab(document.getElementById("adminStudioBody"));
+          } else {
+            renderVideoSection(window.THUYSTALK_I18N[state.lang]);
+          }
+          console.log("[REALTIME SYNC] Video categories updated across browsers via Firestore onSnapshot");
+        }
+      }
+    });
+
+    // 4d. AI Bridge Endpoint Real-time Sync
+    window.ThuysTalkFirebase.listenSiteSettings("ai_bridge", (bridgeRes) => {
+      if (bridgeRes && bridgeRes.url && typeof bridgeRes.url === "string") {
+        const cleanUrl = bridgeRes.url.trim();
+        const isLocalOrigin = /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname);
+        if (!isLocalOrigin || !/^https?:\/\/(localhost|127\.0\.0\.1)/i.test(cleanUrl)) {
+          state.notebookBridgeUrl = cleanUrl;
+          localStorage.setItem(STORAGE_KEYS.BRIDGE_URL, cleanUrl);
         }
       }
     });
@@ -814,13 +876,49 @@
     bindPhotoTriggers(grid);
   }
 
-  function openCourseClassroom(courseId) {
+  function getNextUnfinishedLessonIndex(course) {
+    if (!course || !Array.isArray(course.lessons) || !course.lessons.length) return 0;
+    const savedIdx = state.lastLessonMap && typeof state.lastLessonMap[course.id] === "number"
+      ? state.lastLessonMap[course.id]
+      : null;
+    if (savedIdx !== null && savedIdx >= 0 && savedIdx < course.lessons.length) {
+      const savedLesson = course.lessons[savedIdx];
+      if (savedLesson && !state.completedLessons[savedLesson.id]) {
+        return savedIdx;
+      }
+    }
+    const firstUnfinished = course.lessons.findIndex((l) => !state.completedLessons[l.id]);
+    return firstUnfinished >= 0 ? firstUnfinished : 0;
+  }
+
+  function saveLastLessonIndex(courseId, lessonIndex) {
+    if (!courseId || typeof lessonIndex !== "number") return;
+    state.lastLessonMap[courseId] = lessonIndex;
+    try {
+      localStorage.setItem(STORAGE_KEYS.LAST_LESSON_MAP, JSON.stringify(state.lastLessonMap));
+    } catch (e) {}
+  }
+
+  function openCourseClassroom(courseId, explicitLessonIdx = null) {
     const course = state.courses.find((c) => c.id === courseId);
     if (!course) return;
+    const totalLessons = (course.lessons && course.lessons.length) || 1;
+    let targetIdx =
+      explicitLessonIdx !== null && explicitLessonIdx !== undefined && !isNaN(Number(explicitLessonIdx))
+        ? Math.max(0, Math.min(totalLessons - 1, parseInt(explicitLessonIdx, 10)))
+        : getNextUnfinishedLessonIndex(course);
+
+    const modalEl = document.getElementById("classroomModal");
+    if (!modalEl) {
+      window.location.href = `elearning.html?openCourse=${encodeURIComponent(courseId)}&lesson=${targetIdx}`;
+      return;
+    }
+
     state.activeCourseId = courseId;
-    state.activeLessonIndex = 0;
+    state.activeLessonIndex = targetIdx;
+    saveLastLessonIndex(courseId, targetIdx);
     renderClassroomModal();
-    document.getElementById("classroomModal").classList.add("open");
+    modalEl.classList.add("open");
   }
 
   function renderClassroomModal() {
@@ -951,6 +1049,7 @@
     bodyEl.querySelectorAll("[data-lidx]").forEach((b) => {
       b.addEventListener("click", () => {
         state.activeLessonIndex = parseInt(b.dataset.lidx, 10);
+        saveLastLessonIndex(course.id, state.activeLessonIndex);
         renderClassroomModal();
       });
     });
@@ -1066,18 +1165,48 @@
   // ==========================================================================
   // 6. VIDEO THUYTALK SECTION (With Direct YouTube Iframe Embed)
   // ==========================================================================
+  function getVideoCategoryList() {
+    return Array.isArray(state.videoCategories) && state.videoCategories.length
+      ? state.videoCategories
+      : (window.THUYSTALK_DEFAULT_VIDEO_CATEGORIES || []);
+  }
+
+  function getVideoCategoryLabel(cmId, fallbackObj, lang = state.lang) {
+    const found = getVideoCategoryList().find((c) => c.id === cmId);
+    if (found) {
+      return lang === "en" ? (found.labelEn || found.labelVi || found.id) : (found.labelVi || found.labelEn || found.id);
+    }
+    if (fallbackObj && typeof fallbackObj === "object") {
+      return fallbackObj[lang] || fallbackObj.vi || cmId || "";
+    }
+    return fallbackObj || cmId || "";
+  }
+
   function renderVideoSection(t) {
     setText("vidEyebrow", t.video.eyebrow);
     setText("vidTitle", t.video.title);
     setText("vidDesc", t.video.desc);
 
+    const dynamicCats = getVideoCategoryList();
+    if (state.activeVideoCat !== "all" && !dynamicCats.some((c) => c.id === state.activeVideoCat)) {
+      state.activeVideoCat = "all";
+    }
+
+    const tabsData = [
+      { id: "all", label: state.lang === "en" ? "All Videos" : "Tất cả video" },
+      ...dynamicCats.map((c) => ({
+        id: c.id,
+        label: state.lang === "en" ? (c.labelEn || c.labelVi || c.id) : (c.labelVi || c.labelEn || c.id)
+      }))
+    ];
+
     const tabsWrap = document.getElementById("videoFilterTabs");
     if (tabsWrap) {
-      tabsWrap.innerHTML = t.video.tabs
+      tabsWrap.innerHTML = tabsData
         .map(
           (tab) => `
-        <button type="button" class="filter-tab ${state.activeVideoCat === tab.id ? "active" : ""}" data-vcat="${tab.id}">
-          ${tab.label}
+        <button type="button" class="filter-tab ${state.activeVideoCat === tab.id ? "active" : ""}" data-vcat="${escapeHtml(tab.id)}">
+          ${escapeHtml(tab.label)}
         </button>`
         )
         .join("");
@@ -1103,7 +1232,7 @@
       const embedSrc = buildYoutubeEmbedSrc(activeVid);
       const vTitle = typeof activeVid.title === "object" ? activeVid.title[state.lang] || activeVid.title.vi : activeVid.title;
       const vDesc = typeof activeVid.desc === "object" ? activeVid.desc[state.lang] || activeVid.desc.vi : activeVid.desc;
-      const vCmLabel = typeof activeVid.cmLabel === "object" ? activeVid.cmLabel[state.lang] || activeVid.cmLabel.vi : activeVid.cm;
+      const vCmLabel = getVideoCategoryLabel(activeVid.cm, activeVid.cmLabel, state.lang);
       const thumbUrl = ytId
         ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`
         : getPhotoUrl(activeVid.thumbSlot || "aboutSpeaker");
@@ -1178,7 +1307,7 @@
             : getPhotoUrl(v.thumbSlot || "aboutSpeaker");
           const tStyle = ytId ? "" : getPhotoStyle(v.thumbSlot || "aboutSpeaker");
           const vTitle = typeof v.title === "object" ? v.title[state.lang] || v.title.vi : v.title;
-          const vCmLabel = typeof v.cmLabel === "object" ? v.cmLabel[state.lang] || v.cmLabel.vi : v.cm;
+          const vCmLabel = getVideoCategoryLabel(v.cm, v.cmLabel, state.lang);
           return `
           <div class="video-list-item ${activeVid && v.id === activeVid.id ? "active" : ""}" data-vid="${v.id}">
             <div class="video-list-thumb">
@@ -1210,7 +1339,7 @@
 
   function openVideoModal(video) {
     const vTitle = typeof video.title === "object" ? video.title[state.lang] || video.title.vi : video.title;
-    const vCmLabel = typeof video.cmLabel === "object" ? video.cmLabel[state.lang] || video.cmLabel.vi : video.cm;
+    const vCmLabel = getVideoCategoryLabel(video.cm, video.cmLabel, state.lang);
     const vScript = typeof video.script === "object" ? video.script[state.lang] || video.script.vi : video.script;
 
     document.getElementById("articleModalTitle").textContent = vCmLabel + " · @thuystalk";
@@ -1239,7 +1368,7 @@
 
   function downloadVideoChecklist(video) {
     const vTitle = typeof video.title === "object" ? video.title[state.lang] || video.title.vi : video.title;
-    const vCmLabel = typeof video.cmLabel === "object" ? video.cmLabel[state.lang] || video.cmLabel.vi : video.cm;
+    const vCmLabel = getVideoCategoryLabel(video.cm, video.cmLabel, state.lang);
     const vScript = typeof video.script === "object" ? video.script[state.lang] || video.script.vi : video.script;
 
     const content = [
@@ -1795,11 +1924,48 @@
 
     // 2. Otherwise call the backend AI Knowledge Bridge silently (Zero mention of NotebookLM!)
     const bridgeEndpoint = (state.notebookBridgeUrl || "http://localhost:8099/api/notebook-query").trim();
-    const loadingBubble = appendChatMessage(
-      "ai",
-      `Đang phân tích và đối chiếu dữ liệu pháp lý chuyên sâu thuộc [${route.title.vi}] cho câu hỏi "${q}" (vui lòng đợi khoảng 10–15 giây để hệ thống tổng hợp trích dẫn)...`,
-      route.branch
-    );
+    const chatBox = document.getElementById("notebookChatMessages");
+    let loadingBubble = null;
+    let thinkingTimerId = null;
+
+    if (chatBox) {
+      let elapsedSec = 0;
+      loadingBubble = document.createElement("div");
+      loadingBubble.className = "chat-bubble chat-bubble-ai chat-bubble-thinking";
+      loadingBubble.innerHTML = `
+        <div class="ai-thinking-row">
+          <div class="ai-thinking-spinner" aria-hidden="true"></div>
+          <div>
+            <div class="ai-thinking-meta">
+              <span class="ai-thinking-title">${state.lang === "en" ? "Thinking & checking legal database..." : "Đang phân tích & đối chiếu dữ liệu pháp lý..."}</span>
+              <span class="ai-thinking-timer" data-thinking-seconds>0 giây</span>
+            </div>
+            <div class="ai-thinking-sub">${escapeHtml(route.title.vi)} · "${escapeHtml(q)}"</div>
+          </div>
+        </div>
+      `;
+      chatBox.appendChild(loadingBubble);
+      chatBox.scrollTop = chatBox.scrollHeight;
+
+      const secBadge = loadingBubble.querySelector("[data-thinking-seconds]");
+      thinkingTimerId = window.setInterval(() => {
+        elapsedSec += 1;
+        if (secBadge) {
+          secBadge.textContent = state.lang === "en" ? `${elapsedSec}s` : `${elapsedSec} giây`;
+        }
+      }, 1000);
+    }
+
+    const stopThinkingUi = () => {
+      if (thinkingTimerId !== null) {
+        window.clearInterval(thinkingTimerId);
+        thinkingTimerId = null;
+      }
+      if (loadingBubble) {
+        loadingBubble.remove();
+        loadingBubble = null;
+      }
+    };
 
     try {
       const resp = await fetch(bridgeEndpoint, {
@@ -1813,7 +1979,7 @@
       if (resp.ok) {
         const data = await resp.json();
         if (data && data.answer) {
-          if (loadingBubble) loadingBubble.remove();
+          stopThinkingUi();
           appendChatMessage(
             "ai",
             data.answer,
@@ -1834,7 +2000,7 @@
       // Bridge offline or blocked
     }
 
-    if (loadingBubble) loadingBubble.remove();
+    stopThinkingUi();
     appendChatMessage(
       "ai",
       `Hệ thống đã ghi nhận câu hỏi "${q}" thuộc nhóm [${route.title.vi}]. Để tra cứu chuyên sâu theo thời gian thực hoặc nhận văn bản gốc cho tình huống này, bạn hãy mở qua cổng máy chủ nội bộ hoặc để lại thông tin tại mục Tư vấn 1-1.`,
@@ -3876,18 +4042,40 @@
         });
       }
       const percent = Math.round((done / total) * 100);
+      const nextIdx = getNextUnfinishedLessonIndex(course);
+      const nextLesson = course.lessons && course.lessons[nextIdx];
+      const nextLessonTitle = nextLesson
+        ? (typeof nextLesson.title === "object" ? nextLesson.title[state.lang] || nextLesson.title.vi : nextLesson.title)
+        : "";
+      const actionLabel = percent === 100 ? "Xem lại ->" : "Tiếp tục làm ->";
+
       return `
-        <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:8px; padding:12px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <strong style="font-size:0.88rem; color:var(--jade-950);">${escapeHtml(course.title && (course.title.vi || course.title))}</strong>
-            <span style="font-size:0.78rem; font-weight:800; color:${percent === 100 ? '#059669' : 'var(--orange-600)'};">${done}/${total} tài liệu (${percent}%)</span>
+        <button type="button" class="profile-progress-card" data-progress-course-id="${escapeHtml(course.id)}" data-progress-lesson-idx="${nextIdx}" title="Nhấn để mở trực tiếp tài liệu &amp; Mini Test">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:6px;">
+            <strong style="font-size:0.88rem; color:var(--jade-950); line-height:1.35;">${escapeHtml(course.title && (course.title.vi || course.title))}</strong>
+            <span style="font-size:0.78rem; font-weight:800; color:${percent === 100 ? '#059669' : 'var(--orange-600)'}; white-space:nowrap;">${done}/${total} tài liệu (${percent}%)</span>
           </div>
-          <div style="width:100%; height:8px; background:#E2E8F0; border-radius:4px; overflow:hidden;">
+          <div style="width:100%; height:8px; background:#E2E8F0; border-radius:4px; overflow:hidden; margin-bottom:8px;">
             <div style="width:${percent}%; height:100%; background:${percent === 100 ? '#059669' : 'var(--orange-500)'}; transition:width 0.3s ease;"></div>
           </div>
-        </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:0.76rem;">
+            <span style="color:var(--ink-600); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+              ${percent === 100 ? "Đã hoàn thành toàn bộ chuyên đề" : `Đang dở: Bài ${nextIdx + 1}${nextLessonTitle ? " · " + escapeHtml(nextLessonTitle) : ""}`}
+            </span>
+            <span style="font-weight:800; color:${percent === 100 ? '#047857' : 'var(--orange-600)'}; white-space:nowrap;">${actionLabel}</span>
+          </div>
+        </button>
       `;
     }).join("");
+
+    container.querySelectorAll("[data-progress-course-id]").forEach((cardBtn) => {
+      cardBtn.addEventListener("click", () => {
+        const courseId = cardBtn.dataset.progressCourseId;
+        const lessonIdx = parseInt(cardBtn.dataset.progressLessonIdx || "0", 10);
+        if (modalDiv) modalDiv.classList.remove("open");
+        openCourseClassroom(courseId, lessonIdx);
+      });
+    });
   }
 
   function openUserProfileModal(activeTab = "info") {
@@ -4330,18 +4518,48 @@
     }
   }
 
-  // --- TAB 3: YOUTUBE VIDEO EMBED CMS (Supports full <iframe ...> code & URLs + Live Preview + Sửa Button) ---
+  // --- TAB 3: YOUTUBE VIDEO EMBED & CM CATEGORIES CMS ---
   function renderAdminVideosTab(body) {
     let editingVidId = null;
+    const catList = getVideoCategoryList();
+
+    const catRowsHtml = catList
+      .map(
+        (cat, idx) => `
+      <div class="cms-item-card" data-vcat-row="${idx}" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 12px; background:#fff; border:1px solid var(--border-subtle); border-radius:10px;">
+        <span class="exp-tag" style="min-width:60px; text-align:center;">${escapeHtml(cat.id)}</span>
+        <input type="text" class="cms-vcat-vi" data-idx="${idx}" value="${escapeHtml(cat.labelVi || "")}" placeholder="Tên tiếng Việt (VD: CM1 · Văn bản nóng)" style="flex:1.4; min-width:200px; padding:7px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:0.85rem; font-weight:600;" />
+        <input type="text" class="cms-vcat-en" data-idx="${idx}" value="${escapeHtml(cat.labelEn || "")}" placeholder="Tên tiếng Anh (tùy chọn)" style="flex:1; min-width:160px; padding:7px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:0.84rem;" />
+        <div style="display:flex; gap:6px; flex-shrink:0;">
+          <button type="button" class="btn btn-jade btn-sm" data-save-vcat="${idx}">Lưu</button>
+          <button type="button" class="btn btn-outline btn-sm" style="color:#b91c1c; border-color:#fecaca;" data-del-vcat="${idx}">Xóa</button>
+        </div>
+      </div>`
+      )
+      .join("");
+
+    const cmSelectOptionsHtml = catList
+      .map(
+        (cat, idx) =>
+          `<option value="${escapeHtml(cat.id)}" ${cat.id === "CM3" || idx === 0 ? (cat.id === "CM3" ? "selected" : "") : ""}>${escapeHtml(cat.labelVi || cat.id)}</option>`
+      )
+      .join("");
+
+    const nextCmNum =
+      catList.reduce((mx, c) => {
+        const m = String(c.id || "").match(/CM(\d+)/i);
+        return m ? Math.max(mx, parseInt(m[1], 10)) : mx;
+      }, catList.length) + 1;
 
     const rows = state.videos
       .map((v, idx) => {
         const vTitle = typeof v.title === "object" ? v.title.vi : v.title;
+        const vCatDisplay = getVideoCategoryLabel(v.cm, v.cmLabel, "vi");
         const ytId = extractYoutubeId(v.youtubeEmbedId || v.youtubeEmbedSrc || v.youtubeUrl);
         return `
         <tr>
           <td>${idx + 1}</td>
-          <td><span class="exp-tag">${escapeHtml(v.cm)}</span></td>
+          <td><span class="exp-tag">${escapeHtml(vCatDisplay || v.cm)}</span></td>
           <td style="font-weight:700;">${escapeHtml(vTitle)}</td>
           <td>${
             ytId
@@ -4357,6 +4575,27 @@
       .join("");
 
     body.innerHTML = `
+      <div class="cms-panel-box" style="margin-bottom:20px; border-color:var(--jade-400); background:var(--jade-50);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+          <div>
+            <h4 style="margin:0; color:var(--jade-900);">Quản Lý Chuyên Mục Video (CM1, CM2, CM3, CM4...)</h4>
+            <p style="font-size:0.8rem; color:var(--ink-600); margin:3px 0 0;">Đổi tên, thêm chuyên mục mới hoặc xóa bớt — bộ lọc trên Trang Chủ &amp; Trang Video sẽ cập nhật tức thì.</p>
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" id="resetDefaultVideoCatsBtn">Khôi phục 4 CM mặc định</button>
+        </div>
+
+        <div id="cmsVideoCatsList" style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;">
+          ${catRowsHtml || '<p style="font-size:0.85rem; color:var(--ink-500);">Chưa có chuyên mục nào.</p>'}
+        </div>
+
+        <form id="addVideoCategoryForm" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 12px; background:#fff; border:1px dashed var(--jade-400); border-radius:10px;">
+          <input type="text" id="newVcatId" value="CM${nextCmNum}" placeholder="Mã (VD: CM${nextCmNum})" style="width:105px; padding:7px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:0.85rem; font-weight:800; text-transform:uppercase;" required />
+          <input type="text" id="newVcatVi" placeholder="Tên chuyên mục mới (VD: CM${nextCmNum} · Phân tích thực chiến)" style="flex:1.4; min-width:210px; padding:7px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:0.85rem;" required />
+          <input type="text" id="newVcatEn" placeholder="Tên tiếng Anh (tùy chọn)" style="flex:1; min-width:150px; padding:7px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:0.84rem;" />
+          <button type="submit" class="btn btn-primary btn-sm">+ Thêm Chuyên Mục</button>
+        </form>
+      </div>
+
       <div class="cms-panel-box" id="cmsVideoFormCard">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
           <h4 id="cmsVidFormHeading" style="margin:0; color:var(--jade-900);">
@@ -4390,10 +4629,7 @@
               <div class="form-group">
                 <label>Chuyên mục Video ThuyTalk *</label>
                 <select id="cmsVidCm" class="form-control">
-                  <option value="CM1">CM1 · Văn bản nóng</option>
-                  <option value="CM2">CM2 · Dịch luật ra tiếng người</option>
-                  <option value="CM3" selected>CM3 · Ký sự thương mại</option>
-                  <option value="CM4">CM4 · Tâm tình nghề thực tế</option>
+                  ${cmSelectOptionsHtml}
                 </select>
               </div>
             </div>
@@ -4460,6 +4696,83 @@
         <tbody>${rows}</tbody>
       </table>
     `;
+
+    // Bind Video Category (CM) CRUD handlers
+    body.querySelectorAll("[data-save-vcat]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.saveVcat, 10);
+        const row = body.querySelector(`[data-vcat-row="${idx}"]`);
+        if (!row || !state.videoCategories[idx]) return;
+        const labelVi = row.querySelector(".cms-vcat-vi").value.trim();
+        const labelEn = row.querySelector(".cms-vcat-en").value.trim() || labelVi;
+        if (!labelVi) {
+          showToast("Vui lòng nhập tên chuyên mục!");
+          return;
+        }
+        const catId = state.videoCategories[idx].id;
+        state.videoCategories[idx] = { id: catId, labelVi, labelEn };
+        state.videos.forEach((v) => {
+          if (v.cm === catId) {
+            v.cmLabel = { vi: labelVi, en: labelEn };
+          }
+        });
+        saveVideoCategories();
+        saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
+        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
+          window.ThuysTalkFirebase.syncCollection("videos", state.videos);
+        }
+        renderVideoSection(window.THUYSTALK_I18N[state.lang]);
+        renderAdminVideosTab(body);
+        showToast(`Đã cập nhật chuyên mục ${labelVi}!`);
+      });
+    });
+
+    body.querySelectorAll("[data-del-vcat]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.delVcat, 10);
+        if (isNaN(idx) || !state.videoCategories[idx]) return;
+        const removed = state.videoCategories.splice(idx, 1)[0];
+        if (state.activeVideoCat === removed.id) {
+          state.activeVideoCat = "all";
+        }
+        saveVideoCategories();
+        renderVideoSection(window.THUYSTALK_I18N[state.lang]);
+        renderAdminVideosTab(body);
+        showToast(`Đã xóa chuyên mục ${removed.labelVi || removed.id}.`);
+      });
+    });
+
+    const addVcatForm = document.getElementById("addVideoCategoryForm");
+    if (addVcatForm) {
+      addVcatForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const rawId = document.getElementById("newVcatId").value.trim().toUpperCase().replace(/\s+/g, "_");
+        const labelVi = document.getElementById("newVcatVi").value.trim();
+        const labelEn = document.getElementById("newVcatEn").value.trim() || labelVi;
+        if (!rawId || !labelVi) return;
+        if (state.videoCategories.some((c) => String(c.id).toUpperCase() === rawId)) {
+          showToast(`Mã chuyên mục "${rawId}" đã tồn tại!`);
+          return;
+        }
+        state.videoCategories.push({ id: rawId, labelVi, labelEn });
+        saveVideoCategories();
+        renderVideoSection(window.THUYSTALK_I18N[state.lang]);
+        renderAdminVideosTab(body);
+        showToast(`Đã thêm chuyên mục mới: ${labelVi}!`);
+      });
+    }
+
+    const resetVcatsBtn = document.getElementById("resetDefaultVideoCatsBtn");
+    if (resetVcatsBtn) {
+      resetVcatsBtn.addEventListener("click", () => {
+        state.videoCategories = JSON.parse(JSON.stringify(window.THUYSTALK_DEFAULT_VIDEO_CATEGORIES || []));
+        state.activeVideoCat = "all";
+        saveVideoCategories();
+        renderVideoSection(window.THUYSTALK_I18N[state.lang]);
+        renderAdminVideosTab(body);
+        showToast("Đã khôi phục 4 chuyên mục CM1 – CM4 mặc định.");
+      });
+    }
 
     const urlInp = document.getElementById("cmsVidUrl");
     const previewBox = document.getElementById("cmsVideoLivePreviewBox");
@@ -4534,12 +4847,10 @@
       const desc = document.getElementById("cmsVidDesc").value.trim();
       const rawScript = document.getElementById("cmsVidScript").value.trim() || desc;
 
-      const cmLabels = {
-        CM1: { vi: "CM1 · Văn bản nóng", en: "CM1 · Hot Regulations" },
-        CM2: { vi: "CM2 · Dịch luật ra tiếng người", en: "CM2 · Law in Plain Language" },
-        CM3: { vi: "CM3 · Ký sự thương mại", en: "CM3 · Trade Chronicles" },
-        CM4: { vi: "CM4 · Tâm tình nghề thực tế", en: "CM4 · Real-World Stories" }
-      };
+      const activeCatObj = getVideoCategoryList().find((c) => c.id === cm);
+      const resolvedCmLabel = activeCatObj
+        ? { vi: activeCatObj.labelVi || cm, en: activeCatObj.labelEn || activeCatObj.labelVi || cm }
+        : { vi: cm, en: cm };
 
       const formattedScript = rawScript
         .split(/\n+/)
@@ -4550,7 +4861,7 @@
         const vid = state.videos.find((v) => v.id === editingVidId);
         if (vid) {
           vid.cm = cm;
-          vid.cmLabel = cmLabels[cm] || cmLabels.CM1;
+          vid.cmLabel = resolvedCmLabel;
           vid.duration = duration;
           vid.youtubeUrl = ytId ? `https://www.youtube.com/watch?v=${ytId}` : rawInput;
           vid.youtubeEmbedId = ytId;
@@ -4571,7 +4882,7 @@
         const newVid = {
           id: "vid-custom-" + Date.now(),
           cm,
-          cmLabel: cmLabels[cm] || cmLabels.CM1,
+          cmLabel: resolvedCmLabel,
           duration,
           date: new Date().toLocaleDateString("vi-VN"),
           thumbSlot: "aboutSpeaker",
@@ -5200,7 +5511,12 @@
       if (!val) return;
       state.notebookBridgeUrl = val;
       localStorage.setItem(STORAGE_KEYS.BRIDGE_URL, val);
-      showToast("Đã lưu địa chỉ URL API Trung Gian!");
+      if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
+        window.ThuysTalkFirebase.saveSiteSettings("ai_bridge", { url: val }).catch((err) => {
+          console.warn("Cloud Firestore auto-sync error for ai_bridge:", err);
+        });
+      }
+      showToast("Đã lưu & đồng bộ địa chỉ URL API Trung Gian!");
     });
 
     document.getElementById("cmsTestBridgeBtn").addEventListener("click", async () => {
@@ -5699,6 +6015,16 @@
     initConsultForm();
     bindPhotoTriggers(document);
     hydrateAllFromFirestore();
+
+    // Auto-open unfinished tài liệu / Mini Test if redirected via ?openCourse=...&lesson=...
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const openCourseId = urlParams.get("openCourse");
+      const openLessonParam = urlParams.get("lesson");
+      if (openCourseId && document.getElementById("classroomModal")) {
+        openCourseClassroom(openCourseId, openLessonParam !== null ? parseInt(openLessonParam, 10) : null);
+      }
+    } catch (e) {}
 
     // Hidden Admin CMS shortcut (Ctrl+Shift+A)
     document.addEventListener("keydown", (e) => {

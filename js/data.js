@@ -24,6 +24,13 @@ window.THUYSTALK_DEFAULT_SOCIALS = [
   }
 ];
 
+window.THUYSTALK_DEFAULT_VIDEO_CATEGORIES = [
+  { id: "CM1", labelVi: "CM1 · Văn bản nóng", labelEn: "CM1 · Hot Regulations" },
+  { id: "CM2", labelVi: "CM2 · Dịch luật ra tiếng người", labelEn: "CM2 · Law in Plain Language" },
+  { id: "CM3", labelVi: "CM3 · Ký sự thương mại", labelEn: "CM3 · Trade Chronicles" },
+  { id: "CM4", labelVi: "CM4 · Chuyện nghề & Thực tế", labelEn: "CM4 · Real-World Stories" }
+];
+
 window.THUYSTALK_DEFAULT_MEDIA = {
   heroPortrait: {
     id: "heroPortrait",
