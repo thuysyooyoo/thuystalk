@@ -1,8 +1,7 @@
 /**
- * THUYSTALK - FIREBASE DATABASE & STORAGE INTEGRATION MODULE
+ * THUYSTALK - FIREBASE AUTH & FIRESTORE INTEGRATION MODULE
  * Project: thuystalk
- * Storage Bucket: thuystalk.firebasestorage.app
- * Connects Cloud Firestore & Firebase Storage to ThuysTalk Web Platform
+ * Connects Cloud Firestore & Firebase Authentication to ThuysTalk Web Platform
  */
 
 (function () {
@@ -28,7 +27,6 @@
   };
 
   let db = null;
-  let storage = null;
   let auth = null;
   let isInitialized = false;
   let persistenceConfigured = false;
@@ -92,9 +90,6 @@
         if (typeof firebase.firestore === "function") {
           db = firebase.firestore();
         }
-        if (typeof firebase.storage === "function") {
-          storage = firebase.storage();
-        }
         isInitialized = true;
         console.log("ThuysTalk Firebase Initialized: project =", cfg.projectId);
         return true;
@@ -125,20 +120,14 @@
     isAuthReady: function () {
       return !!(isInitialized && auth);
     },
-    isStorageReady: function () {
-      return !!(isInitialized && storage);
-    },
     getStatus: function () {
       const cfg = getStoredConfig();
       const ready = !!(isInitialized && db);
       const authReady = !!(isInitialized && auth);
-      const stReady = !!(isInitialized && storage);
       return {
         ready: ready,
         authReady: authReady,
-        storageReady: stReady,
         projectId: cfg.projectId || "thuystalk",
-        storageBucket: cfg.storageBucket || "thuystalk.firebasestorage.app",
         hasApiKey: !!cfg.apiKey
       };
     },
@@ -494,25 +483,6 @@
         console.warn("Firestore saveLearner error:", err);
         return false;
       }
-    },
-
-    // Upload Media / Document to Firebase Storage
-    uploadFile: async function (file, folderPath = "media") {
-      initFirebase();
-      if (!storage) {
-        throw new Error("Firebase Storage chưa được khởi tạo. Vui lòng cấu hình Firebase API Key trong Quản trị CMS.");
-      }
-      const safeName = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const fullPath = `${folderPath}/${safeName}`;
-      const ref = storage.ref().child(fullPath);
-      const snapshot = await ref.put(file);
-      const downloadUrl = await snapshot.ref.getDownloadURL();
-      return {
-        url: downloadUrl,
-        fullPath: fullPath,
-        name: file.name,
-        size: file.size
-      };
     },
 
     // Sync Collection (Articles, Videos, Mini-Test Courses) to Firestore
