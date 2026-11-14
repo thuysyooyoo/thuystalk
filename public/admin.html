@@ -16,7 +16,38 @@
 </head>
 <body class="admin-body">
 
-  <div class="admin-page-layout">
+  <!-- Fail-Closed Admin Auth Gate: CMS stays hidden until Google Admin is verified -->
+  <div id="adminAuthGate" style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; background:linear-gradient(135deg, #042E24 0%, #064E3B 55%, #0D6B53 100%);">
+    <div style="width:100%; max-width:460px; background:#FFFFFF; color:#0F172A; border-radius:20px; padding:34px 30px; box-shadow:0 28px 70px rgba(0,0,0,0.35); border:1px solid #E2E8F0; text-align:center;">
+      <div style="width:54px; height:54px; border-radius:14px; background:#064E3B; color:#FFFFFF; font-weight:900; font-size:1.3rem; display:inline-flex; align-items:center; justify-content:center; margin-bottom:14px; letter-spacing:-0.02em;">
+        T<span style="color:#F97316;">T</span>
+      </div>
+      <h1 style="font-size:1.25rem; font-weight:800; color:#064E3B; margin:0 0 8px;">
+        Cổng Quản Trị Nội Bộ ThuysTalk
+      </h1>
+      <p style="font-size:0.86rem; color:#475569; line-height:1.55; margin:0 0 20px;">
+        Trang quản trị được bảo vệ. Vui lòng đăng nhập bằng tài khoản Google Quản trị viên đã được cấp quyền để truy cập hệ thống CMS.
+      </p>
+
+      <div id="adminAuthStatus" style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:10px; padding:10px 14px; font-size:0.82rem; color:#334155; font-weight:600; margin-bottom:14px;">
+        Đang kiểm tra phiên đăng nhập...
+      </div>
+
+      <div id="adminAuthError" style="display:none; background:#FEF2F2; border:1.5px solid #F87171; border-radius:10px; padding:12px 14px; font-size:0.83rem; color:#991B1B; font-weight:600; line-height:1.5; margin-bottom:16px; text-align:left;"></div>
+
+      <button type="button" id="adminGoogleLoginBtn" class="btn btn-primary" style="width:100%; justify-content:center; padding:13px 18px; font-size:0.94rem; font-weight:800;">
+        Đăng nhập bằng Google
+      </button>
+
+      <div style="margin-top:18px; padding-top:16px; border-top:1px solid #E2E8F0;">
+        <a href="index.html" style="font-size:0.82rem; color:#0D6B53; font-weight:700; text-decoration:none;">
+          ← Quay lại trang chủ ThuysTalk
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="admin-page-layout" id="adminPageLayout" style="display:none;">
     <!-- ======================================================================
          LEFT SIDEBAR MENU (CỘT MENU BÊN CẠNH)
          ====================================================================== -->
@@ -59,11 +90,17 @@
           <p id="adminTopDesc">Mọi thay đổi được lưu tức thì và cập nhật thẳng ra trang chủ &amp; các trang chuyên mục.</p>
         </div>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <span id="adminCurrentEmailBadge" style="font-size:0.78rem; font-weight:700; color:#065F46; background:#ECFDF5; border:1px solid #A7F3D0; padding:6px 12px; border-radius:99px;">
+            Admin: Đã xác thực
+          </span>
           <a href="elearning.html" class="btn btn-outline btn-sm">Trang E-Learning</a>
           <a href="videos.html" class="btn btn-outline btn-sm">Trang Video</a>
           <a href="bai-viet.html" class="btn btn-outline btn-sm">Trang Bài Viết</a>
           <a href="tra-cuu.html" class="btn btn-jade btn-sm">Trang Tra Cứu AI Pháp Lý</a>
           <a href="index.html" class="btn btn-primary btn-sm">Trang Chủ</a>
+          <button type="button" id="adminLogoutBtn" class="btn btn-outline btn-sm" style="color:#B91C1C; border-color:#FECACA;">
+            Đăng xuất
+          </button>
         </div>
       </header>
 
