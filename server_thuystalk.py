@@ -34,6 +34,7 @@ from pathlib import Path
 
 PORT = 8099
 WEB_DIR = Path(__file__).resolve().parent
+STATIC_DIR = WEB_DIR / "public"
 PASSWORD_STORE_FILE = WEB_DIR / "backend" / "password_resets.json"
 
 
@@ -206,7 +207,11 @@ def parse_minitest_rows(rows):
 
 class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=str(WEB_DIR), **kwargs)
+        super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
+
+    def list_directory(self, path):
+        self.send_error(404, "Not Found")
+        return None
 
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -238,6 +243,26 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
                 },
             )
             return
+
+        raw_path = urllib.parse.unquote(parsed.path)
+        if "\x00" in raw_path or "\\" in raw_path:
+            self.send_error(404, "Not Found")
+            return
+        parts = [p for p in raw_path.split("/") if p]
+        if any(p.startswith(".") or p in ("..", "_headers") for p in parts):
+            self.send_error(404, "Not Found")
+            return
+        static_root = STATIC_DIR.resolve()
+        target = (static_root / "/".join(parts)).resolve() if parts else (static_root / "index.html")
+        try:
+            target.relative_to(static_root)
+        except ValueError:
+            self.send_error(404, "Not Found")
+            return
+        if target.is_dir() or not target.is_file():
+            self.send_error(404, "Not Found")
+            return
+
         super().do_GET()
 
     def do_POST(self):
