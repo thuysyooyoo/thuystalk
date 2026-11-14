@@ -318,6 +318,9 @@
 
       // Kích hoạt Real-Time bi-directional synchronization trên Firestore onSnapshot
       initFirestoreRealtimeSync();
+      if (state.adminMode && document.getElementById("adminSidebarNav")) {
+        initAdminProtectedListeners();
+      }
     } catch (err) {
       console.warn("hydrateAllFromFirestore notice:", err);
     }
@@ -447,21 +450,8 @@
       }
     });
 
-    // 5. Learners & Leads Real-time Sync (Admin Tab 06)
-    window.ThuysTalkFirebase.listenCollection("learners", () => {
-      if (document.getElementById("adminSidebarNav") && state.activeCmsTab === "leads") {
-        const reloadBtn = document.getElementById("reloadFirestoreLeadsBtn");
-        if (reloadBtn) reloadBtn.click();
-      }
-    });
-    window.ThuysTalkFirebase.listenCollection("leads", () => {
-      if (document.getElementById("adminSidebarNav") && state.activeCmsTab === "leads") {
-        const reloadBtn = document.getElementById("reloadFirestoreLeadsBtn");
-        if (reloadBtn) reloadBtn.click();
-      }
-    });
-
-    // 6. Cross-tab synchronization via local StorageEvent fallback
+    // 5. Cross-tab synchronization via local StorageEvent fallback
+    // (Protected learners & leads listeners are registered ONLY in initAdminProtectedListeners after Google Admin verification)
     window.addEventListener("storage", (e) => {
       if ([STORAGE_KEYS.ARTICLES, STORAGE_KEYS.VIDEOS, STORAGE_KEYS.COURSES, STORAGE_KEYS.MEDIA].includes(e.key)) {
         console.log("[STORAGE EVENT] Cross-tab update detected:", e.key);
@@ -5840,34 +5830,33 @@
       if (leadsStatus) leadsStatus.textContent = `Đã đồng bộ (${currentLeads.length} lượt tải/tư vấn)`;
     }
 
+    onAdminLeadsUpdated = (kind, list) => {
+      if (kind === "learners") {
+        currentLearners = list;
+      } else if (kind === "leads" && Array.isArray(list) && list.length > 0) {
+        currentLeads = list;
+      }
+      refreshTablesFromData();
+    };
+
     async function loadFirestoreData() {
       const learnersStatus = document.getElementById("firestoreLearnersStatus");
+      if (!state.adminMode || !window.ThuysTalkFirebase || !window.ThuysTalkFirebase.isCurrentUserAdmin()) {
+        return;
+      }
       try {
-        if (window.ThuysTalkFirebase) {
-          const [learners, leads] = await Promise.all([
-            window.ThuysTalkFirebase.fetchLearners(),
-            window.ThuysTalkFirebase.fetchLeads()
-          ]);
-          currentLearners = learners || [];
-          if (leads && leads.length > 0) {
-            currentLeads = leads;
-          }
-          refreshTablesFromData();
-
-          // Realtime Listeners for both collections
-          window.ThuysTalkFirebase.listenCollection("learners", (list) => {
-            if (Array.isArray(list)) {
-              currentLearners = list;
-              refreshTablesFromData();
-            }
-          });
-          window.ThuysTalkFirebase.listenCollection("leads", (list) => {
-            if (Array.isArray(list)) {
-              currentLeads = list;
-              refreshTablesFromData();
-            }
-          });
+        const [learners, leads] = await Promise.all([
+          window.ThuysTalkFirebase.fetchLearners(),
+          window.ThuysTalkFirebase.fetchLeads()
+        ]);
+        currentLearners = learners || [];
+        state.adminLearners = currentLearners;
+        if (leads && leads.length > 0) {
+          currentLeads = leads;
+          state.adminLeads = currentLeads;
         }
+        refreshTablesFromData();
+        initAdminProtectedListeners();
       } catch (err) {
         console.warn("loadFirestoreData notice:", err);
         if (learnersStatus) learnersStatus.textContent = "Hiển thị dữ liệu cục bộ.";
@@ -6012,6 +6001,54 @@
     reader.readAsDataURL(file);
   }
 
+  let isAdminProtectedListening = false;
+  let adminLearnersUnsub = null;
+  let adminLeadsUnsub = null;
+  let onAdminLeadsUpdated = null;
+
+  function stopAdminProtectedListeners() {
+    if (typeof adminLearnersUnsub === "function") {
+      try { adminLearnersUnsub(); } catch (e) {}
+    }
+    if (typeof adminLeadsUnsub === "function") {
+      try { adminLeadsUnsub(); } catch (e) {}
+    }
+    adminLearnersUnsub = null;
+    adminLeadsUnsub = null;
+    onAdminLeadsUpdated = null;
+    isAdminProtectedListening = false;
+  }
+
+  function initAdminProtectedListeners() {
+    if (
+      isAdminProtectedListening ||
+      !state.adminMode ||
+      !document.getElementById("adminSidebarNav") ||
+      !window.ThuysTalkFirebase ||
+      !window.ThuysTalkFirebase.isReady() ||
+      !window.ThuysTalkFirebase.isCurrentUserAdmin()
+    ) {
+      return;
+    }
+    isAdminProtectedListening = true;
+    adminLearnersUnsub = window.ThuysTalkFirebase.listenCollection("learners", (list) => {
+      if (Array.isArray(list)) {
+        state.adminLearners = list;
+        if (state.activeCmsTab === "leads" && typeof onAdminLeadsUpdated === "function") {
+          onAdminLeadsUpdated("learners", list);
+        }
+      }
+    });
+    adminLeadsUnsub = window.ThuysTalkFirebase.listenCollection("leads", (list) => {
+      if (Array.isArray(list)) {
+        state.adminLeads = list;
+        if (state.activeCmsTab === "leads" && typeof onAdminLeadsUpdated === "function") {
+          onAdminLeadsUpdated("leads", list);
+        }
+      }
+    });
+  }
+
   function initAdminAuthGate(requestedSlot = null) {
     const gateEl = document.getElementById("adminAuthGate");
     const layoutEl = document.getElementById("adminPageLayout");
@@ -6037,6 +6074,7 @@
     function showGate(statusText) {
       state.adminMode = false;
       adminCmsBooted = false;
+      stopAdminProtectedListeners();
       if (layoutEl) layoutEl.style.display = "none";
       if (gateEl) gateEl.style.display = "flex";
       if (studioBody) studioBody.innerHTML = "";
@@ -6058,6 +6096,7 @@
         adminCmsBooted = true;
         renderAdminStudioModal(requestedSlot || null);
         hydrateAllFromFirestore(true);
+        initAdminProtectedListeners();
       }
     }
 
