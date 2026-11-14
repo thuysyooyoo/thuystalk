@@ -205,45 +205,6 @@
         };
       } catch (authErr) {
         console.warn("Firebase Auth notice:", authErr.code, authErr.message);
-        // Bắt buộc: Mỗi email duy nhất 1 tài khoản, nếu trùng ném lỗi ngay
-        if (authErr.code === "auth/email-already-in-use" || (authErr.message && authErr.message.includes("email-already-in-use"))) {
-          throw authErr;
-        }
-
-        // If Auth is not yet toggled on in Firebase Console (e.g. CONFIGURATION_NOT_FOUND or operation-not-allowed)
-        if (
-          authErr.code === "auth/configuration-not-found" ||
-          authErr.code === "auth/operation-not-allowed" ||
-          authErr.code === "auth/admin-restricted-operation" ||
-          authErr.code === "auth/api-key-not-valid.-please-pass-a-valid-api-key."
-        ) {
-          // Graceful auto-registration in local state & Firestore leads so student is never blocked!
-          const localUid = "learner_" + Date.now();
-          if (db) {
-            try {
-              await safeFirestoreWrite(
-                db.collection("learners").doc(localUid).set({
-                  uid: localUid,
-                  name: name || "",
-                  email: email,
-                  phone: phone || "",
-                  emailVerified: true,
-                  createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                  source: "ThuysTalk Web Portal (Direct Registration)"
-                }, { merge: true }),
-                2000
-              );
-            } catch (e) {}
-          }
-          return {
-            uid: localUid,
-            email: email,
-            name: name,
-            emailVerified: true,
-            localMode: true,
-            notice: "Tài khoản đã được kích hoạt thành công trên hệ thống ThuysTalk!"
-          };
-        }
         throw authErr;
       }
     },
@@ -255,53 +216,41 @@
         throw new Error("Hệ thống xác thực chưa sẵn sàng.");
       }
 
-      try {
-        const userCred = await auth.signInWithEmailAndPassword(email, password);
-        const user = userCred.user;
+      const userCred = await auth.signInWithEmailAndPassword(email, password);
+      const user = userCred.user;
 
-        // BẮT BUỘC: Chưa kích hoạt qua email thì TUYỆT ĐỐI KHÔNG cho đăng nhập!
-        if (!user.emailVerified) {
-          await auth.signOut();
-          return {
-            uid: user.uid,
-            email: user.email,
-            name: user.displayName || email.split("@")[0],
-            emailVerified: false
-          };
-        }
-
-        if (db) {
-          try {
-            await safeFirestoreWrite(
-              db.collection("learners").doc(user.uid).set({ emailVerified: true }, { merge: true }),
-              1500
-            );
-          } catch (e) {}
-        }
-
+      // BẮT BUỘC: Chưa kích hoạt qua email thì TUYỆT ĐỐI KHÔNG cho đăng nhập!
+      if (!user.emailVerified) {
+        await auth.signOut();
         return {
           uid: user.uid,
           email: user.email,
           name: user.displayName || email.split("@")[0],
-          emailVerified: true
+          emailVerified: false
         };
-      } catch (loginErr) {
-        if (
-          loginErr.code === "auth/configuration-not-found" ||
-          loginErr.code === "auth/operation-not-allowed" ||
-          loginErr.code === "auth/api-key-not-valid.-please-pass-a-valid-api-key."
-        ) {
-          const savedName = localStorage.getItem("thuystalk_learner_name_v4") || email.split("@")[0];
-          return {
-            uid: "learner_local",
-            email: email,
-            name: savedName,
-            emailVerified: true,
-            localMode: true
-          };
-        }
-        throw loginErr;
       }
+
+      if (db) {
+        try {
+          await safeFirestoreWrite(
+            db.collection("learners").doc(user.uid).set({
+              uid: user.uid,
+              email: user.email,
+              name: user.displayName || localStorage.getItem("thuystalk_learner_name_v4") || email.split("@")[0],
+              emailVerified: true,
+              lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true }),
+            1500
+          );
+        } catch (e) {}
+      }
+
+      return {
+        uid: user.uid,
+        email: user.email,
+        name: user.displayName || email.split("@")[0],
+        emailVerified: true
+      };
     },
 
     // 3. RESEND VERIFICATION EMAIL
@@ -329,6 +278,12 @@
     getCurrentUser: function () {
       initFirebase();
       return auth ? auth.currentUser : null;
+    },
+    getIdToken: async function (forceRefresh = false) {
+      initFirebase();
+      const user = auth ? auth.currentUser : null;
+      if (!user) return null;
+      return await user.getIdToken(!!forceRefresh);
     },
     isAdminUser: function (user) {
       return isAdminUserObj(user);
@@ -408,19 +363,24 @@
     updateLearnerProfile: async function (profileData) {
       initFirebase();
       const user = auth ? auth.currentUser : null;
-      if (user && profileData.name) {
+      if (!user || !user.emailVerified) {
+        throw new Error("Vui lòng đăng nhập tài khoản đã xác thực để cập nhật hồ sơ.");
+      }
+      if (profileData.name) {
         try {
           await user.updateProfile({ displayName: profileData.name });
         } catch (e) {}
       }
-      if (db && profileData.email) {
+      if (db) {
         try {
-          const docId = user ? user.uid : profileData.email.toLowerCase().replace(/[^a-z0-9]/g, "_");
           await safeFirestoreWrite(
-            db.collection("learners").doc(docId).set({
+            db.collection("learners").doc(user.uid).set({
+              uid: user.uid,
+              email: user.email || profileData.email || "",
               name: profileData.name || "",
               phone: profileData.phone || "",
               company: profileData.company || "",
+              emailVerified: true,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true }),
             2500
@@ -446,12 +406,11 @@
     // 5d. SAVE & FETCH LEARNER PROGRESS (CLOUD SYNC)
     saveLearnerProgress: async function (email, progressData) {
       initFirebase();
-      if (!db || !email) return false;
+      const user = auth ? auth.currentUser : null;
+      if (!db || !user || !user.emailVerified) return false;
       try {
-        const user = auth ? auth.currentUser : null;
-        const docId = user ? user.uid : email.toLowerCase().replace(/[^a-z0-9]/g, "_");
         await safeFirestoreWrite(
-          db.collection("learners").doc(docId).set({
+          db.collection("learners").doc(user.uid).set({
             progress: progressData,
             lastStudiedAt: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true }),
@@ -466,11 +425,10 @@
 
     fetchLearnerProgress: async function (email) {
       initFirebase();
-      if (!db || !email) return null;
+      const user = auth ? auth.currentUser : null;
+      if (!db || !user || !user.emailVerified) return null;
       try {
-        const user = auth ? auth.currentUser : null;
-        const docId = user ? user.uid : email.toLowerCase().replace(/[^a-z0-9]/g, "_");
-        const doc = await db.collection("learners").doc(docId).get();
+        const doc = await db.collection("learners").doc(user.uid).get();
         if (doc.exists && doc.data().progress) {
           return doc.data().progress;
         }
