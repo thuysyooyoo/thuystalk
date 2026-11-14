@@ -8,10 +8,18 @@
 (function () {
   const STORAGE_KEY_FIREBASE = "thuystalk_firebase_custom_config";
 
+  // Authorized Admin Emails for CMS & Backend privileged actions (R1-02 / R7-03)
+  const ADMIN_EMAILS = ["thuystalk.official@gmail.com", "thuyn.bic@gmail.com"];
+
+  const DEFAULT_AUTH_DOMAIN =
+    typeof window !== "undefined" && window.location && window.location.hostname === "thuystalk.web.app"
+      ? "thuystalk.web.app"
+      : "thuystalk.firebaseapp.com";
+
   // Official Firebase Project Configuration for thuystalk (From Firebase Console)
   const OFFICIAL_FIREBASE_CONFIG = {
     apiKey: "AIzaSyA3PZ3oRrPzEJCVIvLF6sQpbY3OuFDaEw8",
-    authDomain: "thuystalk.firebaseapp.com",
+    authDomain: DEFAULT_AUTH_DOMAIN,
     projectId: "thuystalk",
     storageBucket: "thuystalk.firebasestorage.app",
     messagingSenderId: "767228711805",
@@ -23,11 +31,20 @@
   let storage = null;
   let auth = null;
   let isInitialized = false;
+  let persistenceConfigured = false;
+
+  function isAdminUserObj(user) {
+    if (!user || user.emailVerified !== true || !user.email) return false;
+    return ADMIN_EMAILS.includes(String(user.email).trim().toLowerCase());
+  }
 
   function getStoredConfig() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY_FIREBASE);
-      if (raw) return { ...OFFICIAL_FIREBASE_CONFIG, ...JSON.parse(raw) };
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return { ...OFFICIAL_FIREBASE_CONFIG, ...parsed, authDomain: DEFAULT_AUTH_DOMAIN };
+      }
     } catch (e) {
       // Ignore
     }
@@ -65,6 +82,12 @@
         const app = firebase.apps[0];
         if (typeof firebase.auth === "function") {
           auth = firebase.auth();
+          if (!persistenceConfigured && firebase.auth.Auth && firebase.auth.Auth.Persistence) {
+            persistenceConfigured = true;
+            auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch((err) => {
+              console.warn("Auth setPersistence LOCAL notice:", err && err.message ? err.message : err);
+            });
+          }
         }
         if (typeof firebase.firestore === "function") {
           db = firebase.firestore();
@@ -302,9 +325,83 @@
       return true;
     },
 
-    // 5. CURRENT LEARNER STATE
+    // 5. CURRENT LEARNER / AUTH STATE & ADMIN GOOGLE LOGIN (R1-02 / R4-03 / R7-03)
     getCurrentUser: function () {
+      initFirebase();
       return auth ? auth.currentUser : null;
+    },
+    isAdminUser: function (user) {
+      return isAdminUserObj(user);
+    },
+    isCurrentUserAdmin: function () {
+      initFirebase();
+      return isAdminUserObj(auth ? auth.currentUser : null);
+    },
+    onAuthStateChanged: function (callback) {
+      initFirebase();
+      if (typeof callback !== "function") return function () {};
+      if (!auth) {
+        setTimeout(() => callback(null), 0);
+        return function () {};
+      }
+      return auth.onAuthStateChanged(callback);
+    },
+    loginAdminWithGoogle: async function () {
+      initFirebase();
+      if (!auth || typeof firebase.auth.GoogleAuthProvider !== "function") {
+        throw new Error("Dịch vụ xác thực Google chưa sẵn sàng trên trình duyệt.");
+      }
+      if (firebase.auth.Auth && firebase.auth.Auth.Persistence) {
+        try {
+          await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+        } catch (e) {}
+      }
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      try {
+        const result = await auth.signInWithPopup(provider);
+        const user = result && result.user;
+        if (!isAdminUserObj(user)) {
+          const deniedEmail = user && user.email ? user.email : "Tài khoản này";
+          await auth.signOut();
+          const deniedErr = new Error(
+            `Tài khoản "${deniedEmail}" không có quyền Quản trị viên ThuysTalk.`
+          );
+          deniedErr.code = "auth/not-admin";
+          throw deniedErr;
+        }
+        return { user: user, email: user.email };
+      } catch (err) {
+        if (err && err.code === "auth/popup-blocked") {
+          await auth.signInWithRedirect(provider);
+          return { redirected: true };
+        }
+        throw err;
+      }
+    },
+    checkAdminRedirectResult: async function () {
+      initFirebase();
+      if (!auth) return null;
+      const res = await auth.getRedirectResult();
+      if (res && res.user) {
+        if (!isAdminUserObj(res.user)) {
+          const deniedEmail = res.user.email || "Tài khoản này";
+          await auth.signOut();
+          const deniedErr = new Error(
+            `Tài khoản "${deniedEmail}" không có quyền Quản trị viên ThuysTalk.`
+          );
+          deniedErr.code = "auth/not-admin";
+          throw deniedErr;
+        }
+        return res.user;
+      }
+      return null;
+    },
+    logoutAdmin: async function () {
+      initFirebase();
+      if (auth) {
+        await auth.signOut();
+      }
     },
 
     // 5b. UPDATE LEARNER PROFILE

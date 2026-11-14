@@ -2343,6 +2343,7 @@
   function openAdminStudio(highlightSlot = null) {
     const sidebarNav = document.getElementById("adminSidebarNav");
     if (sidebarNav) {
+      if (!state.adminMode) return;
       renderAdminStudioModal(highlightSlot);
       return;
     }
@@ -2352,6 +2353,7 @@
   }
 
   function renderAdminStudioModal(highlightSlot = null) {
+    if (!state.adminMode) return;
     const sidebarNav = document.getElementById("adminSidebarNav");
     const tabsBar = document.getElementById("adminCmsTabsBar");
     const body = document.getElementById("adminStudioBody");
@@ -5944,6 +5946,126 @@
     reader.readAsDataURL(file);
   }
 
+  function initAdminAuthGate(requestedSlot = null) {
+    const gateEl = document.getElementById("adminAuthGate");
+    const layoutEl = document.getElementById("adminPageLayout");
+    const statusEl = document.getElementById("adminAuthStatus");
+    const errorEl = document.getElementById("adminAuthError");
+    const loginBtn = document.getElementById("adminGoogleLoginBtn");
+    const logoutBtn = document.getElementById("adminLogoutBtn");
+    const emailBadge = document.getElementById("adminCurrentEmailBadge");
+    const studioBody = document.getElementById("adminStudioBody");
+
+    let adminCmsBooted = false;
+
+    function showGateError(msg) {
+      if (errorEl) {
+        errorEl.textContent = msg;
+        errorEl.style.display = "block";
+      }
+      if (statusEl) {
+        statusEl.textContent = "Chưa xác thực quyền Quản trị viên.";
+      }
+    }
+
+    function showGate(statusText) {
+      state.adminMode = false;
+      adminCmsBooted = false;
+      if (layoutEl) layoutEl.style.display = "none";
+      if (gateEl) gateEl.style.display = "flex";
+      if (studioBody) studioBody.innerHTML = "";
+      if (statusEl && statusText) statusEl.textContent = statusText;
+    }
+
+    function showAdminWorkspace(user) {
+      state.adminMode = true;
+      if (errorEl) {
+        errorEl.style.display = "none";
+        errorEl.textContent = "";
+      }
+      if (gateEl) gateEl.style.display = "none";
+      if (layoutEl) layoutEl.style.display = "";
+      if (emailBadge) {
+        emailBadge.textContent = "Admin: " + (user.email || "");
+      }
+      if (!adminCmsBooted) {
+        adminCmsBooted = true;
+        renderAdminStudioModal(requestedSlot || null);
+        hydrateAllFromFirestore(true);
+      }
+    }
+
+    if (!window.ThuysTalkFirebase || typeof window.ThuysTalkFirebase.onAuthStateChanged !== "function") {
+      showGate("Không thể khởi tạo dịch vụ xác thực.");
+      showGateError("Dịch vụ xác thực Firebase chưa được tải trên trang này.");
+      return;
+    }
+
+    if (loginBtn) {
+      loginBtn.addEventListener("click", async () => {
+        if (errorEl) {
+          errorEl.style.display = "none";
+          errorEl.textContent = "";
+        }
+        loginBtn.disabled = true;
+        loginBtn.textContent = "Đang mở cửa sổ đăng nhập Google...";
+        try {
+          await window.ThuysTalkFirebase.loginAdminWithGoogle();
+        } catch (err) {
+          let msg = (err && err.message) ? err.message : "Đăng nhập Google thất bại.";
+          if (err && err.code === "auth/popup-closed-by-user") {
+            msg = "Bạn đã đóng cửa sổ đăng nhập Google trước khi hoàn tất.";
+          } else if (err && err.code === "auth/unauthorized-domain") {
+            msg = "Tên miền hiện tại chưa được cấp phép trong Firebase Authorized Domains.";
+          } else if (err && err.code === "auth/operation-not-allowed") {
+            msg = "Đăng nhập Google chưa được bật trên Firebase Console (Authentication -> Sign-in method).";
+          }
+          showGateError(msg);
+        } finally {
+          loginBtn.disabled = false;
+          loginBtn.textContent = "Đăng nhập bằng Google";
+        }
+      });
+    }
+
+    if (logoutBtn) {
+      logoutBtn.addEventListener("click", async () => {
+        try {
+          await window.ThuysTalkFirebase.logoutAdmin();
+          if (errorEl) {
+            errorEl.style.display = "none";
+            errorEl.textContent = "";
+          }
+          showGate("Bạn đã đăng xuất khỏi Hệ thống Quản trị.");
+          showToast("Đã đăng xuất tài khoản Quản trị viên.");
+        } catch (err) {
+          showToast("Lỗi khi đăng xuất: " + ((err && err.message) || err));
+        }
+      });
+    }
+
+    if (typeof window.ThuysTalkFirebase.checkAdminRedirectResult === "function") {
+      window.ThuysTalkFirebase.checkAdminRedirectResult().catch((err) => {
+        if (err && err.message) showGateError(err.message);
+      });
+    }
+
+    window.ThuysTalkFirebase.onAuthStateChanged((user) => {
+      if (window.ThuysTalkFirebase.isAdminUser(user)) {
+        showAdminWorkspace(user);
+      } else if (user) {
+        const deniedEmail = user.email || "không xác định";
+        showGate("Truy cập bị từ chối.");
+        showGateError(
+          `Tài khoản "${deniedEmail}" không thuộc danh sách Quản trị viên ThuysTalk (hoặc chưa xác thực email). Hệ thống đã tự động đăng xuất.`
+        );
+        window.ThuysTalkFirebase.logoutAdmin().catch(() => {});
+      } else {
+        showGate("Vui lòng đăng nhập bằng tài khoản Google Quản trị viên để tiếp tục.");
+      }
+    });
+  }
+
   // ==========================================================================
   // INITIALIZE EVENT LISTENERS ON DOM READY (Supports both index.html & admin.html)
   // ==========================================================================
@@ -5979,13 +6101,12 @@
         }
       });
 
-    // If we are on the dedicated internal Admin Page (admin.html):
+    // If we are on the dedicated internal Admin Page (admin.html) — Fail-closed until Google Admin verified:
     if (document.getElementById("adminSidebarNav")) {
       const requestedTab = params.get("tab");
       const requestedSlot = params.get("slot");
       if (requestedTab) state.activeCmsTab = requestedTab;
-      renderAdminStudioModal(requestedSlot || null);
-      hydrateAllFromFirestore();
+      initAdminAuthGate(requestedSlot || null);
       return;
     }
 
