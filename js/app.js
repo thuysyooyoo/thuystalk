@@ -3649,40 +3649,20 @@
         forgotBtn.disabled = true;
 
         try {
-          let smtpDelivered = false;
           let fallbackSent = false;
           let errMsg = "";
 
-          // 1. Sinh mật khẩu ngẫu nhiên và gửi qua email (tuyệt đối không hiển thị mật khẩu lên màn hình)
-          try {
-            const resp = await fetch("http://localhost:8099/api/reset-password", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email: email })
-            });
-            if (resp.ok) {
-              const data = await resp.json();
-              smtpDelivered = !!(data && data.delivered);
-              if (!smtpDelivered && data && data.message) {
-                errMsg = data.message;
-              }
-            }
-          } catch (smtpErr) {
-            console.warn("Reset email SMTP notice:", smtpErr);
-          }
-
-          // 2. Fallback nếu dịch vụ email cục bộ chưa kết nối được
-          if (!smtpDelivered && window.ThuysTalkFirebase) {
+          if (window.ThuysTalkFirebase) {
             try {
               await window.ThuysTalkFirebase.sendPasswordReset(email);
               fallbackSent = true;
             } catch (fbErr) {
-              if (!errMsg) errMsg = fbErr && fbErr.message ? fbErr.message : "Không thể gửi email khôi phục.";
+              errMsg = fbErr && fbErr.message ? fbErr.message : "Không thể gửi email khôi phục.";
             }
           }
 
           noticeBox.style.display = "block";
-          if (smtpDelivered || fallbackSent) {
+          if (fallbackSent) {
             noticeBox.innerHTML = `
               <div style="background:#F0FDF4; border:1.5px solid #059669; border-radius:8px; padding:12px; margin-bottom:8px;">
                 <strong style="color:#065F46; font-size:0.9rem;">Đã Gửi Mật Khẩu Mới Qua Email!</strong><br />
