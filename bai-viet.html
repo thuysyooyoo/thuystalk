@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <title>Kho Bài Viết Chuyên Sâu & Case Study Hải Quan · ThuysTalk | Nguyễn Thị Ngọc Thúy</title>
+  <meta name="description" content="Kho bài viết chuyên sâu đăng toàn văn trên web của Nguyễn Thị Ngọc Thúy (ThuysTalk) — Phân tích công văn hải quan, Tình huống thực tế và Cẩm nang quản trị chuỗi cung ứng." />
+
+  <!-- Google Fonts: Plus Jakarta Sans (400;500;600;700;800;900) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="styles/main.css" />
+</head>
+<body data-page="articles">
+
+  <!-- Sticky Header -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="index.html" class="brand-logo">
+        <div class="brand-monogram">T<span>T</span></div>
+        <div class="brand-text">
+          <span class="brand-name">ThuysTalk</span>
+        </div>
+      </a>
+
+      <nav class="main-nav" aria-label="Main Navigation">
+        <a href="index.html" class="nav-link" id="navHome">Trang chủ</a>
+        <a href="index.html#chuyen-mon" class="nav-link" id="navExpertise">Chuyên môn</a>
+        <a href="index.html#ve-toi" class="nav-link" id="navAbout">Về tôi</a>
+        <a href="elearning.html" class="nav-link" id="navElearning">E-Learning</a>
+        <a href="videos.html" class="nav-link" id="navVideo">Video ThuyTalk</a>
+        <a href="bai-viet.html" class="nav-link active" id="navArticles">Bài viết</a>
+        <a href="tra-cuu.html" class="nav-link" id="navNotebook">Tra cứu Pháp lý &amp; Mã HS</a>
+        <a href="index.html#tu-van" class="nav-link" id="navConsult">Tư vấn 1-1</a>
+      </nav>
+
+      <div class="header-actions">
+        <div class="lang-switch" role="group" aria-label="Language Switcher">
+          <button type="button" class="lang-btn active" data-lang="vi">VI</button>
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+        </div>
+        <a href="index.html#tu-van" class="btn btn-primary btn-sm" id="headerCtaBtn">
+          Nhận tài liệu &amp; Tư vấn
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Subpage Hero -->
+  <section class="subpage-hero">
+    <div class="container">
+      <div class="subpage-breadcrumb">
+        <a href="index.html">Trang chủ ThuysTalk</a>
+        <span>/</span>
+        <span>Kho Bài Viết Chuyên Sâu &amp; Case Study Hải Quan</span>
+      </div>
+      <h1>Kho Bài Viết Chuyên Sâu, Phân Tích Công Văn &amp; Tình Huống Thực Tế</h1>
+      <p>
+        100% bài viết được xuất bản toàn văn ngay trên nền tảng ThuysTalk để bạn tra cứu dễ dàng căn cứ pháp lý, quy trình xử lý tình huống và tải biểu mẫu đính kèm.
+      </p>
+    </div>
+  </section>
+
+  <!-- Full Articles Section -->
+  <section class="articles-section" id="bai-viet">
+    <div class="container">
+      <div class="section-header-bar">
+        <div>
+          <span class="eyebrow" id="artEyebrow">BÀI VIẾT CHUYÊN SÂU · ĐĂNG TOÀN VĂN TRÊN WEB</span>
+          <h2 class="section-title" id="artTitle">Toàn Bộ Bài Phân Tích Pháp Lý, Case Study &amp; Hướng Dẫn Thực Hành</h2>
+          <p class="section-desc" id="artDesc"></p>
+        </div>
+        <div class="filter-tabs" id="articleFilterTabs"></div>
+      </div>
+
+      <div class="articles-grid" id="articlesGrid"></div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top">
+        <a href="index.html" class="brand-logo">
+          <div class="brand-monogram">T<span>T</span></div>
+          <div class="brand-text">
+            <span class="brand-name">ThuysTalk</span>
+          </div>
+        </a>
+        <div class="hero-socials" style="margin-top:0;"></div>
+        <div style="display:flex; gap:20px; flex-wrap:wrap; font-size:0.86rem; font-weight:700; color:var(--ink-600);">
+          <a href="index.html">Trang chủ</a>
+          <a href="elearning.html">Tài liệu &amp; Mini Test</a>
+          <a href="videos.html">Video ThuyTalk</a>
+          <a href="bai-viet.html" style="color:var(--orange-600);">Bài viết</a>
+          <a href="tra-cuu.html">Tra cứu Pháp lý &amp; Mã HS</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Bản quyền 2026 Nguyễn Thị Ngọc Thúy (ThuysTalk).</span>
+        <span>Kho Bài Viết Chuyên Sâu &amp; Case Study Hải Quan</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Modals -->
+  <div class="modal-backdrop" id="classroomModal" role="dialog" aria-modal="true">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 id="classroomModalTitle">Học viện E-Learning ThuysTalk</h3>
+        <button type="button" class="modal-close" data-close-modal="classroomModal" aria-label="Close">Đóng</button>
+      </div>
+      <div class="modal-body" id="classroomModalBody"></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="articleModal" role="dialog" aria-modal="true">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3 id="articleModalTitle">Bài viết chuyên sâu ThuysTalk</h3>
+        <button type="button" class="modal-close" data-close-modal="articleModal" aria-label="Close">Đóng</button>
+      </div>
+      <div class="modal-body" id="articleModalBody"></div>
+    </div>
+  </div>
+
+  <div class="toast-notification" id="toastNotification" role="status" aria-live="polite"></div>
+
+  <!-- Firebase App, Auth, Firestore & Storage SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <script src="js/firebase-config.js?v=20261112b"></script>
+  <script src="js/data.js?v=20261112b"></script>
+  <script src="js/app.js?v=20261112b"></script>
+</body>
+</html>
