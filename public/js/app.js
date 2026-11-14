@@ -3524,7 +3524,7 @@
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
                   <button type="button" id="authForgotPassBtn" style="border:none; background:transparent; font-size:0.8rem; color:#047857; font-weight:700; cursor:pointer; padding:0; text-decoration:underline;">
-                    Quên mật khẩu? (Nhận mật khẩu mới)
+                    Quên mật khẩu?
                   </button>
                   <button type="button" id="authResendVerifyBtn" style="border:none; background:transparent; font-size:0.8rem; color:#EA580C; font-weight:700; cursor:pointer; padding:0; display:none;">
                     Gửi lại email kích hoạt
@@ -3714,64 +3714,43 @@
         }
       });
 
-      // Password reset & Send auto-generated random temporary password via SMTP
+      // Password reset with neutral non-enumerating feedback
       authDiv.querySelector("#authForgotPassBtn").addEventListener("click", async () => {
         const email = authDiv.querySelector("#authLogEmail").value.trim();
         if (!email || !email.includes("@")) {
-          showToast("Vui lòng nhập Email ở ô trên để nhận mật khẩu mới qua hộp thư.");
+          showToast("Vui lòng nhập địa chỉ Email ở ô trên để nhận liên kết đặt lại mật khẩu.");
           authDiv.querySelector("#authLogEmail").focus();
           return;
         }
 
         const forgotBtn = authDiv.querySelector("#authForgotPassBtn");
         const noticeBox = authDiv.querySelector("#authLoginNoticeBox");
-        forgotBtn.textContent = "Đang tạo & gửi mật khẩu mới...";
+        forgotBtn.textContent = "Đang gửi yêu cầu...";
         forgotBtn.disabled = true;
 
         try {
-          let fallbackSent = false;
-          let errMsg = "";
-
-          if (window.ThuysTalkFirebase) {
+          if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.sendPasswordReset === "function") {
             try {
               await window.ThuysTalkFirebase.sendPasswordReset(email);
-              fallbackSent = true;
             } catch (fbErr) {
-              errMsg = fbErr && fbErr.message ? fbErr.message : "Không thể gửi email khôi phục.";
+              if (fbErr && fbErr.code !== "auth/user-not-found") {
+                console.warn("Password reset request warning:", fbErr.code || fbErr);
+              }
             }
           }
 
           noticeBox.style.display = "block";
-          if (fallbackSent) {
-            noticeBox.innerHTML = `
-              <div style="background:#F0FDF4; border:1.5px solid #059669; border-radius:8px; padding:12px; margin-bottom:8px;">
-                <strong style="color:#065F46; font-size:0.9rem;">Đã Gửi Mật Khẩu Mới Qua Email!</strong><br />
-                <span style="color:#047857; font-size:0.84rem; line-height:1.5; display:block; margin-top:4px;">
-                  Hệ thống đã tự động tạo mật khẩu tạm thời mới và gửi về hộp thư: <strong>${escapeHtml(email)}</strong>.<br />
-                  Vui lòng kiểm tra hộp thư (kể cả mục Thư rác / Spam), nhập mật khẩu vừa nhận để đăng nhập và đổi sang mật khẩu riêng tại mục <strong>Hồ sơ cá nhân</strong>.
-                </span>
-              </div>
-            `;
-            const passInput = authDiv.querySelector("#authLogPass");
-            if (passInput) {
-              passInput.value = "";
-              passInput.focus();
-            }
-            showToast(`Đã gửi mật khẩu mới tới hộp thư ${email}. Vui lòng kiểm tra email!`);
-          } else {
-            noticeBox.innerHTML = `
-              <div style="background:#FEF2F2; border:1.5px solid #F87171; border-radius:8px; padding:12px; margin-bottom:8px;">
-                <strong style="color:#DC2626; font-size:0.9rem;">Chưa thể gửi email khôi phục mật khẩu</strong><br />
-                <span style="color:#7F1D1D; font-size:0.84rem; line-height:1.5; display:block; margin-top:4px;">
-                  ${escapeHtml(errMsg || "Vui lòng kiểm tra kết nối và thử lại sau ít phút.")}
-                </span>
-              </div>
-            `;
-          }
-        } catch (e) {
-          alert("Lỗi khôi phục mật khẩu: " + e.message);
+          noticeBox.innerHTML = `
+            <div style="background:#F0FDF4; border:1.5px solid #059669; border-radius:8px; padding:12px; margin-bottom:8px;">
+              <strong style="color:#065F46; font-size:0.9rem;">Yêu cầu đặt lại mật khẩu đã được ghi nhận</strong><br />
+              <span style="color:#047857; font-size:0.84rem; line-height:1.5; display:block; margin-top:4px;">
+                Nếu địa chỉ <strong>${escapeHtml(email)}</strong> đã đăng ký trên hệ thống ThuysTalk, một liên kết đặt lại mật khẩu sẽ được gửi tới hộp thư của bạn trong vài phút (vui lòng kiểm tra cả mục Thư rác / Spam).
+              </span>
+            </div>
+          `;
+          showToast("Yêu cầu đặt lại mật khẩu đã được ghi nhận.");
         } finally {
-          forgotBtn.textContent = "Quên mật khẩu? (Nhận mật khẩu mới)";
+          forgotBtn.textContent = "Quên mật khẩu?";
           forgotBtn.disabled = false;
         }
       });

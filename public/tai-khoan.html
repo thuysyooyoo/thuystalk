@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Quản Lý Tài Khoản Học Viên · ThuysTalk | Nguyễn Thị Ngọc Thúy</title>
+  <meta name="description" content="Trang xác thực địa chỉ email và đặt lại mật khẩu tài khoản chính thức của hệ thống học tập & tra cứu ThuysTalk." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="styles/main.css?v=20261112b" />
+  <style>
+    .tk-main {
+      min-height: calc(100vh - 200px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 16px;
+      background: linear-gradient(135deg, #f0fdf4 0%, #f8fafc 55%, #fff7ed 100%);
+    }
+    .tk-card {
+      width: 100%;
+      max-width: 490px;
+      background: #ffffff;
+      border-radius: 18px;
+      border: 1.5px solid #cbd5e1;
+      box-shadow: 0 22px 55px rgba(4, 47, 46, 0.12);
+      overflow: hidden;
+    }
+    .tk-card-head {
+      padding: 22px 26px 18px;
+      background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
+      color: #ffffff;
+    }
+    .tk-card-head h1 {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #ffffff;
+    }
+    .tk-card-head p {
+      margin: 6px 0 0;
+      font-size: 0.85rem;
+      color: #d1fae5;
+      line-height: 1.5;
+    }
+    .tk-card-body {
+      padding: 24px 26px 28px;
+    }
+    .tk-status-box {
+      padding: 16px 18px;
+      border-radius: 12px;
+      margin-bottom: 18px;
+      line-height: 1.55;
+      font-size: 0.9rem;
+    }
+    .tk-status-loading {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      color: #334155;
+      text-align: center;
+    }
+    .tk-status-success {
+      background: #ecfdf5;
+      border: 1.5px solid #10b981;
+      color: #065f46;
+    }
+    .tk-status-error {
+      background: #fef2f2;
+      border: 1.5px solid #ef4444;
+      color: #991b1b;
+    }
+    .tk-email-pill {
+      display: inline-block;
+      margin-bottom: 16px;
+      padding: 6px 12px;
+      background: #ecfdf5;
+      color: #065f46;
+      border: 1px solid #a7f3d0;
+      border-radius: 99px;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+    .tk-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+  </style>
+</head>
+<body data-page="account-action">
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="index.html" class="brand-logo">
+        <div class="brand-monogram">T<span>T</span></div>
+        <div class="brand-text">
+          <span class="brand-name">ThuysTalk</span>
+        </div>
+      </a>
+
+      <nav class="main-nav" aria-label="Main Navigation">
+        <a href="index.html" class="nav-link">Trang chủ</a>
+        <a href="elearning.html" class="nav-link">E-Learning</a>
+        <a href="videos.html" class="nav-link">Video ThuyTalk</a>
+        <a href="bai-viet.html" class="nav-link">Bài viết</a>
+        <a href="tra-cuu.html" class="nav-link">Tra cứu Pháp lý &amp; Mã HS</a>
+      </nav>
+
+      <div class="header-actions">
+        <a href="index.html" class="btn btn-outline btn-sm">Về trang chủ</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="tk-main">
+    <section class="tk-card" aria-live="polite">
+      <div class="tk-card-head">
+        <h1 id="tkHeaderTitle">Xác Thực Tài Khoản ThuysTalk</h1>
+        <p id="tkHeaderDesc">Hệ thống đang kiểm tra liên kết bảo mật dành riêng cho bạn.</p>
+      </div>
+
+      <div class="tk-card-body">
+        <!-- Loading Panel -->
+        <div id="tkLoadingPane" class="tk-status-box tk-status-loading">
+          Đang kiểm tra liên kết bảo mật, vui lòng chờ trong giây lát...
+        </div>
+
+        <!-- Reset Password Panel -->
+        <div id="tkResetPane" style="display:none;">
+          <div id="tkResetEmailPill" class="tk-email-pill"></div>
+          <div id="tkResetInlineError" class="tk-status-box tk-status-error" style="display:none;"></div>
+
+          <form id="tkResetForm">
+            <div class="form-group">
+              <label for="tkNewPassword">Mật khẩu mới * (tối thiểu 6 ký tự)</label>
+              <input
+                type="password"
+                id="tkNewPassword"
+                class="form-control"
+                required
+                minlength="6"
+                autocomplete="new-password"
+                placeholder="Nhập mật khẩu mới của bạn"
+              />
+            </div>
+            <div class="form-group">
+              <label for="tkConfirmPassword">Xác nhận lại mật khẩu mới *</label>
+              <input
+                type="password"
+                id="tkConfirmPassword"
+                class="form-control"
+                required
+                minlength="6"
+                autocomplete="new-password"
+                placeholder="Nhập lại mật khẩu vừa đặt"
+              />
+            </div>
+            <div class="tk-actions">
+              <button type="submit" class="btn btn-primary" id="tkResetSubmitBtn" style="flex:1;">
+                Lưu Mật Khẩu Mới
+              </button>
+              <a href="index.html" class="btn btn-outline">Hủy</a>
+            </div>
+          </form>
+        </div>
+
+        <!-- Result Panel (Success / Error) -->
+        <div id="tkResultPane" style="display:none;">
+          <div id="tkResultBox" class="tk-status-box">
+            <strong id="tkResultHeading" style="display:block; margin-bottom:6px; font-size:0.98rem;"></strong>
+            <p id="tkResultMessage" style="margin:0;"></p>
+          </div>
+          <div class="tk-actions">
+            <a id="tkPrimaryLink" href="elearning.html" class="btn btn-primary">Tiếp tục vào E-Learning</a>
+            <a href="index.html" class="btn btn-outline">Về Trang Chủ ThuysTalk</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-bottom" style="padding:20px 0;">
+        <p>&copy; 2026 ThuysTalk &mdash; Nguyễn Thị Ngọc Thúy. Thực chiến Hải quan, Thuế &amp; Logistics.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-config.js?v=20261112b"></script>
+  <script>
+    (function () {
+      "use strict";
+
+      const loadingPane = document.getElementById("tkLoadingPane");
+      const resetPane = document.getElementById("tkResetPane");
+      const resultPane = document.getElementById("tkResultPane");
+      const resultBox = document.getElementById("tkResultBox");
+      const resultHeading = document.getElementById("tkResultHeading");
+      const resultMessage = document.getElementById("tkResultMessage");
+      const headerTitle = document.getElementById("tkHeaderTitle");
+      const headerDesc = document.getElementById("tkHeaderDesc");
+      const primaryLink = document.getElementById("tkPrimaryLink");
+      const resetEmailPill = document.getElementById("tkResetEmailPill");
+      const resetInlineError = document.getElementById("tkResetInlineError");
+      const resetForm = document.getElementById("tkResetForm");
+      const newPassInp = document.getElementById("tkNewPassword");
+      const confirmPassInp = document.getElementById("tkConfirmPassword");
+      const resetSubmitBtn = document.getElementById("tkResetSubmitBtn");
+
+      function getSafeContinueHref(rawUrl) {
+        if (!rawUrl) return "";
+        try {
+          const parsed = new URL(rawUrl, window.location.origin);
+          if (parsed.origin === window.location.origin) {
+            return parsed.pathname + parsed.search + parsed.hash;
+          }
+        } catch (err) {
+          return "";
+        }
+        return "";
+      }
+
+      function mapActionError(err) {
+        const code = err && err.code ? String(err.code) : "";
+        if (code === "auth/expired-action-code") {
+          return "Liên kết bảo mật đã hết hạn sử dụng. Vui lòng quay lại trang web và gửi yêu cầu mới.";
+        }
+        if (code === "auth/invalid-action-code") {
+          return "Liên kết này không hợp lệ hoặc đã được sử dụng trước đó. Vui lòng kiểm tra lại hộp thư hoặc yêu cầu liên kết mới.";
+        }
+        if (code === "auth/user-disabled") {
+          return "Tài khoản này hiện đang bị tạm khóa. Vui lòng liên hệ quản trị viên ThuysTalk để được hỗ trợ.";
+        }
+        if (code === "auth/user-not-found") {
+          return "Không tìm thấy tài khoản tương ứng với liên kết này.";
+        }
+        if (code === "auth/weak-password") {
+          return "Mật khẩu mới chưa đủ mạnh. Vui lòng chọn mật khẩu dài tối thiểu 6 ký tự.";
+        }
+        if (code === "auth/network-request-failed") {
+          return "Không thể kết nối tới máy chủ xác thực. Vui lòng kiểm tra đường truyền mạng và thử lại.";
+        }
+        return "Liên kết xác thực hoặc đặt lại mật khẩu không hợp lệ, đã hết hạn hoặc đã được sử dụng. Vui lòng gửi yêu cầu mới.";
+      }
+
+      function showResult(isSuccess, title, heading, message) {
+        loadingPane.style.display = "none";
+        resetPane.style.display = "none";
+        resultPane.style.display = "block";
+        headerTitle.textContent = title;
+        headerDesc.textContent = isSuccess
+          ? "Thao tác tài khoản trên hệ thống ThuysTalk đã hoàn tất."
+          : "Không thể hoàn tất yêu cầu với liên kết hiện tại.";
+        resultBox.className = "tk-status-box " + (isSuccess ? "tk-status-success" : "tk-status-error");
+        resultHeading.textContent = heading;
+        resultMessage.textContent = message;
+      }
+
+      async function handleAccountAction() {
+        const params = new URLSearchParams(window.location.search);
+        const mode = String(params.get("mode") || "").trim();
+        const oobCode = String(params.get("oobCode") || "").trim();
+        const safeContinue = getSafeContinueHref(params.get("continueUrl"));
+        if (safeContinue) {
+          primaryLink.href = safeContinue;
+        }
+
+        if (!mode || !oobCode) {
+          showResult(
+            false,
+            "Liên Kết Không Hợp Lệ",
+            "Thiếu mã xác thực hoặc liên kết đã cũ",
+            "Liên kết xác thực hoặc đặt lại mật khẩu không hợp lệ, đã hết hạn hoặc thiếu tham số cần thiết. Vui lòng quay lại ThuysTalk để thực hiện lại."
+          );
+          return;
+        }
+
+        try {
+          if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.init === "function") {
+            window.ThuysTalkFirebase.init();
+          }
+          if (!window.firebase || typeof window.firebase.auth !== "function") {
+            showResult(
+              false,
+              "Dịch Vụ Tạm Thời Chưa Sẵn Sàng",
+              "Không thể kết nối dịch vụ xác thực tài khoản",
+              "Vui lòng tải lại trang hoặc kiểm tra kết nối mạng rồi thử lại sau ít phút."
+            );
+            return;
+          }
+
+          const auth = window.firebase.auth();
+
+          if (mode === "verifyEmail") {
+            headerTitle.textContent = "Đang Kích Hoạt Email Tài Khoản";
+            headerDesc.textContent = "Hệ thống ThuysTalk đang hoàn tất bước xác thực hộp thư của bạn.";
+            await auth.applyActionCode(oobCode);
+            if (auth.currentUser) {
+              try {
+                await auth.currentUser.reload();
+                await auth.currentUser.getIdToken(true);
+              } catch (reloadErr) {
+                /* bỏ qua lỗi làm mới phiên nếu người dùng mở liên kết ở trình duyệt khác */
+              }
+            }
+            showResult(
+              true,
+              "Xác Thực Email Thành Công",
+              "Tài khoản ThuysTalk của bạn đã được kích hoạt!",
+              "Bạn đã xác thực địa chỉ email thành công. Giờ đây bạn có thể đăng nhập để truy cập đầy đủ kho tài liệu E-Learning, Mini Test và Trợ lý Tra cứu Pháp lý & Mã HS."
+            );
+            return;
+          }
+
+          if (mode === "resetPassword") {
+            headerTitle.textContent = "Đặt Lại Mật Khẩu Mới";
+            headerDesc.textContent = "Vui lòng nhập mật khẩu mới cho tài khoản ThuysTalk của bạn.";
+            const accountEmail = await auth.verifyPasswordResetCode(oobCode);
+
+            loadingPane.style.display = "none";
+            resetPane.style.display = "block";
+            resetEmailPill.textContent = "Tài khoản: " + accountEmail;
+            newPassInp.focus();
+
+            resetForm.addEventListener("submit", async (ev) => {
+              ev.preventDefault();
+              resetInlineError.style.display = "none";
+              const p1 = newPassInp.value;
+              const p2 = confirmPassInp.value;
+              if (!p1 || p1.length < 6) {
+                resetInlineError.textContent = "Mật khẩu mới cần dài tối thiểu 6 ký tự.";
+                resetInlineError.style.display = "block";
+                newPassInp.focus();
+                return;
+              }
+              if (p1 !== p2) {
+                resetInlineError.textContent = "Mật khẩu xác nhận không khớp. Vui lòng kiểm tra lại.";
+                resetInlineError.style.display = "block";
+                confirmPassInp.focus();
+                return;
+              }
+
+              resetSubmitBtn.disabled = true;
+              resetSubmitBtn.textContent = "Đang cập nhật mật khẩu...";
+
+              try {
+                await auth.confirmPasswordReset(oobCode, p1);
+                showResult(
+                  true,
+                  "Đặt Lại Mật Khẩu Thành Công",
+                  "Mật khẩu mới của bạn đã được lưu!",
+                  "Bạn có thể sử dụng mật khẩu mới ngay bây giờ để đăng nhập vào hệ thống học tập & tra cứu ThuysTalk."
+                );
+              } catch (confirmErr) {
+                if (confirmErr && confirmErr.code === "auth/weak-password") {
+                  resetInlineError.textContent = mapActionError(confirmErr);
+                  resetInlineError.style.display = "block";
+                  resetSubmitBtn.disabled = false;
+                  resetSubmitBtn.textContent = "Lưu Mật Khẩu Mới";
+                } else {
+                  showResult(
+                    false,
+                    "Không Thể Đặt Lại Mật Khẩu",
+                    "Liên kết đặt lại mật khẩu đã hết hạn hoặc không hợp lệ",
+                    mapActionError(confirmErr)
+                  );
+                }
+              }
+            });
+            return;
+          }
+
+          showResult(
+            false,
+            "Liên Kết Không Hỗ Trợ",
+            "Yêu cầu tài khoản không được nhận diện",
+            "Liên kết này không khớp với thao tác xác thực email hay đặt lại mật khẩu trên ThuysTalk. Vui lòng quay lại trang chủ để thực hiện lại."
+          );
+        } catch (err) {
+          showResult(
+            false,
+            "Không Thể Xử Lý Liên Kết",
+            "Liên kết không hợp lệ hoặc đã hết hạn",
+            mapActionError(err)
+          );
+        }
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", handleAccountAction);
+      } else {
+        handleAccountAction();
+      }
+    })();
+  </script>
+</body>
+</html>
