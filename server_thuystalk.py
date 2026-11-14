@@ -37,6 +37,60 @@ WEB_DIR = Path(__file__).resolve().parent
 PASSWORD_STORE_FILE = WEB_DIR / "backend" / "password_resets.json"
 
 
+def _load_dotenv(dotenv_path: Path):
+    """Nạp biến môi trường từ file .env cục bộ (không ghi đè biến đã có)."""
+    if not dotenv_path.exists():
+        return
+    try:
+        lines = dotenv_path.read_text(encoding="utf-8").splitlines()
+    except Exception as exc:
+        print(f"[ENV] Khong the doc file .env: {exc}", flush=True)
+        return
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        if line.startswith("export "):
+            line = line[7:].strip()
+        key, val = line.split("=", 1)
+        key = key.strip()
+        val = val.strip()
+        if len(val) >= 2 and ((val[0] == '"' and val[-1] == '"') or (val[0] == "'" and val[-1] == "'")):
+            val = val[1:-1]
+        if key and not os.environ.get(key):
+            os.environ[key] = val
+
+
+_load_dotenv(WEB_DIR / ".env")
+
+
+def _get_smtp_config() -> dict:
+    """Trả về cấu hình SMTP tập trung duy nhất đọc từ biến môi trường / .env."""
+    port_raw = os.environ.get("THUYSTALK_SMTP_PORT", "465").strip()
+    try:
+        port = int(port_raw) if port_raw else 465
+    except ValueError:
+        port = 465
+    return {
+        "host": os.environ.get("THUYSTALK_SMTP_HOST", "smtp.gmail.com").strip() or "smtp.gmail.com",
+        "port": port,
+        "sender": os.environ.get("THUYSTALK_SMTP_SENDER", "thuystalk.official@gmail.com").strip() or "thuystalk.official@gmail.com",
+        "app_password": os.environ.get("THUYSTALK_SMTP_APP_PASSWORD", "").strip(),
+    }
+
+
+def _open_smtp_connection(timeout: int = 12):
+    """Mở kết nối SMTP_SSL từ cấu hình .env; ném RuntimeError rõ ràng nếu chưa cấu hình."""
+    cfg = _get_smtp_config()
+    if not cfg["app_password"]:
+        raise RuntimeError(
+            "Tính năng gửi email đang tắt (chưa cấu hình THUYSTALK_SMTP_APP_PASSWORD trong .env)."
+        )
+    server = smtplib.SMTP_SSL(cfg["host"], cfg["port"], timeout=timeout)
+    server.login(cfg["sender"], cfg["app_password"])
+    return server, cfg["sender"]
+
+
 def generate_random_password(length=10):
     """Sinh mật khẩu ngẫu nhiên an toàn bằng secrets, tránh ký tự dễ nhầm lẫn (0/O, 1/l/I)."""
     upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -222,14 +276,16 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json(400, {"ok": False, "error": "Địa chỉ Email không hợp lệ."})
                 return
 
-            # REAL SMTP TRANSMISSION VIA GMAIL (thuystalk.official@gmail.com)
+            # REAL SMTP TRANSMISSION VIA GMAIL
             smtp_success = False
             smtp_notice = ""
             try:
-                smtp_server = "smtp.gmail.com"
-                smtp_port = 465
-                sender_email = "thuystalk.official@gmail.com"
-                sender_pwd = "oyszmggjwhtphsij"
+                smtp_cfg = _get_smtp_config()
+                if not smtp_cfg["app_password"]:
+                    raise RuntimeError(
+                        "Tính năng gửi email đang tắt (chưa cấu hình THUYSTALK_SMTP_APP_PASSWORD trong .env)."
+                    )
+                sender_email = smtp_cfg["sender"]
 
                 msg = MIMEMultipart("alternative")
                 msg["From"] = f"ThuysTalk Official <{sender_email}>"
@@ -305,8 +361,7 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
                 part.add_header("Content-Disposition", f'attachment; filename="{safe_fname}"')
                 msg.attach(part)
 
-                server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=12)
-                server.login(sender_email, sender_pwd)
+                server, _ = _open_smtp_connection(timeout=12)
                 server.send_message(msg)
                 server.quit()
                 smtp_success = True
@@ -367,10 +422,15 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json(400, {"ok": False, "error": "Danh sách người nhận không hợp lệ hoặc đang trống."})
                 return
 
-            smtp_server = "smtp.gmail.com"
-            smtp_port = 465
-            sender_email = "thuystalk.official@gmail.com"
-            sender_pwd = "oyszmggjwhtphsij"
+            smtp_cfg = _get_smtp_config()
+            if not smtp_cfg["app_password"]:
+                print("[SMTP TAT] Bo qua gui email hang loat vi chua cau hinh THUYSTALK_SMTP_APP_PASSWORD trong .env.", flush=True)
+                self._send_json(503, {
+                    "ok": False,
+                    "emailDisabled": True,
+                    "error": "Tính năng gửi email hàng loạt đang tắt (chưa cấu hình THUYSTALK_SMTP_APP_PASSWORD trong .env)."
+                })
+                return
 
             sent_count = 0
             failed_emails = []
@@ -393,8 +453,7 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             clean_preview = content_preview[:1200] + ("..." if len(content_preview) > 1200 else "")
 
             # Open single SSL connection to Gmail SMTP for efficiency
-            server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=25)
-            server.login(sender_email, sender_pwd)
+            server, sender_email = _open_smtp_connection(timeout=25)
 
             for rec in recipients:
                 rec_email = str(rec.get("email", "")).strip().lower()
@@ -519,10 +578,12 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             smtp_notice = ""
 
             try:
-                smtp_server = "smtp.gmail.com"
-                smtp_port = 465
-                sender_email = "thuystalk.official@gmail.com"
-                sender_pwd = "oysz mggj whtp hsij"
+                smtp_cfg = _get_smtp_config()
+                if not smtp_cfg["app_password"]:
+                    raise RuntimeError(
+                        "Tính năng gửi email đang tắt (chưa cấu hình THUYSTALK_SMTP_APP_PASSWORD trong .env)."
+                    )
+                sender_email = smtp_cfg["sender"]
 
                 msg = MIMEMultipart("alternative")
                 msg["Subject"] = f"[ThuysTalk] Mật Khẩu Mới Khôi Phục Tài Khoản ({email})"
@@ -581,8 +642,7 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
 </html>"""
                 msg.attach(MIMEText(html_content, "html", "utf-8"))
 
-                server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=12)
-                server.login(sender_email, sender_pwd)
+                server, _ = _open_smtp_connection(timeout=12)
                 server.send_message(msg)
                 server.quit()
                 smtp_success = True
@@ -771,8 +831,15 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     os.chdir(WEB_DIR)
     url = f"http://localhost:{PORT}"
+    smtp_cfg = _get_smtp_config()
+    smtp_status_line = (
+        f"  - Trang thai Email  : BAT (sender: {smtp_cfg['sender']})"
+        if smtp_cfg["app_password"]
+        else "  - Trang thai Email  : TAT (chua cau hinh THUYSTALK_SMTP_APP_PASSWORD trong .env)"
+    )
     print("=" * 72, flush=True)
     print(f"THUYSTALK WEB & KNOWLEDGE API DANG CHAY TAI: {url}", flush=True)
+    print(smtp_status_line, flush=True)
     print(f"  - Trang chu         : {url}/index.html", flush=True)
     print(f"  - Trang E-Learning  : {url}/elearning.html", flush=True)
     print(f"  - Trang Video       : {url}/videos.html", flush=True)
