@@ -477,6 +477,122 @@
       .replace(/'/g, "&#039;");
   }
 
+  function normalizeUrlForCheck(raw) {
+    return String(raw || "")
+      .replace(/[\u0000-\u001f\u007f]/g, "")
+      .trim();
+  }
+
+  function isAllowedMediaSrc(raw) {
+    const val = normalizeUrlForCheck(raw);
+    if (!val) return false;
+    if (/^https:\/\//i.test(val)) return true;
+    if (/^\/?assets\/[a-zA-Z0-9._\-\/]+$/.test(val) && !val.includes("..")) return true;
+    if (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/i.test(val)) return true;
+    return false;
+  }
+
+  function sanitizeSafeMediaUrl(raw, fallback = "") {
+    const val = normalizeUrlForCheck(raw);
+    return isAllowedMediaSrc(val) ? val : fallback;
+  }
+
+  function sanitizeSafeHref(raw, allowMailto = true) {
+    const val = normalizeUrlForCheck(raw);
+    if (!val) return "";
+    const noWs = val.replace(/\s+/g, "");
+    if (noWs.startsWith("#")) return val;
+    if (/^https?:\/\//i.test(noWs)) return val;
+    if (allowMailto && /^mailto:/i.test(noWs)) return val;
+    if (!noWs.startsWith("//") && !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(noWs)) {
+      return val;
+    }
+    return "";
+  }
+
+  let __domPurifyHooksBound = false;
+
+  function ensureDomPurifyHooks() {
+    if (__domPurifyHooksBound || typeof window === "undefined" || !window.DOMPurify) return;
+    window.DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+      if (!node || !node.tagName) return;
+      const tag = node.tagName.toUpperCase();
+
+      if (node.attributes) {
+        for (let i = node.attributes.length - 1; i >= 0; i--) {
+          const attrName = node.attributes[i].name;
+          if (/^on/i.test(attrName)) {
+            node.removeAttribute(attrName);
+          }
+        }
+      }
+
+      if (node.hasAttribute("href")) {
+        const safeHref = sanitizeSafeHref(node.getAttribute("href"), true);
+        if (safeHref) {
+          node.setAttribute("href", safeHref);
+        } else {
+          node.removeAttribute("href");
+        }
+      }
+
+      if (node.hasAttribute("target")) {
+        const tgt = String(node.getAttribute("target") || "").trim().toLowerCase();
+        if (tgt === "_blank") {
+          const existingRel = String(node.getAttribute("rel") || "")
+            .split(/\s+/)
+            .filter(Boolean);
+          if (!existingRel.includes("noopener")) existingRel.push("noopener");
+          if (!existingRel.includes("noreferrer")) existingRel.push("noreferrer");
+          node.setAttribute("rel", existingRel.join(" "));
+        } else if (tgt !== "_self") {
+          node.removeAttribute("target");
+        }
+      }
+
+      if (node.hasAttribute("src")) {
+        if (tag === "IMG" || tag === "VIDEO" || tag === "SOURCE") {
+          const srcVal = normalizeUrlForCheck(node.getAttribute("src"));
+          if (isAllowedMediaSrc(srcVal)) {
+            node.setAttribute("src", srcVal);
+          } else {
+            node.removeAttribute("src");
+          }
+        } else {
+          node.removeAttribute("src");
+        }
+      }
+
+      if (node.hasAttribute("data-media-id")) {
+        const mediaId = String(node.getAttribute("data-media-id") || "").trim();
+        if (tag !== "IMG" || !/^[A-Za-z0-9_-]{10,40}$/.test(mediaId)) {
+          node.removeAttribute("data-media-id");
+        }
+      }
+    });
+    __domPurifyHooksBound = true;
+  }
+
+  function sanitizeRichHtml(dirtyHtml) {
+    const raw = String(dirtyHtml || "");
+    if (!raw.trim()) return "";
+    if (typeof window !== "undefined" && window.DOMPurify && typeof window.DOMPurify.sanitize === "function") {
+      ensureDomPurifyHooks();
+      return window.DOMPurify.sanitize(raw, {
+        FORBID_TAGS: ["script", "iframe", "object", "embed", "svg", "math", "form", "input", "textarea", "style"],
+        FORBID_ATTR: [
+          "onerror", "onload", "onclick", "onmouseover", "onmouseout", "onmouseenter",
+          "onmouseleave", "onfocus", "onblur", "onchange", "onsubmit", "onkeydown",
+          "onkeyup", "onkeypress", "formaction"
+        ],
+        ADD_TAGS: ["video", "source", "figure", "figcaption"],
+        ADD_ATTR: ["target", "rel", "controls", "playsinline", "preload", "data-media-id"],
+        ALLOW_UNKNOWN_PROTOCOLS: false
+      });
+    }
+    return `<p>${escapeHtml(raw)}</p>`;
+  }
+
   function showToast(msg) {
     const el = document.getElementById("toastNotification");
     if (!el) return;
@@ -491,13 +607,20 @@
   function getPhotoStyle(slotKey) {
     const m = state.media[slotKey] || window.THUYSTALK_DEFAULT_MEDIA[slotKey];
     if (!m) return "";
-    const scale = (m.scale || 100) / 100;
-    return `object-position: ${m.posX ?? 50}% ${m.posY ?? 20}%; transform: scale(${scale});`;
+    const posX = Number.isFinite(Number(m.posX)) ? Number(m.posX) : 50;
+    const posY = Number.isFinite(Number(m.posY)) ? Number(m.posY) : 20;
+    const scaleNum = Number.isFinite(Number(m.scale)) ? Number(m.scale) : 100;
+    const scale = scaleNum / 100;
+    return `object-position: ${posX}% ${posY}%; transform: scale(${scale});`;
   }
 
   function getPhotoUrl(slotKey) {
     const m = state.media[slotKey] || window.THUYSTALK_DEFAULT_MEDIA[slotKey];
-    return m ? m.url : "";
+    return m ? sanitizeSafeMediaUrl(m.url, "") : "";
+  }
+
+  function isValidYoutubeId(id) {
+    return /^[A-Za-z0-9_-]{11}$/.test(String(id || "").trim());
   }
 
   // Extract 11-char YouTube Video ID and full embed src from ANY input:
@@ -508,32 +631,37 @@
   function extractYoutubeId(input) {
     const s = String(input || "").trim();
     if (!s) return "";
-    if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
+    if (isValidYoutubeId(s)) return s;
     const iframeSrcMatch = s.match(/src=["']([^"']+)["']/i);
     const target = iframeSrcMatch ? iframeSrcMatch[1] : s;
     const m = target.match(
-      /(?:youtube(?:-nocookie)?\.com\/(?:watch\?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+      /(?:youtube(?:-nocookie)?\.com\/(?:watch\?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})(?:[?&#/]|$)/
     );
-    return m ? m[1] : "";
+    return m && isValidYoutubeId(m[1]) ? m[1] : "";
   }
 
   function buildYoutubeEmbedSrc(videoObjOrRaw) {
     if (!videoObjOrRaw) return "";
+    if (
+      typeof videoObjOrRaw === "object" &&
+      videoObjOrRaw.youtubeEmbedId &&
+      !isValidYoutubeId(videoObjOrRaw.youtubeEmbedId)
+    ) {
+      return "";
+    }
     const raw =
       typeof videoObjOrRaw === "string"
         ? videoObjOrRaw
         : videoObjOrRaw.youtubeEmbedSrc || videoObjOrRaw.youtubeUrl || videoObjOrRaw.youtubeEmbedId || "";
     const s = String(raw || "").trim();
-    // If user pasted <iframe ... src="https://www.youtube.com/embed/..." ...>, preserve the exact src!
-    const iframeSrcMatch = s.match(/src=["'](https:\/\/www\.youtube(?:-nocookie)?\.com\/embed\/[^"']+)["']/i);
-    if (iframeSrcMatch) return iframeSrcMatch[1];
-    if (/^https:\/\/www\.youtube(?:-nocookie)?\.com\/embed\//i.test(s)) return s;
     const ytId = extractYoutubeId(s);
-    if (!ytId) return "";
-    const siMatch = s.match(/[?&]si=([a-zA-Z0-9_-]+)/);
+    if (!isValidYoutubeId(ytId)) return "";
+    const isNoCookie = /youtube-nocookie\.com\/embed\//i.test(s);
+    const host = isNoCookie ? "https://www.youtube-nocookie.com" : "https://www.youtube.com";
+    const siMatch = s.match(/[?&]si=([a-zA-Z0-9_-]{1,64})(?:[&#"'\s]|$)/);
     return siMatch
-      ? `https://www.youtube.com/embed/${ytId}?si=${siMatch[1]}`
-      : `https://www.youtube.com/embed/${ytId}`;
+      ? `${host}/embed/${ytId}?si=${siMatch[1]}`
+      : `${host}/embed/${ytId}`;
   }
 
   // ==========================================================================
@@ -584,9 +712,11 @@
       .map((item) => {
         const platform = String(item.platform || "website").toLowerCase();
         const label = escapeHtml(item.label || (SOCIAL_PLATFORM_META[platform] ? SOCIAL_PLATFORM_META[platform].name : "Link"));
-        const safeUrl = escapeHtml(item.url);
-        const isMail = safeUrl.startsWith("mailto:");
-        return `<a href="${safeUrl}" ${isMail ? "" : 'target="_blank" rel="noopener"'} class="social-pill" data-platform="${escapeHtml(platform)}" title="${label}" aria-label="${label}">${getSocialIconSvg(platform)}</a>`;
+        const rawSafeUrl = sanitizeSafeHref(item.url, true);
+        if (!rawSafeUrl) return "";
+        const safeUrl = escapeHtml(rawSafeUrl);
+        const isMail = rawSafeUrl.startsWith("mailto:");
+        return `<a href="${safeUrl}" ${isMail ? "" : 'target="_blank" rel="noopener noreferrer"'} class="social-pill" data-platform="${escapeHtml(platform)}" title="${label}" aria-label="${label}">${getSocialIconSvg(platform)}</a>`;
       })
       .join("");
 
@@ -809,8 +939,8 @@
 
     grid.innerHTML = displayedCourses
       .map((c) => {
-        const pct = getCourseProgress(c);
-        const photoUrl = c.customCover || getPhotoUrl(c.photoSlot || "aboutSpeaker");
+        const pct = Number(getCourseProgress(c)) || 0;
+        const photoUrl = sanitizeSafeMediaUrl(c.customCover || getPhotoUrl(c.photoSlot || "aboutSpeaker"), "assets/images/about-speaker.webp");
         const photoStyle = c.customCover ? "" : getPhotoStyle(c.photoSlot || "aboutSpeaker");
         const titleText = typeof c.title === "object" ? c.title[state.lang] || c.title.vi : c.title;
         const descText = typeof c.desc === "object" ? c.desc[state.lang] || c.desc.vi : c.desc;
@@ -821,11 +951,11 @@
         return `
         <article class="course-card">
           <div class="course-thumb editable-photo-wrap">
-            <img src="${photoUrl}" alt="${escapeHtml(titleText)}" style="${photoStyle}" />
+            <img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(titleText)}" style="${photoStyle}" />
             <span class="course-badge-top">${escapeHtml(badgeText)}</span>
             ${
               c.photoSlot
-                ? `<button type="button" class="photo-change-trigger" data-slot="${c.photoSlot}">
+                ? `<button type="button" class="photo-change-trigger" data-slot="${escapeHtml(c.photoSlot)}">
                     ${state.lang === "vi" ? "Đổi ảnh" : "Change Photo"}
                    </button>`
                 : ""
@@ -846,10 +976,10 @@
               </div>
             </div>
             <div class="course-actions">
-              <button type="button" class="btn btn-primary btn-sm open-course-btn" data-course="${c.id}">
+              <button type="button" class="btn btn-primary btn-sm open-course-btn" data-course="${escapeHtml(c.id)}">
                 ${t.elearning.btnStartCourse}
               </button>
-              <button type="button" class="btn btn-outline-orange btn-sm send-kit-btn" data-course="${c.id}">
+              <button type="button" class="btn btn-outline-orange btn-sm send-kit-btn" data-course="${escapeHtml(c.id)}">
                 ${t.elearning.btnSendMaterial}
               </button>
             </div>
@@ -938,7 +1068,7 @@
         const doneTag = state.completedLessons[l.id] ? "[Đã học] " : "";
         return `
         <button type="button" class="filter-tab ${idx === state.activeLessonIndex ? "active" : ""}" data-lidx="${idx}">
-          ${doneTag}${state.lang === "vi" ? "Bài" : "Lesson"} ${idx + 1} (${l.duration || "10:00"})
+          ${doneTag}${state.lang === "vi" ? "Bài" : "Lesson"} ${idx + 1} (${escapeHtml(l.duration || "10:00")})
         </button>`;
       })
       .join("");
@@ -1002,7 +1132,7 @@
         <h2>${escapeHtml(lTitle)}</h2>
         <p style="color:var(--jade-700); font-weight:700;">${escapeHtml(lSummary)}</p>
         <hr style="border:none; border-top:1px solid var(--ink-200); margin:16px 0;" />
-        ${lContent}
+        ${sanitizeRichHtml(lContent)}
       </div>
       ${exerciseHtml}
       ${quizHtml}
@@ -1221,35 +1351,44 @@
 
     const stageEl = document.getElementById("featuredVideoStage");
     if (stageEl && activeVid) {
-      const ytId = extractYoutubeId(activeVid.youtubeEmbedId || activeVid.youtubeEmbedSrc || activeVid.youtubeUrl);
-      const embedSrc = buildYoutubeEmbedSrc(activeVid);
+      const rawYtId = extractYoutubeId(activeVid.youtubeEmbedId || activeVid.youtubeEmbedSrc || activeVid.youtubeUrl);
+      const ytId =
+        (!activeVid.youtubeEmbedId || isValidYoutubeId(activeVid.youtubeEmbedId)) && isValidYoutubeId(rawYtId)
+          ? rawYtId
+          : "";
+      const embedSrc = ytId ? buildYoutubeEmbedSrc(activeVid) : "";
       const vTitle = typeof activeVid.title === "object" ? activeVid.title[state.lang] || activeVid.title.vi : activeVid.title;
       const vDesc = typeof activeVid.desc === "object" ? activeVid.desc[state.lang] || activeVid.desc.vi : activeVid.desc;
       const vCmLabel = getVideoCategoryLabel(activeVid.cm, activeVid.cmLabel, state.lang);
       const thumbUrl = ytId
         ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`
-        : getPhotoUrl(activeVid.thumbSlot || "aboutSpeaker");
+        : sanitizeSafeMediaUrl(getPhotoUrl(activeVid.thumbSlot || "aboutSpeaker"), "assets/images/about-speaker.webp");
       const thumbStyle = ytId ? "" : getPhotoStyle(activeVid.thumbSlot || "aboutSpeaker");
+      const safeWatchHref = escapeHtml(
+        ytId
+          ? `https://www.youtube.com/watch?v=${ytId}`
+          : sanitizeSafeHref(activeVid.youtubeUrl, false) || "https://www.youtube.com/@thuystalk"
+      );
 
       const isFileProtocol = window.location.protocol === "file:";
       const playerMediaHtml = embedSrc
         ? isFileProtocol
           ? `
-            <img src="${thumbUrl}" alt="${escapeHtml(vTitle)}" style="width:100%;height:100%;object-fit:cover;opacity:0.55;" />
+            <img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(vTitle)}" style="width:100%;height:100%;object-fit:cover;opacity:0.55;" />
             <div class="video-play-overlay" style="background:rgba(4,40,32,0.78); padding:24px; text-align:center;">
               <a href="http://localhost:8099/index.html#video" class="play-btn-pill" style="text-decoration:none;">
                 Mở qua http://localhost:8099 để phát Video YouTube trực tiếp (Tránh lỗi 153 của trình duyệt khi mở file://)
               </a>
-              <a href="https://www.youtube.com/watch?v=${ytId}" target="_blank" rel="noopener noreferrer" style="color:#FFF; font-size:0.84rem; font-weight:700; text-decoration:underline; margin-top:6px;">
+              <a href="https://www.youtube.com/watch?v=${escapeHtml(ytId)}" target="_blank" rel="noopener noreferrer" style="color:#FFF; font-size:0.84rem; font-weight:700; text-decoration:underline; margin-top:6px;">
                 Hoặc mở xem ngay trên YouTube (@thuystalk)
               </a>
             </div>`
-          : `<iframe width="560" height="315" src="${embedSrc}" title="${escapeHtml(vTitle)}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`
+          : `<iframe width="560" height="315" src="${escapeHtml(embedSrc)}" title="${escapeHtml(vTitle)}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`
         : `
-          <img src="${thumbUrl}" alt="${escapeHtml(vTitle)}" style="${thumbStyle}" />
+          <img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(vTitle)}" style="${thumbStyle}" />
           ${
             activeVid.thumbSlot
-              ? `<button type="button" class="photo-change-trigger" data-slot="${activeVid.thumbSlot}">
+              ? `<button type="button" class="photo-change-trigger" data-slot="${escapeHtml(activeVid.thumbSlot)}">
                   ${state.lang === "vi" ? "Đổi ảnh" : "Change Photo"}
                  </button>`
               : ""
@@ -1259,7 +1398,7 @@
               ${state.lang === "vi" ? "Xem kịch bản & Nội dung video" : "Open Video Script & Notes"}
             </button>
             <span style="font-size:0.78rem; font-weight:700; background:rgba(6,61,49,0.88); padding:5px 14px; border-radius:99px; border:1px solid var(--orange-400);">
-              ${escapeHtml(vCmLabel)} · ${activeVid.duration || "08:00"}
+              ${escapeHtml(vCmLabel)} · ${escapeHtml(activeVid.duration || "08:00")}
             </span>
           </div>`;
 
@@ -1269,7 +1408,7 @@
         </div>
         <div class="featured-video-info">
           <span style="color:var(--orange-400); font-size:0.76rem; font-weight:800; letter-spacing:0.08em;">
-            @THUYSTALK OFFICIAL SERIES · ${activeVid.date || "11/2026"}
+            @THUYSTALK OFFICIAL SERIES · ${escapeHtml(activeVid.date || "11/2026")}
           </span>
           <h3>${escapeHtml(vTitle)}</h3>
           <p>${escapeHtml(vDesc)}</p>
@@ -1277,7 +1416,7 @@
             <button type="button" class="btn btn-primary btn-sm" id="readFullScriptBtn">
               ${t.video.btnReadScript}
             </button>
-            <a href="${activeVid.youtubeUrl || "https://www.youtube.com/@thuystalk"}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="background:rgba(255,255,255,0.1); color:#FFF; border-color:rgba(255,255,255,0.25);">
+            <a href="${safeWatchHref}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="background:rgba(255,255,255,0.1); color:#FFF; border-color:rgba(255,255,255,0.25);">
               ${t.video.btnYoutubeChannel}
             </a>
           </div>
@@ -1294,23 +1433,27 @@
       const playlistItems = isHomePage() ? filtered.slice(0, 3) : filtered;
       listEl.innerHTML = playlistItems
         .map((v) => {
-          const ytId = extractYoutubeId(v.youtubeEmbedId || v.youtubeUrl);
+          const rawItemYtId = extractYoutubeId(v.youtubeEmbedId || v.youtubeEmbedSrc || v.youtubeUrl);
+          const ytId =
+            (!v.youtubeEmbedId || isValidYoutubeId(v.youtubeEmbedId)) && isValidYoutubeId(rawItemYtId)
+              ? rawItemYtId
+              : "";
           const tUrl = ytId
             ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`
-            : getPhotoUrl(v.thumbSlot || "aboutSpeaker");
+            : sanitizeSafeMediaUrl(getPhotoUrl(v.thumbSlot || "aboutSpeaker"), "assets/images/about-speaker.webp");
           const tStyle = ytId ? "" : getPhotoStyle(v.thumbSlot || "aboutSpeaker");
           const vTitle = typeof v.title === "object" ? v.title[state.lang] || v.title.vi : v.title;
           const vCmLabel = getVideoCategoryLabel(v.cm, v.cmLabel, state.lang);
           return `
-          <div class="video-list-item ${activeVid && v.id === activeVid.id ? "active" : ""}" data-vid="${v.id}">
+          <div class="video-list-item ${activeVid && v.id === activeVid.id ? "active" : ""}" data-vid="${escapeHtml(v.id)}">
             <div class="video-list-thumb">
-              <img src="${tUrl}" alt="${escapeHtml(vTitle)}" style="${tStyle}" />
-              <span class="dur">${v.duration || "08:00"}</span>
+              <img src="${escapeHtml(tUrl)}" alt="${escapeHtml(vTitle)}" style="${tStyle}" />
+              <span class="dur">${escapeHtml(v.duration || "08:00")}</span>
             </div>
             <div class="video-list-meta">
               <span class="cm-tag">${escapeHtml(vCmLabel)}</span>
               <h4>${escapeHtml(vTitle)}</h4>
-              <span>${v.date || "11/2026"} · YouTube @thuystalk</span>
+              <span>${escapeHtml(v.date || "11/2026")} · YouTube @thuystalk</span>
             </div>
           </div>`;
         })
@@ -1339,9 +1482,9 @@
     document.getElementById("articleModalBody").innerHTML = `
       <div class="reader-content">
         <h2>${escapeHtml(vTitle)}</h2>
-        <p style="color:var(--jade-700); font-weight:700;">Thời lượng: ${video.duration || "08:00"} · Ngày đăng: ${video.date || "11/2026"}</p>
+        <p style="color:var(--jade-700); font-weight:700;">Thời lượng: ${escapeHtml(video.duration || "08:00")} · Ngày đăng: ${escapeHtml(video.date || "11/2026")}</p>
         <hr style="border:none; border-top:1px solid var(--ink-200); margin:16px 0;" />
-        ${vScript}
+        ${sanitizeRichHtml(vScript)}
       </div>
       <div class="material-lead-box" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
         <div>
@@ -1470,7 +1613,7 @@
 
     grid.innerHTML = displayedArticles
       .map((a) => {
-        const pUrl = a.customImg || getPhotoUrl(a.photoSlot || "heroPortrait");
+        const pUrl = sanitizeSafeMediaUrl(a.customImg || getPhotoUrl(a.photoSlot || "heroPortrait"), "assets/images/hero-portrait.webp");
         const pStyle = a.customImg ? "" : getPhotoStyle(a.photoSlot || "heroPortrait");
         const aTitle = typeof a.title === "object" ? a.title[state.lang] || a.title.vi : a.title;
         const aExcerpt = typeof a.excerpt === "object" ? a.excerpt[state.lang] || a.excerpt.vi : a.excerpt;
@@ -1480,25 +1623,25 @@
         return `
         <article class="article-card">
           <div class="article-thumb editable-photo-wrap">
-            <img src="${pUrl}" alt="${escapeHtml(aTitle)}" style="${pStyle}" />
+            <img src="${escapeHtml(pUrl)}" alt="${escapeHtml(aTitle)}" style="${pStyle}" />
             <span class="article-pillar-badge">${escapeHtml(aPillar)}</span>
             ${
               a.photoSlot && !a.customImg
-                ? `<button type="button" class="photo-change-trigger" data-slot="${a.photoSlot}">
+                ? `<button type="button" class="photo-change-trigger" data-slot="${escapeHtml(a.photoSlot)}">
                     ${state.lang === "vi" ? "Đổi ảnh" : "Change Photo"}
                    </button>`
                 : ""
             }
           </div>
           <div class="article-body">
-            <div class="article-date">${a.date} · ${escapeHtml(aRead)}</div>
+            <div class="article-date">${escapeHtml(a.date || "")} · ${escapeHtml(aRead)}</div>
             <h3 class="article-title">${escapeHtml(aTitle)}</h3>
             <p class="article-excerpt">${escapeHtml(aExcerpt)}</p>
             <div class="article-footer">
-              <button type="button" class="article-read-btn" data-artid="${a.id}">
+              <button type="button" class="article-read-btn" data-artid="${escapeHtml(a.id)}">
                 ${t.articles.readFull}
               </button>
-              <span class="article-read-pill" data-artid="${a.id}">${state.lang === "vi" ? "Mở bài" : "Open"}</span>
+              <span class="article-read-pill" data-artid="${escapeHtml(a.id)}">${state.lang === "vi" ? "Mở bài" : "Open"}</span>
             </div>
           </div>
         </article>`;
@@ -1521,15 +1664,15 @@
     const aRead = typeof art.readTime === "object" ? art.readTime[state.lang] || art.readTime.vi : art.readTime || "5 phút đọc";
     const aBody = typeof art.body === "object" ? art.body[state.lang] || art.body.vi : art.body;
 
-    document.getElementById("articleModalTitle").textContent = aPillar + " · " + art.date;
+    document.getElementById("articleModalTitle").textContent = aPillar + " · " + (art.date || "");
     document.getElementById("articleModalBody").innerHTML = `
       <div class="reader-content">
         <h2>${escapeHtml(aTitle)}</h2>
         <p style="color:var(--ink-500); font-size:0.85rem; font-weight:700;">
-          Tác giả: Nguyễn Thị Ngọc Thúy · Ngày đăng: ${art.date} · ${escapeHtml(aRead)}
+          Tác giả: Nguyễn Thị Ngọc Thúy · Ngày đăng: ${escapeHtml(art.date || "")} · ${escapeHtml(aRead)}
         </p>
         <hr style="border:none; border-top:1px solid var(--ink-200); margin:16px 0;" />
-        ${aBody}
+        ${sanitizeRichHtml(aBody)}
       </div>
       <div class="material-lead-box" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;">
         <div>
@@ -2633,7 +2776,7 @@
     const s = String(rawText || "").trim();
     if (!s) return "";
     if (/<(p|h2|h3|h4|ul|ol|div|figure|img|video|blockquote|table)\b/i.test(s)) {
-      return s;
+      return sanitizeRichHtml(s);
     }
     return s
       .split(/\n+/)
@@ -2655,7 +2798,7 @@
         preview.innerHTML = `<span style="color:var(--ink-400); font-size:0.82rem;">Xem trước bài giảng (HTML &amp; Hình ảnh / Video minh họa sẽ hiển thị trực tiếp tại đây)...</span>`;
         return;
       }
-      preview.innerHTML = `<div class="reader-content">${formatRawOrHtmlContent(val)}</div>`;
+      preview.innerHTML = `<div class="reader-content">${sanitizeRichHtml(formatRawOrHtmlContent(val))}</div>`;
     }
 
     textarea.addEventListener("input", updatePreview);
@@ -3141,7 +3284,8 @@
           if (!/<[a-z][\s\S]*>/i.test(text)) {
             text = text.split(/\n+/).map((line) => `<p>${escapeHtml(line)}</p>`).join("");
           }
-          canvas.innerHTML = canvas.innerHTML ? canvas.innerHTML + "<br />" + text : text;
+          const safeHtml = sanitizeRichHtml(text);
+          canvas.innerHTML = canvas.innerHTML ? sanitizeRichHtml(canvas.innerHTML) + "<br />" + safeHtml : safeHtml;
           saveSelection();
           updateStats();
           showToast(`Đã nạp nội dung từ tệp "${file.name}" vào trình soạn thảo!`);
@@ -3152,9 +3296,9 @@
     }
 
     return {
-      getHtml: () => canvas.innerHTML.trim(),
+      getHtml: () => sanitizeRichHtml(canvas.innerHTML.trim()),
       setHtml: (val) => {
-        canvas.innerHTML = val || "";
+        canvas.innerHTML = sanitizeRichHtml(val || "");
         updateStats();
       },
       clear: () => {
@@ -4225,9 +4369,9 @@
           <td style="font-weight:700;">${escapeHtml(titleVi)}</td>
           <td>${escapeHtml(a.date)}</td>
           <td style="white-space:nowrap;">
-            <button type="button" class="btn btn-outline btn-xs" data-edit-art="${a.id}" style="margin-right:6px; padding:4px 8px; font-size:0.75rem;">Sửa</button>
-            <button type="button" class="btn btn-jade btn-xs" data-bulk-email-art="${a.id}" style="margin-right:6px; padding:4px 8px; font-size:0.75rem; background:#047857; color:#fff;" title="Gửi tài liệu bài viết này qua email tới tất cả người dùng & khách hàng đã đăng ký">Gửi email hàng loạt</button>
-            <button type="button" class="btn btn-danger btn-xs" data-del-art="${a.id}" style="padding:4px 8px; font-size:0.75rem;">Xóa</button>
+            <button type="button" class="btn btn-outline btn-xs" data-edit-art="${escapeHtml(a.id)}" style="margin-right:6px; padding:4px 8px; font-size:0.75rem;">Sửa</button>
+            <button type="button" class="btn btn-jade btn-xs" data-bulk-email-art="${escapeHtml(a.id)}" style="margin-right:6px; padding:4px 8px; font-size:0.75rem; background:#047857; color:#fff;" title="Gửi tài liệu bài viết này qua email tới tất cả người dùng & khách hàng đã đăng ký">Gửi email hàng loạt</button>
+            <button type="button" class="btn btn-danger btn-xs" data-del-art="${escapeHtml(a.id)}" style="padding:4px 8px; font-size:0.75rem;">Xóa</button>
           </td>
         </tr>`;
       })
@@ -4576,7 +4720,11 @@
       .map((v, idx) => {
         const vTitle = typeof v.title === "object" ? v.title.vi : v.title;
         const vCatDisplay = getVideoCategoryLabel(v.cm, v.cmLabel, "vi");
-        const ytId = extractYoutubeId(v.youtubeEmbedId || v.youtubeEmbedSrc || v.youtubeUrl);
+        const rawYtId = extractYoutubeId(v.youtubeEmbedId || v.youtubeEmbedSrc || v.youtubeUrl);
+        const ytId =
+          (!v.youtubeEmbedId || isValidYoutubeId(v.youtubeEmbedId)) && isValidYoutubeId(rawYtId)
+            ? rawYtId
+            : "";
         return `
         <tr>
           <td>${idx + 1}</td>
@@ -4584,12 +4732,12 @@
           <td style="font-weight:700;">${escapeHtml(vTitle)}</td>
           <td>${
             ytId
-              ? `<span style="color:var(--jade-700);font-weight:800;">Đã nhúng YouTube (ID: ${ytId})</span>`
+              ? `<span style="color:var(--jade-700);font-weight:800;">Đã nhúng YouTube (ID: ${escapeHtml(ytId)})</span>`
               : "Kịch bản Studio"
           }</td>
           <td style="white-space:nowrap;">
-            <button type="button" class="btn btn-outline btn-xs" data-edit-vid="${v.id}" style="margin-right:6px; padding:4px 8px; font-size:0.75rem;">Sửa</button>
-            <button type="button" class="btn btn-danger btn-xs" data-del-vid="${v.id}" style="padding:4px 8px; font-size:0.75rem;">Xóa</button>
+            <button type="button" class="btn btn-outline btn-xs" data-edit-vid="${escapeHtml(v.id)}" style="margin-right:6px; padding:4px 8px; font-size:0.75rem;">Sửa</button>
+            <button type="button" class="btn btn-danger btn-xs" data-del-vid="${escapeHtml(v.id)}" style="padding:4px 8px; font-size:0.75rem;">Xóa</button>
           </td>
         </tr>`;
       })
@@ -4802,9 +4950,9 @@
     urlInp.addEventListener("input", () => {
       const val = urlInp.value.trim();
       const ytId = extractYoutubeId(val);
-      const embedSrc = buildYoutubeEmbedSrc(val);
+      const embedSrc = ytId ? buildYoutubeEmbedSrc(val) : "";
       if (ytId && embedSrc) {
-        previewBox.innerHTML = `<iframe width="100%" height="100%" src="${embedSrc}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen style="position:absolute; inset:0; width:100%; height:100%; border:0;"></iframe>`;
+        previewBox.innerHTML = `<iframe width="100%" height="100%" src="${escapeHtml(embedSrc)}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen style="position:absolute; inset:0; width:100%; height:100%; border:0;"></iframe>`;
         parseHint.textContent = `Đã nhận diện thành công mã Video YouTube: ${ytId}`;
       } else {
         parseHint.textContent = "Hãy dán thẻ <iframe ...> hoặc đường link YouTube hợp lệ.";
@@ -4819,9 +4967,10 @@
         if (!target) return;
         editingVidId = target.id;
 
-        const embedCode = target.youtubeEmbedSrc
-          ? `<iframe width="560" height="315" src="${target.youtubeEmbedSrc}" title="YouTube video player" frameborder="0" allowfullscreen></iframe>`
-          : (target.youtubeUrl || "");
+        const safeEmbedSrc = buildYoutubeEmbedSrc(target);
+        const embedCode = safeEmbedSrc
+          ? `<iframe width="560" height="315" src="${escapeHtml(safeEmbedSrc)}" title="YouTube video player" frameborder="0" allowfullscreen></iframe>`
+          : (sanitizeSafeHref(target.youtubeUrl, false) || "");
         document.getElementById("cmsVidUrl").value = embedCode;
         document.getElementById("cmsVidTitle").value = typeof target.title === "object" ? target.title.vi : target.title;
         document.getElementById("cmsVidCm").value = target.cm || "CM3";
@@ -4884,7 +5033,9 @@
           vid.cm = cm;
           vid.cmLabel = resolvedCmLabel;
           vid.duration = duration;
-          vid.youtubeUrl = ytId ? `https://www.youtube.com/watch?v=${ytId}` : rawInput;
+          vid.youtubeUrl = ytId
+            ? `https://www.youtube.com/watch?v=${ytId}`
+            : sanitizeSafeHref(rawInput, false) || "https://www.youtube.com/@thuystalk";
           vid.youtubeEmbedId = ytId;
           vid.youtubeEmbedSrc = embedSrc;
           vid.title = { vi: title, en: title };
@@ -4907,7 +5058,9 @@
           duration,
           date: new Date().toLocaleDateString("vi-VN"),
           thumbSlot: "aboutSpeaker",
-          youtubeUrl: ytId ? `https://www.youtube.com/watch?v=${ytId}` : rawInput,
+          youtubeUrl: ytId
+            ? `https://www.youtube.com/watch?v=${ytId}`
+            : sanitizeSafeHref(rawInput, false) || "https://www.youtube.com/@thuystalk",
           youtubeEmbedId: ytId,
           youtubeEmbedSrc: embedSrc,
           title: { vi: title, en: title },
@@ -5054,7 +5207,7 @@
             <td style="font-weight:700;">${escapeHtml(lTitle)}</td>
             <td style="color:var(--jade-700); font-weight:800;">${qCount} câu hỏi trắc nghiệm</td>
             <td>
-              <button type="button" class="btn btn-danger btn-sm" data-del-lesson="${l.id}" data-parent-course="${c.id}">Xóa bài</button>
+              <button type="button" class="btn btn-danger btn-sm" data-del-lesson="${escapeHtml(l.id)}" data-parent-course="${escapeHtml(c.id)}">Xóa bài</button>
             </td>
           </tr>
         `);
@@ -5407,7 +5560,7 @@
       if (!course) return;
 
       const miniTest = JSON.parse(JSON.stringify(state.generatedMiniTestDraft));
-      const formattedBody = formatRawOrHtmlContent(rawBody);
+      const formattedBody = sanitizeRichHtml(formatRawOrHtmlContent(rawBody));
       const plainSummary = rawBody.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 
       course.lessons.push({
@@ -5458,7 +5611,7 @@
         <td style="font-size:0.76rem; color:var(--ink-600);">${escapeHtml(item.keywords)}</td>
         <td style="font-size:0.78rem;">${escapeHtml((item.answer || "").slice(0, 110))}...</td>
         <td>
-          <button type="button" class="btn btn-danger btn-sm" data-del-kb="${item.id}">Xóa</button>
+          <button type="button" class="btn btn-danger btn-sm" data-del-kb="${escapeHtml(item.id)}">Xóa</button>
         </td>
       </tr>`
       )
