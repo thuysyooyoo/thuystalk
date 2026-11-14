@@ -5961,7 +5961,7 @@
           showToast("Đang đồng bộ dữ liệu lên Cloud Firestore (thuystalk)...");
           await window.ThuysTalkFirebase.syncCollection("articles", state.articles);
           await window.ThuysTalkFirebase.syncCollection("videos", state.videos);
-          await window.ThuysTalkFirebase.syncCollection("elearning_courses", state.courses);
+          await window.ThuysTalkFirebase.syncCollection("courses", state.courses);
           await window.ThuysTalkFirebase.syncCollection("ai_kb", state.aiKb);
           showToast("Đã đồng bộ toàn bộ Bài viết, Video, E-Learning lên Cloud Firestore (thuystalk) thành công!");
           loadFirestoreData();
