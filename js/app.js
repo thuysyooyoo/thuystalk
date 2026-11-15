@@ -2470,6 +2470,8 @@
     const nameDisp = document.getElementById("consultLoggedNameDisplay");
     const emailDisp = document.getElementById("consultLoggedEmailDisplay");
     const phoneDisp = document.getElementById("consultLoggedPhoneDisplay");
+    const missingPhoneRow = document.getElementById("consultLoggedPhoneMissingRow");
+    const loggedPhoneInp = document.getElementById("consultLoggedInPhoneInp");
 
     if (!loggedBadge || !guestGroup) return;
 
@@ -2481,21 +2483,36 @@
       if (emailInp) emailInp.removeAttribute("required");
 
       const displayName = state.learnerName || localStorage.getItem(STORAGE_KEYS.LEARNER_NAME) || state.learnerEmail.split("@")[0];
-      const displayPhone = state.learnerPhone || localStorage.getItem(STORAGE_KEYS.LEARNER_PHONE) || "Chưa cập nhật";
+      const savedPhone = (state.learnerPhone || localStorage.getItem(STORAGE_KEYS.LEARNER_PHONE) || "").trim();
 
       if (nameDisp) nameDisp.textContent = displayName;
       if (emailDisp) emailDisp.textContent = `(${state.learnerEmail})`;
-      if (phoneDisp) phoneDisp.textContent = displayPhone;
+      if (phoneDisp) phoneDisp.textContent = savedPhone || "Chưa cập nhật";
 
-      if (submitBtn) submitBtn.textContent = "Gửi câu hỏi tư vấn ngay";
+      if (missingPhoneRow && loggedPhoneInp) {
+        if (savedPhone) {
+          missingPhoneRow.style.display = "none";
+          loggedPhoneInp.removeAttribute("required");
+          loggedPhoneInp.value = savedPhone;
+        } else {
+          missingPhoneRow.style.display = "block";
+          loggedPhoneInp.setAttribute("required", "required");
+        }
+      }
+
+      if (submitBtn) submitBtn.textContent = state.lang === "en" ? "Submit Advisory Request" : "Gửi đăng ký tư vấn";
     } else {
       loggedBadge.style.display = "none";
       guestGroup.style.display = "block";
       if (nameInp) nameInp.setAttribute("required", "required");
       if (phoneInp) phoneInp.setAttribute("required", "required");
       if (emailInp) emailInp.setAttribute("required", "required");
+      if (missingPhoneRow && loggedPhoneInp) {
+        missingPhoneRow.style.display = "none";
+        loggedPhoneInp.removeAttribute("required");
+      }
 
-      if (submitBtn) submitBtn.textContent = "Gửi đăng ký tư vấn & Nhận bộ tài liệu";
+      if (submitBtn) submitBtn.textContent = state.lang === "en" ? "Submit Advisory Request" : "Gửi đăng ký tư vấn";
     }
   }
 
@@ -2533,10 +2550,26 @@
       }
 
       let name, phone, email;
+      let shouldSavePhoneToProfile = false;
       if (state.learnerEmail) {
         email = state.learnerEmail;
         name = state.learnerName || localStorage.getItem(STORAGE_KEYS.LEARNER_NAME) || email.split("@")[0];
-        phone = state.learnerPhone || localStorage.getItem(STORAGE_KEYS.LEARNER_PHONE) || "-";
+        const savedPhone = (state.learnerPhone || localStorage.getItem(STORAGE_KEYS.LEARNER_PHONE) || "").trim();
+        const loggedPhoneInp = document.getElementById("consultLoggedInPhoneInp");
+        const enteredPhone = loggedPhoneInp ? loggedPhoneInp.value.trim() : "";
+        phone = savedPhone || enteredPhone;
+        if (!phone) {
+          showToast(
+            state.lang === "vi"
+              ? "Vui lòng nhập Số điện thoại / Zalo để Chị Thúy liên hệ tư vấn."
+              : "Please enter your Phone / Zalo number."
+          );
+          if (loggedPhoneInp) loggedPhoneInp.focus();
+          return;
+        }
+        if (!savedPhone && enteredPhone) {
+          shouldSavePhoneToProfile = true;
+        }
       } else {
         name = document.getElementById("consultNameInput").value.trim();
         phone = document.getElementById("consultPhoneInput").value.trim();
@@ -2547,13 +2580,24 @@
       const message = document.getElementById("consultMsgInput").value.trim();
       const consent = document.getElementById("consultConsentCheck").checked;
 
-      if (!name || !email || !consent) {
+      if (!name || !phone || !email || !consent) {
         showToast(
           state.lang === "vi"
             ? "Vui lòng điền đầy đủ thông tin và tích đồng ý Chính sách bảo mật."
             : "Please complete all required fields and accept the privacy policy."
         );
         return;
+      }
+
+      if (shouldSavePhoneToProfile) {
+        state.learnerPhone = phone;
+        localStorage.setItem(STORAGE_KEYS.LEARNER_PHONE, phone);
+        if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.updateLearnerProfile === "function") {
+          window.ThuysTalkFirebase
+            .updateLearnerProfile({ name, phone, email })
+            .catch((err) => console.warn("Save phone on consult warning:", err));
+        }
+        updateConsultFormStatus();
       }
 
       if (!topic || !message) {
@@ -3653,8 +3697,8 @@
                       <input type="password" id="authRegPass" class="form-control" required minlength="6" placeholder="Mật khẩu bảo mật" />
                     </div>
                     <div class="form-group">
-                      <label>Số điện thoại / Zalo *</label>
-                      <input type="tel" id="authRegPhone" class="form-control" required placeholder="VD: 0912 345 678" />
+                      <label>Số điện thoại / Zalo (không bắt buộc)</label>
+                      <input type="tel" id="authRegPhone" class="form-control" placeholder="VD: 0912 345 678" />
                     </div>
                   </div>
                   <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
@@ -4243,8 +4287,8 @@
                     <input type="text" id="profileNameInp" class="form-control" required placeholder="VD: Nguyễn Thị Lan" />
                   </div>
                   <div class="form-group">
-                    <label style="font-size:0.82rem; font-weight:700; color:var(--ink-700);">Số điện thoại / Zalo *</label>
-                    <input type="tel" id="profilePhoneInp" class="form-control" required placeholder="VD: 0912 345 678" />
+                    <label style="font-size:0.82rem; font-weight:700; color:var(--ink-700);">Số điện thoại / Zalo</label>
+                    <input type="tel" id="profilePhoneInp" class="form-control" placeholder="VD: 0912 345 678" />
                   </div>
                 </div>
                 <div class="form-group" style="margin-bottom:14px;">
@@ -4357,15 +4401,16 @@
         const company = profDiv.querySelector("#profileCompanyInp").value.trim();
         const email = state.learnerEmail;
 
-        if (!name || !phone) {
-          showToast("Vui lòng điền Họ tên và Số điện thoại.");
+        if (!name) {
+          showToast("Vui lòng điền Họ và tên của bạn.");
           return;
         }
 
         state.learnerName = name;
         state.learnerPhone = phone;
         localStorage.setItem(STORAGE_KEYS.LEARNER_NAME, name);
-        localStorage.setItem(STORAGE_KEYS.LEARNER_PHONE, phone);
+        if (phone) localStorage.setItem(STORAGE_KEYS.LEARNER_PHONE, phone);
+        else localStorage.removeItem(STORAGE_KEYS.LEARNER_PHONE);
         if (company) localStorage.setItem("thuystalk_learner_company", company);
 
         const saveBtn = profDiv.querySelector("#profileSaveInfoBtn");

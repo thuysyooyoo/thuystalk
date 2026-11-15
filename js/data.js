@@ -387,7 +387,7 @@ window.THUYSTALK_I18N = {
       lblMsg: "Mô tả ngắn tình huống hoặc câu hỏi của bạn *",
       msgPlaceholder: "VD: Mình đang chuẩn bị nhập khẩu lô hàng máy móc / hóa chất về cảng Hải Phòng và cần tư vấn mã HS, thủ tục giấy phép...",
       consentText: "Tôi đồng ý cho phép ThuysTalk lưu trữ thông tin liên hệ để gửi tài liệu học tập và phản hồi tư vấn theo Chính sách bảo mật (Nghị định 13/2023/NĐ-CP).",
-      submitBtn: "Gửi đăng ký tư vấn & Nhận bộ tài liệu"
+      submitBtn: "Gửi đăng ký tư vấn"
     }
   },
 
@@ -544,7 +544,7 @@ window.THUYSTALK_I18N = {
       lblMsg: "Briefly describe your situation or question *",
       msgPlaceholder: "Example: We are importing specialized chemicals/machinery through Hai Phong Port and need guidance on HS code & permits...",
       consentText: "I agree to allow ThuysTalk to process my contact details to send learning materials and advisory responses under Decree 13/2023/ND-CP.",
-      submitBtn: "Submit Advisory Request & Get Kit"
+      submitBtn: "Submit Advisory Request"
     }
   }
 };
