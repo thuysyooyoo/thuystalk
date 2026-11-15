@@ -15,7 +15,7 @@
     DEVICE_ID: "thuystalk_device_id_v1",
     DEVICE_TRUST_MAP: "thuystalk_device_trust_v1",
     GOOGLE_TRUST_UIDS: "thuystalk_google_auth_uids_v1",
-    PENDING_REG_PROFILE: "thuystalk_pending_reg_profile_v1",
+    PENDING_REG_MAP: "thuystalk_pending_reg_map_v1",
     PENDING_AUTH_CHALLENGE_UID: "thuystalk_pending_challenge_uid_v1",
     PENDING_GOOGLE_PROFILE_UID: "thuystalk_pending_google_profile_uid_v1",
     NEW_GOOGLE_AUTH_UID: "thuystalk_new_google_uid_v1",
@@ -128,6 +128,74 @@
     const map = readStorageJson(localStorage, STORAGE_KEYS.REG_TRUST_UIDS, {});
     map[uid] = true;
     writeStorageJson(localStorage, STORAGE_KEYS.REG_TRUST_UIDS, map);
+  }
+
+  function normalizeEmailKey(email) {
+    return String(email || "").trim().toLowerCase();
+  }
+
+  function savePendingRegProfile(entry) {
+    if (!entry || typeof entry !== "object") return;
+    const uid = String(entry.uid || "").trim();
+    const emailKey = normalizeEmailKey(entry.email);
+    if (!uid && !emailKey) return;
+    const map = readStorageJson(localStorage, STORAGE_KEYS.PENDING_REG_MAP, {});
+    const record = {
+      uid,
+      email: emailKey,
+      name: String(entry.name || "").trim(),
+      phone: entry.phone !== undefined ? String(entry.phone || "").trim() : "",
+      consent: !!entry.consent,
+      savedAt: Date.now()
+    };
+    if (uid) map[`uid:${uid}`] = record;
+    if (emailKey) map[`email:${emailKey}`] = record;
+    writeStorageJson(localStorage, STORAGE_KEYS.PENDING_REG_MAP, map);
+  }
+
+  function getPendingRegProfile(user) {
+    if (!user) return null;
+    const map = readStorageJson(localStorage, STORAGE_KEYS.PENDING_REG_MAP, {});
+    if (user.uid && map[`uid:${user.uid}`]) {
+      return map[`uid:${user.uid}`];
+    }
+    const emailKey = normalizeEmailKey(user.email);
+    if (emailKey && map[`email:${emailKey}`]) {
+      return map[`email:${emailKey}`];
+    }
+    const legacy = readStorageJson(sessionStorage, "thuystalk_pending_reg_profile_v1", null);
+    if (
+      legacy &&
+      ((user.uid && legacy.uid === user.uid) || (emailKey && normalizeEmailKey(legacy.email) === emailKey))
+    ) {
+      return legacy;
+    }
+    return null;
+  }
+
+  function removePendingRegProfile(user) {
+    if (!user) return;
+    const map = readStorageJson(localStorage, STORAGE_KEYS.PENDING_REG_MAP, {});
+    const uid = String(user.uid || "").trim();
+    const emailKey = normalizeEmailKey(user.email);
+    let changed = false;
+    Object.keys(map).forEach((k) => {
+      const rec = map[k];
+      if (
+        k === `uid:${uid}` ||
+        k === `email:${emailKey}` ||
+        (rec && ((uid && rec.uid === uid) || (emailKey && normalizeEmailKey(rec.email) === emailKey)))
+      ) {
+        delete map[k];
+        changed = true;
+      }
+    });
+    if (changed) {
+      writeStorageJson(localStorage, STORAGE_KEYS.PENDING_REG_MAP, map);
+    }
+    try {
+      sessionStorage.removeItem("thuystalk_pending_reg_profile_v1");
+    } catch (e) {}
   }
 
   function setSessionFlag(key, value) {
@@ -3898,6 +3966,7 @@
         const wasChallenge = activeAuthStep === "device_code" || activeAuthStep === "google_profile" || activeAuthStep === "verify_email";
         activeAuthStep = "";
         pendingAuthSuccessCallback = null;
+        pendingConsentContext = null;
         setSessionFlag(STORAGE_KEYS.PENDING_AUTH_CHALLENGE_UID, "");
         setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, "");
         setSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID, "");
@@ -4015,7 +4084,7 @@
             throw new Error("Dịch vụ xác thực tài khoản chưa sẵn sàng trên trình duyệt.");
           }
           const regRes = await window.ThuysTalkFirebase.registerLearnerWithVerification(name, email, pass, phone);
-          writeStorageJson(sessionStorage, STORAGE_KEYS.PENDING_REG_PROFILE, {
+          savePendingRegProfile({
             uid: regRes.uid || "",
             email,
             name,
@@ -4123,7 +4192,6 @@
         stopEmailVerificationPolling();
         stopAuthResendCooldown();
         activeAuthStep = "";
-        setSessionFlag(STORAGE_KEYS.PENDING_REG_PROFILE, "");
         if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.logoutLearner) {
           await window.ThuysTalkFirebase.logoutLearner();
         }
@@ -4171,9 +4239,10 @@
           saveDeviceTrust(curUser.uid, res.data.trust, res.data.issuedAt);
           setSessionFlag(STORAGE_KEYS.PENDING_AUTH_CHALLENGE_UID, "");
           activeAuthStep = "";
-          const docRes = window.ThuysTalkFirebase.fetchLearnerDoc ? await window.ThuysTalkFirebase.fetchLearnerDoc(curUser.uid) : { error: false, exists: false, data: null };
-          await finalizeLearnerSession(curUser, docRes && docRes.data ? docRes.data : {});
-          showToast("Xác nhận thiết bị thành công!");
+          await completeAuthenticatedLearnerEntry(curUser, {
+            source: "ThuysTalk Email Device Verify",
+            toastMessage: "Xác nhận thiết bị thành công!"
+          });
           return;
         }
 
@@ -4240,19 +4309,35 @@
         finishBtn.textContent = "Đang lưu hồ sơ...";
         gNotice.style.display = "none";
         try {
+          const ctx = pendingConsentContext && pendingConsentContext.uid === curUser.uid ? pendingConsentContext : null;
+          let hasExistingDoc = ctx ? !!ctx.hasExistingDoc : false;
+          if (!ctx && window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchLearnerDoc === "function") {
+            const checkRes = await window.ThuysTalkFirebase.fetchLearnerDoc(curUser.uid);
+            hasExistingDoc = !!(checkRes && !checkRes.error && checkRes.exists);
+          }
+          const providers = Array.isArray(curUser.providerData) ? curUser.providerData : [];
+          const hasGoogleProvider = providers.some((p) => p && p.providerId === "google.com");
+          const completionSource = (ctx && ctx.source) || (hasGoogleProvider ? "Google Sign-In" : "ThuysTalk Consent Completion");
+          const toastMsg = (ctx && ctx.toastMessage) || "Hoàn tất hồ sơ thành công!";
           await window.ThuysTalkFirebase.saveVerifiedLearnerDoc({
             name,
             phone,
-            isNew: true,
+            isNew: !hasExistingDoc,
             recordConsent: true,
-            source: "Google Sign-In"
+            source: completionSource
           });
+          removePendingRegProfile(curUser);
           setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, "");
           setSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID, "");
-          markTrustedGoogleBrowser(curUser.uid);
+          pendingConsentContext = null;
+          if (hasGoogleProvider) {
+            markTrustedGoogleBrowser(curUser.uid);
+          } else {
+            markRegVerifiedBrowser(curUser.uid);
+          }
           activeAuthStep = "";
           await finalizeLearnerSession(curUser, { name, phone });
-          showToast("Hoàn tất hồ sơ thành công!");
+          showToast(toastMsg);
         } catch (err) {
           gNotice.style.display = "block";
           gNotice.innerHTML = `<div style="background:#FEF2F2; border:1px solid #F87171; padding:10px 12px; border-radius:8px; color:#991B1B; font-size:0.84rem;">Không thể lưu hồ sơ: ${escapeHtml(err && err.message ? err.message : err)}</div>`;
@@ -4270,6 +4355,7 @@
         const shouldDeleteAccount = !!(curUser && curUser.uid && getSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID) === curUser.uid);
         activeAuthStep = "";
         pendingAuthSuccessCallback = null;
+        pendingConsentContext = null;
         setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, "");
         setSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID, "");
         setSessionFlag(STORAGE_KEYS.PENDING_REDIRECT_REASON, "");
@@ -4733,6 +4819,7 @@
 
   let pendingAuthSuccessCallback = null;
   let activeAuthStep = "";
+  let pendingConsentContext = null;
   let isHandlingRedirectInit = false;
   let verifyPollIntervalId = null;
   let verifyPollFocusHandler = null;
@@ -4926,61 +5013,192 @@
     startEmailVerificationPolling(isFromRegistration);
   }
 
-  async function handlePostPasswordAuth(user, isFromRegistration) {
-    if (!user || user.emailVerified !== true) return;
-    const pendingReg = readStorageJson(sessionStorage, STORAGE_KEYS.PENDING_REG_PROFILE, null);
-    const matchesPendingReg =
-      pendingReg &&
-      pendingReg.email &&
-      ((pendingReg.uid && pendingReg.uid === user.uid) || pendingReg.email === user.email);
+  function openConsentCompletionPane(user, docData, options = {}) {
+    const hasExistingDoc = !!options.hasExistingDoc;
+    const isNewGoogleAccount = !!options.isNewGoogleAccount;
+    const source = options.source || "Google Sign-In";
+    const completionToast = options.completionToast || "Hoàn tất hồ sơ thành công!";
+    const pendingReg = options.pendingReg || null;
+    setSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID, isNewGoogleAccount ? user.uid : "");
+    setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, user.uid);
+    activeAuthStep = "google_profile";
+    pendingConsentContext = {
+      uid: user.uid,
+      hasExistingDoc,
+      source,
+      toastMessage: completionToast
+    };
+    ensureGlobalModals();
+    const authDiv = document.getElementById("learnerAuthModal");
+    if (authDiv) {
+      authDiv.classList.add("open");
+      showAuthSubView("google_profile");
+      const nameInp = authDiv.querySelector("#authGoogleNameInp");
+      const phoneInp = authDiv.querySelector("#authGooglePhoneInp");
+      const consentChk = authDiv.querySelector("#authGoogleConsentCheck");
+      const gNotice = authDiv.querySelector("#authGoogleProfileNoticeBox");
+      if (nameInp) {
+        nameInp.value =
+          (docData && docData.name) ||
+          (pendingReg && pendingReg.name) ||
+          user.displayName ||
+          (user.email ? user.email.split("@")[0] : "");
+      }
+      if (phoneInp) {
+        phoneInp.value =
+          (docData && typeof docData.phone === "string" && docData.phone) ||
+          (pendingReg && pendingReg.phone) ||
+          "";
+      }
+      if (consentChk) consentChk.checked = false;
+      if (gNotice) gNotice.style.display = "none";
+    }
+  }
 
-    let docRes = { error: false, exists: false, data: null };
-    if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchLearnerDoc === "function") {
-      docRes = await window.ThuysTalkFirebase.fetchLearnerDoc(user.uid);
+  async function completeAuthenticatedLearnerEntry(user, options = {}) {
+    if (!user || user.emailVerified !== true || !user.email) return;
+    const source = options.source || "ThuysTalk Login";
+    const fromSessionRestore = !!options.fromSessionRestore;
+    const docRes =
+      window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchLearnerDoc === "function"
+        ? await window.ThuysTalkFirebase.fetchLearnerDoc(user.uid)
+        : { error: false, exists: false, data: null };
+
+    if (docRes.error) {
+      activeAuthStep = "";
+      pendingConsentContext = null;
+      if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.logoutLearner === "function") {
+        await window.ThuysTalkFirebase.logoutLearner();
+      }
+      clearLearnerClientState();
+      if (options.onDocFetchErrorNotice) {
+        ensureGlobalModals();
+        const authDiv = document.getElementById("learnerAuthModal");
+        if (authDiv) {
+          authDiv.classList.add("open");
+          showLoginNotice("Không thể tải hồ sơ người dùng lúc này. Vui lòng thử lại sau.", true);
+        }
+      } else {
+        showToast("Không thể tải hồ sơ người dùng lúc này. Vui lòng thử lại sau.");
+      }
+      return;
     }
 
-    if (isFromRegistration || (matchesPendingReg && (!docRes.exists || !docRes.data))) {
-      const regName = (matchesPendingReg && pendingReg.name) || user.displayName || "";
-      const regPhone = (matchesPendingReg && pendingReg.phone) || "";
-      const regConsent = !!(matchesPendingReg && pendingReg.consent);
-      if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.saveVerifiedLearnerDoc === "function") {
+    const docData = docRes.exists && docRes.data && typeof docRes.data === "object" ? docRes.data : null;
+    const hasDocConsent = !!(docData && docData.consentAt);
+    const pendingReg = getPendingRegProfile(user);
+
+    if (hasDocConsent) {
+      if (pendingReg) removePendingRegProfile(user);
+      setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, "");
+      setSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID, "");
+      pendingConsentContext = null;
+      if (options.markGoogleTrust) markTrustedGoogleBrowser(user.uid);
+      if (options.markRegTrust) markRegVerifiedBrowser(user.uid);
+      activeAuthStep = "";
+
+      if (
+        !fromSessionRestore &&
+        window.ThuysTalkFirebase &&
+        typeof window.ThuysTalkFirebase.saveVerifiedLearnerDoc === "function"
+      ) {
+        const updatePayload = {
+          name: (docData && docData.name) || (pendingReg && pendingReg.name) || user.displayName || "",
+          isNew: false,
+          recordConsent: false,
+          source
+        };
+        if (
+          docData &&
+          typeof docData.phone !== "string" &&
+          pendingReg &&
+          typeof pendingReg.phone === "string" &&
+          pendingReg.phone
+        ) {
+          updatePayload.phone = pendingReg.phone;
+        }
         try {
-          await window.ThuysTalkFirebase.saveVerifiedLearnerDoc({
-            name: regName,
-            phone: regPhone,
-            isNew: !docRes.exists,
-            recordConsent: regConsent,
-            source: "ThuysTalk Email Registration"
-          });
+          await window.ThuysTalkFirebase.saveVerifiedLearnerDoc(updatePayload);
         } catch (err) {
           console.warn("saveVerifiedLearnerDoc warning:", err);
         }
       }
-      setSessionFlag(STORAGE_KEYS.PENDING_REG_PROFILE, "");
-      markRegVerifiedBrowser(user.uid);
-      activeAuthStep = "";
-      await finalizeLearnerSession(user, { name: regName, phone: regPhone });
-      showToast("Xác thực email thành công! Chào mừng bạn đến với ThuysTalk.");
+
+      await finalizeLearnerSession(user, docData);
+      if (options.toastMessage) showToast(options.toastMessage);
       return;
     }
 
-    setSessionFlag(STORAGE_KEYS.PENDING_REG_PROFILE, "");
+    if (pendingReg && pendingReg.consent === true) {
+      const resolvedName = (pendingReg.name && pendingReg.name.trim()) || (docData && docData.name) || user.displayName || "";
+      const resolvedPhone =
+        pendingReg.phone !== undefined ? String(pendingReg.phone || "").trim() : ((docData && docData.phone) || "");
+      let savedOk = false;
+      if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.saveVerifiedLearnerDoc === "function") {
+        try {
+          await window.ThuysTalkFirebase.saveVerifiedLearnerDoc({
+            name: resolvedName,
+            phone: resolvedPhone,
+            isNew: !docRes.exists,
+            recordConsent: true,
+            source: source || "ThuysTalk Email Registration"
+          });
+          savedOk = true;
+          removePendingRegProfile(user);
+        } catch (err) {
+          console.warn("saveVerifiedLearnerDoc consent persist warning:", err);
+        }
+      }
+      if (!savedOk) {
+        openConsentCompletionPane(user, docData, {
+          hasExistingDoc: !!docRes.exists,
+          isNewGoogleAccount: !docRes.exists && !!options.maybeNewGoogleAccount,
+          source: options.consentSource || source,
+          completionToast: options.toastMessage || "Hoàn tất hồ sơ thành công!",
+          pendingReg
+        });
+        return;
+      }
+      setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, "");
+      setSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID, "");
+      pendingConsentContext = null;
+      if (options.markGoogleTrust) markTrustedGoogleBrowser(user.uid);
+      if (options.markRegTrust) markRegVerifiedBrowser(user.uid);
+      activeAuthStep = "";
+      await finalizeLearnerSession(user, { name: resolvedName, phone: resolvedPhone });
+      if (options.toastMessage) showToast(options.toastMessage);
+      return;
+    }
+
+    openConsentCompletionPane(user, docData, {
+      hasExistingDoc: !!docRes.exists,
+      isNewGoogleAccount: !docRes.exists && !!options.maybeNewGoogleAccount,
+      source: options.consentSource || source,
+      completionToast: options.toastMessage || "Hoàn tất hồ sơ thành công!",
+      pendingReg
+    });
+  }
+
+  async function handlePostPasswordAuth(user, isFromRegistration) {
+    if (!user || user.emailVerified !== true) return;
+
+    if (isFromRegistration) {
+      await completeAuthenticatedLearnerEntry(user, {
+        source: "ThuysTalk Email Registration",
+        consentSource: "ThuysTalk Email Registration",
+        markRegTrust: true,
+        toastMessage: "Xác thực email thành công! Chào mừng bạn đến với ThuysTalk."
+      });
+      return;
+    }
 
     const deviceTrusted = !!getDeviceTrust(user.uid) || hasRegVerifiedBrowser(user.uid);
     if (deviceTrusted) {
-      activeAuthStep = "";
-      if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.saveVerifiedLearnerDoc === "function") {
-        window.ThuysTalkFirebase
-          .saveVerifiedLearnerDoc({
-            name: (docRes.data && docRes.data.name) || user.displayName || "",
-            isNew: !docRes.exists,
-            recordConsent: false,
-            source: "ThuysTalk Email Login"
-          })
-          .catch(() => {});
-      }
-      await finalizeLearnerSession(user, (docRes && docRes.data) || {});
-      showToast("Chào mừng bạn trở lại! Đăng nhập thành công.");
+      await completeAuthenticatedLearnerEntry(user, {
+        source: "ThuysTalk Email Login",
+        consentSource: "ThuysTalk Consent Completion",
+        toastMessage: "Chào mừng bạn trở lại! Đăng nhập thành công."
+      });
       return;
     }
 
@@ -5055,73 +5273,27 @@
       activeAuthStep = "";
       return;
     }
-    const docRes =
-      window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchLearnerDoc === "function"
-        ? await window.ThuysTalkFirebase.fetchLearnerDoc(user.uid)
-        : { error: false, exists: false, data: null };
+    const providers = Array.isArray(user.providerData) ? user.providerData : [];
+    const onlyGoogleProvider = providers.length === 1 && providers[0] && providers[0].providerId === "google.com";
+    const isAdmin = !!(window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.isAdminUser === "function" && window.ThuysTalkFirebase.isAdminUser(user));
+    const createdAt = user.metadata && user.metadata.creationTime ? user.metadata.creationTime : "";
+    const lastSignInAt = user.metadata && user.metadata.lastSignInTime ? user.metadata.lastSignInTime : "";
+    const maybeNewGoogleAccount =
+      !isAdmin &&
+      onlyGoogleProvider &&
+      (gRes.isNewUser === true ||
+        (!gRes.fromSessionRestore && !!createdAt && !!lastSignInAt && createdAt === lastSignInAt) ||
+        (!!gRes.fromSessionRestore && getSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID) === user.uid));
 
-    if (docRes.error) {
-      activeAuthStep = "";
-      if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.logoutLearner) {
-        await window.ThuysTalkFirebase.logoutLearner();
-      }
-      clearLearnerClientState();
-      ensureGlobalModals();
-      const authDiv = document.getElementById("learnerAuthModal");
-      if (authDiv) {
-        authDiv.classList.add("open");
-        showLoginNotice("Không thể tải hồ sơ người dùng lúc này. Vui lòng thử lại sau.", true);
-      }
-      return;
-    }
-
-    if (!docRes.exists || !docRes.data || !docRes.data.consentAt) {
-      const providers = Array.isArray(user.providerData) ? user.providerData : [];
-      const onlyGoogleProvider = providers.length === 1 && providers[0] && providers[0].providerId === "google.com";
-      const createdAt = user.metadata && user.metadata.creationTime ? user.metadata.creationTime : "";
-      const lastSignInAt = user.metadata && user.metadata.lastSignInTime ? user.metadata.lastSignInTime : "";
-      const isNewGoogleAccount =
-        !docRes.exists &&
-        onlyGoogleProvider &&
-        (gRes.isNewUser === true ||
-          (!gRes.fromSessionRestore && !!createdAt && !!lastSignInAt && createdAt === lastSignInAt) ||
-          (!!gRes.fromSessionRestore && getSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID) === user.uid));
-      setSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID, isNewGoogleAccount ? user.uid : "");
-      activeAuthStep = "google_profile";
-      setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, user.uid);
-      ensureGlobalModals();
-      const authDiv = document.getElementById("learnerAuthModal");
-      if (authDiv) {
-        authDiv.classList.add("open");
-        showAuthSubView("google_profile");
-        const nameInp = authDiv.querySelector("#authGoogleNameInp");
-        const phoneInp = authDiv.querySelector("#authGooglePhoneInp");
-        const consentChk = authDiv.querySelector("#authGoogleConsentCheck");
-        const gNotice = authDiv.querySelector("#authGoogleProfileNoticeBox");
-        if (nameInp) nameInp.value = (docRes.data && docRes.data.name) || user.displayName || (user.email ? user.email.split("@")[0] : "");
-        if (phoneInp) phoneInp.value = (docRes.data && docRes.data.phone) || "";
-        if (consentChk) consentChk.checked = false;
-        if (gNotice) gNotice.style.display = "none";
-      }
-      return;
-    }
-
-    setSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID, "");
-
-    markTrustedGoogleBrowser(user.uid);
-    activeAuthStep = "";
-    if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.saveVerifiedLearnerDoc === "function") {
-      window.ThuysTalkFirebase
-        .saveVerifiedLearnerDoc({
-          name: docRes.data.name || user.displayName || "",
-          isNew: false,
-          recordConsent: false,
-          source: "Google Sign-In"
-        })
-        .catch(() => {});
-    }
-    await finalizeLearnerSession(user, docRes.data);
-    showToast("Đăng nhập Google thành công!");
+    await completeAuthenticatedLearnerEntry(user, {
+      source: "Google Sign-In",
+      consentSource: "Google Sign-In",
+      maybeNewGoogleAccount,
+      fromSessionRestore: !!gRes.fromSessionRestore,
+      markGoogleTrust: true,
+      onDocFetchErrorNotice: !gRes.fromSessionRestore,
+      toastMessage: gRes.fromSessionRestore ? "" : "Đăng nhập Google thành công!"
+    });
   }
 
   async function executePendingRedirectAction(user) {
@@ -5238,20 +5410,10 @@
     } catch (e) {}
 
     if (isGoogleSession) {
-      const docRes =
-        window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchLearnerDoc === "function"
-          ? await window.ThuysTalkFirebase.fetchLearnerDoc(user.uid)
-          : { error: true, exists: false, data: null };
-      if (docRes.error) {
-        clearLearnerClientState();
-        return;
-      }
-      if (!docRes.exists || !docRes.data || !docRes.data.consentAt || getSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID) === user.uid) {
-        await handleGoogleLoginOutcome({ user, email: user.email, isNewUser: false, fromSessionRestore: true, provider: "google" }, false);
-        return;
-      }
-      markTrustedGoogleBrowser(user.uid);
-      await finalizeLearnerSession(user, docRes.data);
+      await handleGoogleLoginOutcome(
+        { user, email: user.email, isNewUser: false, fromSessionRestore: true, provider: "google" },
+        false
+      );
       return;
     }
 
@@ -5266,7 +5428,12 @@
       return;
     }
 
-    await finalizeLearnerSession(user, null);
+    await completeAuthenticatedLearnerEntry(user, {
+      source: "ThuysTalk Session Restore",
+      consentSource: "ThuysTalk Consent Completion",
+      fromSessionRestore: true,
+      toastMessage: ""
+    });
   }
 
   function openLearnerAuthModal(tab = "register") {
