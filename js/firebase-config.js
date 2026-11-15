@@ -630,37 +630,6 @@
       }
     },
 
-    // Save Learner Account to Firestore
-    saveLearner: async function (learnerData) {
-      initFirebase();
-      if (!db) return false;
-      try {
-        const docId = (learnerData.email || "").toLowerCase().replace(/[^a-z0-9]/g, "_");
-        if (docId) {
-          await safeFirestoreWrite(
-            db.collection("learners").doc(docId).set({
-              ...learnerData,
-              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-              source: "ThuysTalk E-Learning Portal"
-            }, { merge: true }),
-            2500
-          );
-        } else {
-          await safeFirestoreWrite(
-            db.collection("learners").add({
-              ...learnerData,
-              createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            }),
-            2500
-          );
-        }
-        return true;
-      } catch (err) {
-        console.warn("Firestore saveLearner error:", err);
-        return false;
-      }
-    },
-
     // Sync Collection (Articles, Videos, Mini-Test Courses) to Firestore
     syncCollection: async function (collName, items) {
       initFirebase();
