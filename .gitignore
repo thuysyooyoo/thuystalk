@@ -14,6 +14,7 @@ __pycache__/
 .env
 .env.local
 .env.*.local
+.device_code_secret
 *.log
 sent_emails/
 backend/password_resets.json

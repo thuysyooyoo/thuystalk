@@ -12,15 +12,21 @@ Hỗ trợ:
 import base64
 import csv
 import datetime
+import hashlib
+import hmac
 import html
 import http.server
 import io
 import json
 import os
+import re
+import secrets
 import shutil
 import smtplib
 import subprocess
 import sys
+import threading
+import time
 import urllib.parse
 import webbrowser
 from email import encoders
@@ -50,6 +56,15 @@ ALLOWED_ORIGINS = {
 }
 MAX_POST_BODY_BYTES = 5 * 1024 * 1024  # 5 MB
 GOOGLE_AUTH_REQUEST = google_auth_requests.Request()
+DEVICE_CODE_TTL_SECONDS = 600
+DEVICE_CODE_MAX_ATTEMPTS = 5
+DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,128}$")
+DEVICE_SECRET_FILE = WEB_DIR / ".device_code_secret"
+
+_DEVICE_LOCK = threading.Lock()
+_DEVICE_CHALLENGES = {}
+_DEVICE_USER_SENDS = {}
+_DEVICE_GLOBAL_SENDS = []
 
 
 def _load_dotenv(dotenv_path: Path):
@@ -104,6 +119,59 @@ def _open_smtp_connection(timeout: int = 12):
     server = smtplib.SMTP_SSL(cfg["host"], cfg["port"], timeout=timeout)
     server.login(cfg["sender"], cfg["app_password"])
     return server, cfg["sender"]
+
+
+def _get_positive_int_env(name: str, default: int) -> int:
+    """Đọc số nguyên dương từ biến môi trường, fallback về default nếu thiếu hoặc sai định dạng."""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        val = int(raw)
+        return val if val > 0 else default
+    except ValueError:
+        return default
+
+
+def _get_device_code_secret() -> bytes:
+    """Trả về khóa HMAC dùng cho mã xác nhận thiết bị; tự tạo và lưu cục bộ (gitignored) nếu chưa cấu hình."""
+    env_secret = os.environ.get("THUYSTALK_DEVICE_CODE_SECRET", "").strip()
+    if env_secret:
+        return env_secret.encode("utf-8")
+    with _DEVICE_LOCK:
+        if DEVICE_SECRET_FILE.exists():
+            try:
+                saved = DEVICE_SECRET_FILE.read_text(encoding="utf-8").strip()
+                if saved:
+                    return saved.encode("utf-8")
+            except OSError:
+                pass
+        generated = secrets.token_hex(32)
+        try:
+            DEVICE_SECRET_FILE.write_text(generated, encoding="utf-8")
+        except OSError:
+            pass
+        return generated.encode("utf-8")
+
+
+def _compute_device_hmac(secret: bytes, message: str) -> str:
+    """Tính chữ ký HMAC-SHA256 dạng hex cho challenge/trust thiết bị."""
+    return hmac.new(secret, message.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _prune_device_state(now: float):
+    """Dọn mốc thời gian gửi mã quá 1 giờ và challenge hết hạn (yêu cầu đang giữ _DEVICE_LOCK)."""
+    cutoff = now - 3600.0
+    _DEVICE_GLOBAL_SENDS[:] = [ts for ts in _DEVICE_GLOBAL_SENDS if ts >= cutoff]
+    for uid_key in list(_DEVICE_USER_SENDS.keys()):
+        recent = [ts for ts in _DEVICE_USER_SENDS[uid_key] if ts >= cutoff]
+        if recent:
+            _DEVICE_USER_SENDS[uid_key] = recent
+        else:
+            del _DEVICE_USER_SENDS[uid_key]
+    expired_keys = [k for k, v in _DEVICE_CHALLENGES.items() if now > float(v.get("expires_at", 0))]
+    for k in expired_keys:
+        del _DEVICE_CHALLENGES[k]
 
 
 ALLOWED_NOTEBOOK_IDS = {
@@ -214,13 +282,14 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             return ref_origin in ALLOWED_ORIGINS
         return True
 
-    def _verify_admin_token(self):
+    def _verify_firebase_id_token(self):
+        """Xác minh Firebase ID Token chung: kiểm tra Bearer, audience, issuer và email_verified."""
         auth_header = (self.headers.get("Authorization") or "").strip()
         if not auth_header.startswith("Bearer "):
-            return False, 401, "Thiếu Firebase ID Token xác thực Admin."
+            return False, 401, None, "Thiếu token xác thực."
         token = auth_header[7:].strip()
         if not token:
-            return False, 401, "Firebase ID Token xác thực Admin không được để trống."
+            return False, 401, None, "Token xác thực không được để trống."
         try:
             claims = google_id_token.verify_firebase_token(
                 token,
@@ -228,17 +297,32 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
                 audience=FIREBASE_PROJECT_ID,
             )
         except Exception:
-            return False, 401, "Firebase ID Token không hợp lệ hoặc đã hết hạn."
+            return False, 401, None, "Phiên đăng nhập không hợp lệ hoặc đã hết hạn."
         if not isinstance(claims, dict):
-            return False, 401, "Firebase ID Token không hợp lệ."
+            return False, 401, None, "Token xác thực không hợp lệ."
         if claims.get("iss") != FIREBASE_ISSUER:
-            return False, 401, "Issuer của Firebase ID Token không hợp lệ."
+            return False, 401, None, "Token xác thực không hợp lệ."
         if claims.get("email_verified") is not True:
-            return False, 403, "Tài khoản chưa xác thực email."
+            return False, 403, None, "Tài khoản chưa xác thực email."
+        uid = str(claims.get("user_id") or claims.get("sub") or "").strip()
         email = str(claims.get("email") or "").strip().lower()
-        if email not in ADMIN_EMAILS:
+        if not uid or not email:
+            return False, 401, None, "Thông tin xác thực không đầy đủ."
+        return True, 200, {"uid": uid, "email": email}, ""
+
+    def _verify_admin_token(self):
+        ok, status_code, identity, err_msg = self._verify_firebase_id_token()
+        if not ok:
+            return False, status_code, err_msg
+        if identity["email"] not in ADMIN_EMAILS:
             return False, 403, "Tài khoản không có quyền Quản trị viên."
-        return True, 200, email
+        return True, 200, identity["email"]
+
+    def _verify_learner_token(self):
+        ok, status_code, identity, err_msg = self._verify_firebase_id_token()
+        if not ok:
+            return False, status_code, err_msg
+        return True, 200, identity
 
     def _read_json_body(self, content_length: int):
         if content_length <= 0:
@@ -302,6 +386,8 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             "/api/notebook-query",
             "/api/parse-excel",
             "/api/send-bulk-email",
+            "/api/device/send-code",
+            "/api/device/verify",
         }
         if parsed.path not in allowed_post_routes:
             self.close_connection = True
@@ -331,12 +417,20 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json(413, {"ok": False, "error": "Dữ liệu gửi lên vượt quá giới hạn 5 MB."})
             return
 
+        learner_identity = None
         if parsed.path in ("/api/parse-excel", "/api/send-bulk-email"):
             auth_ok, status_code, auth_msg = self._verify_admin_token()
             if not auth_ok:
                 self.close_connection = True
                 self._send_json(status_code, {"ok": False, "error": auth_msg})
                 return
+        elif parsed.path in ("/api/device/send-code", "/api/device/verify"):
+            auth_ok, status_code, auth_res = self._verify_learner_token()
+            if not auth_ok:
+                self.close_connection = True
+                self._send_json(status_code, {"ok": False, "error": auth_res})
+                return
+            learner_identity = auth_res
 
         try:
             payload = self._read_json_body(content_length)
@@ -350,6 +444,10 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_parse_excel(payload)
         elif parsed.path == "/api/send-bulk-email":
             self.handle_send_bulk_email(payload)
+        elif parsed.path == "/api/device/send-code":
+            self.handle_device_send_code(payload, learner_identity)
+        elif parsed.path == "/api/device/verify":
+            self.handle_device_verify(payload, learner_identity)
 
     def handle_send_bulk_email(self, payload: dict):
         try:
@@ -589,6 +687,165 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             )
         except Exception as exc:
             self._send_json(500, {"error": str(exc)})
+
+    def handle_device_send_code(self, payload: dict, identity: dict):
+        uid = identity["uid"]
+        email = identity["email"]
+        device_id = str(payload.get("deviceId") or "").strip()
+        if not DEVICE_ID_RE.match(device_id):
+            self._send_json(400, {"ok": False, "error": "Mã thiết bị không hợp lệ."})
+            return
+
+        smtp_cfg = _get_smtp_config()
+        if not smtp_cfg["app_password"]:
+            self._send_json(
+                503,
+                {
+                    "ok": False,
+                    "emailDisabled": True,
+                    "error": "Chưa gửi được mã xác nhận lúc này. Bạn có thể đăng nhập bằng Google hoặc thử lại sau.",
+                },
+            )
+            return
+
+        now = time.time()
+        per_user_limit = _get_positive_int_env("THUYSTALK_DEVICE_CODES_PER_USER_HOURLY", 3)
+        global_limit = _get_positive_int_env("THUYSTALK_DEVICE_CODES_GLOBAL_HOURLY", 30)
+
+        with _DEVICE_LOCK:
+            _prune_device_state(now)
+            user_recent = _DEVICE_USER_SENDS.get(uid, [])
+            if len(_DEVICE_GLOBAL_SENDS) >= global_limit or len(user_recent) >= per_user_limit:
+                self._send_json(
+                    429,
+                    {
+                        "ok": False,
+                        "rateLimited": True,
+                        "error": "Bạn đã yêu cầu gửi mã quá số lần quy định trong 1 giờ. Vui lòng chờ rồi thử lại sau.",
+                    },
+                )
+                return
+
+        code = f"{secrets.randbelow(1000000):06d}"
+        secret = _get_device_code_secret()
+        challenge_digest = _compute_device_hmac(secret, f"{uid}:{device_id}:{code}")
+        body_text = (
+            f"Mã xác nhận đăng nhập ThuysTalk: {code}. "
+            "Mã hết hạn sau 10 phút. Nếu không phải bạn, hãy đổi mật khẩu."
+        )
+
+        try:
+            server, sender_email = _open_smtp_connection(timeout=15)
+            msg = MIMEMultipart("alternative")
+            msg["From"] = f"ThuysTalk <{sender_email}>"
+            msg["To"] = email
+            msg["Subject"] = "[ThuysTalk] Mã xác nhận đăng nhập thiết bị mới"
+            msg.attach(MIMEText(body_text, "plain", "utf-8"))
+            html_body = (
+                "<div style=\"font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px;"
+                "border:1px solid #e2e8f0;border-radius:12px;color:#0f172a;\">"
+                "<h2 style=\"color:#065f46;margin:0 0 12px;\">ThuysTalk — Xác nhận thiết bị mới</h2>"
+                f"<p style=\"font-size:15px;line-height:1.6;\">{html.escape(body_text)}</p>"
+                "</div>"
+            )
+            msg.attach(MIMEText(html_body, "html", "utf-8"))
+            server.send_message(msg)
+            try:
+                server.quit()
+            except Exception:
+                pass
+        except Exception as exc:
+            print(f"[DEVICE CODE ERROR] Khong the gui email ma xac nhan ({type(exc).__name__})", flush=True)
+            self._send_json(
+                503,
+                {
+                    "ok": False,
+                    "error": "Chưa gửi được mã xác nhận lúc này. Bạn có thể đăng nhập bằng Google hoặc thử lại sau.",
+                },
+            )
+            return
+
+        sent_at = time.time()
+        with _DEVICE_LOCK:
+            _prune_device_state(sent_at)
+            user_recent = _DEVICE_USER_SENDS.setdefault(uid, [])
+            if len(_DEVICE_GLOBAL_SENDS) >= global_limit or len(user_recent) >= per_user_limit:
+                self._send_json(
+                    429,
+                    {
+                        "ok": False,
+                        "rateLimited": True,
+                        "error": "Bạn đã yêu cầu gửi mã quá số lần quy định trong 1 giờ. Vui lòng chờ rồi thử lại sau.",
+                    },
+                )
+                return
+            _DEVICE_GLOBAL_SENDS.append(sent_at)
+            user_recent.append(sent_at)
+            _DEVICE_CHALLENGES[(uid, device_id)] = {
+                "digest": challenge_digest,
+                "expires_at": sent_at + DEVICE_CODE_TTL_SECONDS,
+                "attempts": 0,
+            }
+
+        print(f"[DEVICE CODE] Sent challenge for uid_prefix={uid[:8]}", flush=True)
+        self._send_json(200, {"ok": True, "expiresInSeconds": DEVICE_CODE_TTL_SECONDS})
+
+    def handle_device_verify(self, payload: dict, identity: dict):
+        uid = identity["uid"]
+        device_id = str(payload.get("deviceId") or "").strip()
+        code = str(payload.get("code") or "").strip()
+        if not DEVICE_ID_RE.match(device_id) or not code or len(code) > 16:
+            self._send_json(400, {"ok": False, "error": "Thông tin xác nhận thiết bị không hợp lệ."})
+            return
+
+        now = time.time()
+        secret = _get_device_code_secret()
+        candidate_digest = _compute_device_hmac(secret, f"{uid}:{device_id}:{code}")
+
+        with _DEVICE_LOCK:
+            entry = _DEVICE_CHALLENGES.get((uid, device_id))
+            if not entry or now > float(entry.get("expires_at", 0)):
+                _DEVICE_CHALLENGES.pop((uid, device_id), None)
+                self._send_json(
+                    400,
+                    {
+                        "ok": False,
+                        "requireNewCode": True,
+                        "error": "Mã xác nhận không tồn tại hoặc đã hết hạn. Vui lòng yêu cầu mã mới.",
+                    },
+                )
+                return
+
+            entry["attempts"] = int(entry.get("attempts", 0)) + 1
+            if hmac.compare_digest(candidate_digest, str(entry.get("digest", ""))):
+                _DEVICE_CHALLENGES.pop((uid, device_id), None)
+                issued_at = str(int(now))
+                trust = _compute_device_hmac(secret, f"{uid}:{device_id}:{issued_at}")
+                self._send_json(200, {"ok": True, "trust": trust, "issuedAt": issued_at})
+                return
+
+            attempts = entry["attempts"]
+            if attempts >= DEVICE_CODE_MAX_ATTEMPTS:
+                _DEVICE_CHALLENGES.pop((uid, device_id), None)
+                self._send_json(
+                    429,
+                    {
+                        "ok": False,
+                        "requireNewCode": True,
+                        "error": "Bạn đã nhập sai 5 lần. Mã đã bị vô hiệu hóa, vui lòng xin mã mới.",
+                    },
+                )
+                return
+
+            remaining = DEVICE_CODE_MAX_ATTEMPTS - attempts
+            self._send_json(
+                400,
+                {
+                    "ok": False,
+                    "attemptsRemaining": remaining,
+                    "error": f"Mã xác nhận chưa chính xác. Bạn còn {remaining} lần thử.",
+                },
+            )
 
     def _send_json(self, status_code: int, data: dict):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")

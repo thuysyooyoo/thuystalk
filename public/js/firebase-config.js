@@ -30,6 +30,7 @@
   let auth = null;
   let isInitialized = false;
   let persistenceConfigured = false;
+  let pendingLinkCredential = null;
 
   function isAdminUserObj(user) {
     if (!user || user.emailVerified !== true || !user.email) return false;
@@ -151,7 +152,7 @@
           } catch (e) {}
         }
 
-        // Send email verification
+        // Send email verification (never write learners/{uid} before email_verified == true)
         let sentVerification = false;
         if (user && typeof user.sendEmailVerification === "function") {
           try {
@@ -165,31 +166,12 @@
           }
         }
 
-        // Save learner doc in Firestore (safe non-blocking write)
-        if (db && user) {
-          try {
-            await safeFirestoreWrite(
-              db.collection("learners").doc(user.uid).set({
-                uid: user.uid,
-                name: name || "",
-                email: email,
-                phone: phone || "",
-                emailVerified: false,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                source: "ThuysTalk Registration Portal"
-              }, { merge: true }),
-              2000
-            );
-          } catch (e) {
-            console.warn("Firestore save on register:", e);
-          }
-        }
-
         return {
           uid: user ? user.uid : null,
-          email: email,
-          name: name,
-          emailVerified: false,
+          email: (user && user.email) || email,
+          name: name || "",
+          phone: phone || "",
+          emailVerified: !!(user && user.emailVerified),
           sentVerification: sentVerification
         };
       } catch (authErr) {
@@ -198,7 +180,7 @@
       }
     },
 
-    // 2. LOGIN LEARNER WITH EMAIL & PASSWORD
+    // 2. LOGIN LEARNER WITH EMAIL & PASSWORD (keep session on unverified user so polling/resend can run)
     loginLearner: async function (email, password) {
       initFirebase();
       if (!auth) {
@@ -208,38 +190,202 @@
       const userCred = await auth.signInWithEmailAndPassword(email, password);
       const user = userCred.user;
 
-      // BẮT BUỘC: Chưa kích hoạt qua email thì TUYỆT ĐỐI KHÔNG cho đăng nhập!
-      if (!user.emailVerified) {
-        await auth.signOut();
+      if (!user || !user.emailVerified) {
         return {
-          uid: user.uid,
-          email: user.email,
-          name: user.displayName || email.split("@")[0],
+          uid: user ? user.uid : "",
+          email: (user && user.email) || email,
+          name: (user && user.displayName) || email.split("@")[0],
           emailVerified: false
         };
       }
 
-      if (db) {
-        try {
-          await safeFirestoreWrite(
-            db.collection("learners").doc(user.uid).set({
-              uid: user.uid,
-              email: user.email,
-              name: user.displayName || localStorage.getItem("thuystalk_learner_name_v4") || email.split("@")[0],
-              emailVerified: true,
-              lastLoginAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true }),
-            1500
-          );
-        } catch (e) {}
-      }
+      try {
+        await user.getIdToken(false);
+      } catch (e) {}
 
       return {
         uid: user.uid,
         email: user.email,
         name: user.displayName || email.split("@")[0],
-        emailVerified: true
+        emailVerified: true,
+        user: user
       };
+    },
+
+    // 2b. LEARNER GOOGLE SIGN-IN (Popup with Redirect fallback & single-account linking)
+    hasPendingGoogleLink: function () {
+      return !!pendingLinkCredential;
+    },
+    clearPendingGoogleLink: function () {
+      pendingLinkCredential = null;
+    },
+    loginLearnerWithGoogle: async function () {
+      initFirebase();
+      if (!auth || typeof firebase.auth.GoogleAuthProvider !== "function") {
+        throw new Error("Dịch vụ xác thực Google chưa sẵn sàng trên trình duyệt.");
+      }
+      if (firebase.auth.Auth && firebase.auth.Auth.Persistence) {
+        try {
+          await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+        } catch (e) {}
+      }
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      try {
+        const result = await auth.signInWithPopup(provider);
+        const user = result && result.user;
+        pendingLinkCredential = null;
+        return {
+          user: user,
+          email: user ? user.email : "",
+          isNewUser: !!(result && result.additionalUserInfo && result.additionalUserInfo.isNewUser),
+          provider: "google"
+        };
+      } catch (err) {
+        if (err && err.code === "auth/popup-blocked") {
+          await auth.signInWithRedirect(provider);
+          return { redirected: true };
+        }
+        if (err && err.code === "auth/account-exists-with-different-credential") {
+          const cred =
+            (firebase.auth.GoogleAuthProvider.credentialFromError
+              ? firebase.auth.GoogleAuthProvider.credentialFromError(err)
+              : err.credential) || null;
+          pendingLinkCredential = cred;
+          const existingEmail = err.email || (err.customData && err.customData.email) || "";
+          return {
+            accountExists: true,
+            email: existingEmail,
+            hasCredential: !!cred
+          };
+        }
+        throw err;
+      }
+    },
+    checkLearnerRedirectResult: async function () {
+      initFirebase();
+      if (!auth) return null;
+      try {
+        const res = await auth.getRedirectResult();
+        if (res && res.user) {
+          pendingLinkCredential = null;
+          return {
+            user: res.user,
+            email: res.user.email || "",
+            isNewUser: !!(res.additionalUserInfo && res.additionalUserInfo.isNewUser),
+            provider: "google"
+          };
+        }
+        return null;
+      } catch (err) {
+        if (err && err.code === "auth/account-exists-with-different-credential") {
+          const cred =
+            (firebase.auth.GoogleAuthProvider.credentialFromError
+              ? firebase.auth.GoogleAuthProvider.credentialFromError(err)
+              : err.credential) || null;
+          pendingLinkCredential = cred;
+          const existingEmail = err.email || (err.customData && err.customData.email) || "";
+          return {
+            accountExists: true,
+            email: existingEmail,
+            hasCredential: !!cred
+          };
+        }
+        throw err;
+      }
+    },
+    linkPendingGoogleCredentialToCurrentUser: async function () {
+      initFirebase();
+      if (!auth || !auth.currentUser || !pendingLinkCredential) return false;
+      const cred = pendingLinkCredential;
+      try {
+        await auth.currentUser.linkWithCredential(cred);
+        pendingLinkCredential = null;
+        return true;
+      } catch (err) {
+        if (err && err.code === "auth/provider-already-linked") {
+          pendingLinkCredential = null;
+          return true;
+        }
+        pendingLinkCredential = null;
+        throw err;
+      }
+    },
+    reloadCurrentUser: async function () {
+      initFirebase();
+      if (!auth || !auth.currentUser) return null;
+      await auth.currentUser.reload();
+      if (auth.currentUser && auth.currentUser.emailVerified) {
+        try {
+          await auth.currentUser.getIdToken(true);
+        } catch (e) {}
+      }
+      return auth.currentUser;
+    },
+    fetchLearnerDoc: async function (uidOverride) {
+      initFirebase();
+      const targetUid = uidOverride || (auth && auth.currentUser ? auth.currentUser.uid : "");
+      if (!db || !targetUid) return { error: true, exists: false, data: null };
+      try {
+        const snap = await db.collection("learners").doc(targetUid).get();
+        return {
+          error: false,
+          exists: snap.exists,
+          data: snap.exists ? snap.data() : null
+        };
+      } catch (err) {
+        console.warn("fetchLearnerDoc error:", err);
+        return { error: true, exists: false, data: null };
+      }
+    },
+    saveVerifiedLearnerDoc: async function (profileData = {}) {
+      initFirebase();
+      const user = auth ? auth.currentUser : null;
+      if (!user || user.emailVerified !== true) {
+        throw new Error("Tài khoản chưa xác thực email.");
+      }
+      if (profileData.name) {
+        try {
+          await user.updateProfile({ displayName: profileData.name });
+        } catch (e) {}
+      }
+      if (!db) return false;
+      const payload = {
+        uid: user.uid,
+        email: user.email || profileData.email || "",
+        name: profileData.name || user.displayName || (user.email ? user.email.split("@")[0] : ""),
+        emailVerified: true,
+        lastLoginAt: firebase.firestore.FieldValue.serverTimestamp(),
+        source: profileData.source || "ThuysTalk Registration Portal"
+      };
+      if (profileData.phone !== undefined) {
+        payload.phone = profileData.phone || "";
+      }
+      if (profileData.isNew) {
+        payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      }
+      if (profileData.recordConsent) {
+        payload.consentAt = firebase.firestore.FieldValue.serverTimestamp();
+      }
+      await db.collection("learners").doc(user.uid).set(payload, { merge: true });
+      return true;
+    },
+    deleteUnconsentedGoogleUser: async function () {
+      initFirebase();
+      const user = auth ? auth.currentUser : null;
+      if (user) {
+        try {
+          await user.delete();
+        } catch (err) {
+          console.warn("deleteUnconsentedGoogleUser notice:", err && err.code ? err.code : err);
+        }
+      }
+      if (auth) {
+        try {
+          await auth.signOut();
+        } catch (e) {}
+      }
+      return true;
     },
 
     // 3. RESEND VERIFICATION EMAIL
