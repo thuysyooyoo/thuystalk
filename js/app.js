@@ -20,6 +20,7 @@
     PENDING_GOOGLE_PROFILE_UID: "thuystalk_pending_google_profile_uid_v1",
     PENDING_REDIRECT_REASON: "thuystalk_pending_redirect_reason_v1",
     PENDING_ACTION: "thuystalk_pending_action_v1",
+    DOWNLOAD_DEDUP: "thuystalk_download_dedup_v1",
     REG_TRUST_UIDS: "thuystalk_reg_verified_uids_v1",
     GUEST_QUERY_COUNT: "thuystalk_guest_query_count_v4",
     PROGRESS: "thuystalk_lesson_progress_v3",
@@ -1383,29 +1384,212 @@
     });
   }
 
+  const inFlightDownloadKeys = new Set();
+
+  function buildDownloadDedupKey(uid, itemType, itemId, fileName) {
+    return `${uid || "anon"}::${itemType || ""}::${itemId || ""}::${fileName || ""}`;
+  }
+
+  function shouldRecordDownloadLeadNow(uid, itemType, itemId, fileName) {
+    if (!uid) return false;
+    const key = buildDownloadDedupKey(uid, itemType, itemId, fileName);
+    if (inFlightDownloadKeys.has(key)) return false;
+    const map = readStorageJson(localStorage, STORAGE_KEYS.DOWNLOAD_DEDUP, {});
+    const now = Date.now();
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const ts = Number(map[key] || 0);
+    return !(ts > 0 && now - ts < DAY_MS);
+  }
+
+  function markDownloadLeadRecorded(uid, itemType, itemId, fileName) {
+    if (!uid) return;
+    const key = buildDownloadDedupKey(uid, itemType, itemId, fileName);
+    const map = readStorageJson(localStorage, STORAGE_KEYS.DOWNLOAD_DEDUP, {});
+    const now = Date.now();
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    Object.keys(map).forEach((k) => {
+      if (now - Number(map[k] || 0) >= DAY_MS) delete map[k];
+    });
+    map[key] = now;
+    writeStorageJson(localStorage, STORAGE_KEYS.DOWNLOAD_DEDUP, map);
+  }
+
+  function showManualDownloadBanner(fileName, performDownload) {
+    const prev = document.getElementById("manualDownloadFallbackBar");
+    if (prev) prev.remove();
+    const bar = document.createElement("div");
+    bar.id = "manualDownloadFallbackBar";
+    bar.style.cssText =
+      "position:fixed;right:20px;bottom:76px;z-index:9998;max-width:360px;background:#064E3B;color:#FFFFFF;border:1.5px solid #34D399;border-radius:12px;padding:12px 14px;box-shadow:0 16px 36px rgba(0,0,0,0.28);display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:0.83rem;";
+    bar.innerHTML = `
+      <div style="min-width:0;">
+        <div style="font-weight:800;color:#ECFDF5;">Sẵn sàng tải tài liệu</div>
+        <div style="font-size:0.78rem;color:#D1FAE5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(fileName || "Tai lieu ThuysTalk")}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+        <button type="button" id="manualDownloadNowBtn" class="btn btn-primary btn-xs" style="background:#F59E0B;border-color:#F59E0B;color:#0F172A;font-weight:800;">Tải ngay</button>
+        <button type="button" id="manualDownloadCloseBtn" aria-label="Đóng" style="border:none;background:transparent;color:#D1FAE5;font-size:1.1rem;cursor:pointer;padding:2px 4px;">&times;</button>
+      </div>
+    `;
+    document.body.appendChild(bar);
+    const nowBtn = bar.querySelector("#manualDownloadNowBtn");
+    const closeBtn = bar.querySelector("#manualDownloadCloseBtn");
+    if (nowBtn) {
+      nowBtn.addEventListener("click", () => {
+        try {
+          if (typeof performDownload === "function") performDownload();
+        } finally {
+          bar.remove();
+        }
+      });
+    }
+    if (closeBtn) closeBtn.addEventListener("click", () => bar.remove());
+    setTimeout(() => {
+      if (bar.parentNode) bar.remove();
+    }, 15000);
+  }
+
+  function executeVerifiedMaterialDownload(user, meta, performDownload, fromAsyncFlow) {
+    const activeUser =
+      user ||
+      (window.ThuysTalkFirebase && window.ThuysTalkFirebase.getCurrentUser
+        ? window.ThuysTalkFirebase.getCurrentUser()
+        : null);
+    const uid = (activeUser && activeUser.uid) || state.learnerUid || "";
+    const dedupKey = buildDownloadDedupKey(uid, meta.itemType, meta.itemId, meta.fileName);
+
+    if (shouldRecordDownloadLeadNow(uid, meta.itemType, meta.itemId, meta.fileName)) {
+      inFlightDownloadKeys.add(dedupKey);
+      if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.recordDownloadLead === "function") {
+        window.ThuysTalkFirebase
+          .recordDownloadLead({
+            name: state.learnerName || (activeUser && activeUser.displayName) || "",
+            itemType: meta.itemType,
+            itemId: meta.itemId,
+            itemTitle: meta.itemTitle,
+            fileName: meta.fileName
+          })
+          .then((saved) => {
+            if (saved) markDownloadLeadRecorded(uid, meta.itemType, meta.itemId, meta.fileName);
+          })
+          .catch(() => {})
+          .finally(() => {
+            inFlightDownloadKeys.delete(dedupKey);
+          });
+      } else {
+        inFlightDownloadKeys.delete(dedupKey);
+      }
+    }
+
+    let downloadSucceeded = false;
+    try {
+      if (typeof performDownload === "function") performDownload();
+      downloadSucceeded = true;
+    } catch (e) {
+      downloadSucceeded = false;
+    }
+    if (fromAsyncFlow || !downloadSucceeded) {
+      showManualDownloadBanner(meta.fileName, performDownload);
+    }
+  }
+
+  function triggerGatedMaterialDownload(meta) {
+    const fbUser =
+      window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.getCurrentUser === "function"
+        ? window.ThuysTalkFirebase.getCurrentUser()
+        : null;
+    const isVerifiedLoggedIn = !!(fbUser && fbUser.emailVerified === true && state.learnerUid && state.learnerEmail);
+
+    if (isVerifiedLoggedIn) {
+      executeVerifiedMaterialDownload(fbUser, meta, meta.performDownload, false);
+      return;
+    }
+
+    requireLearnerLogin({
+      reason: "Đăng nhập để tải tài liệu (1 chạm với Google)",
+      pendingAction: {
+        type: "download",
+        itemType: meta.itemType,
+        itemId: meta.itemId
+      },
+      onSuccess: (loggedUser) => {
+        setSessionFlag(STORAGE_KEYS.PENDING_ACTION, "");
+        executeVerifiedMaterialDownload(loggedUser, meta, meta.performDownload, true);
+      }
+    });
+  }
+
+  window.__thuystalkResumePendingAction = function (pendingAct, user) {
+    if (!pendingAct || pendingAct.type !== "download") return;
+    if (pendingAct.itemType === "course") {
+      const course = state.courses.find((c) => c.id === pendingAct.itemId);
+      if (course) {
+        const cTitleVi = typeof course.title === "object" ? course.title.vi : course.title;
+        executeVerifiedMaterialDownload(
+          user,
+          {
+            itemType: "course",
+            itemId: course.id,
+            itemTitle: cTitleVi,
+            fileName: `ThuysTalk_Tai_Lieu_${course.id}.txt`
+          },
+          () => triggerChecklistDownload(course),
+          true
+        );
+      }
+    } else if (pendingAct.itemType === "video") {
+      const video = state.videos.find((v) => v.id === pendingAct.itemId);
+      if (video) {
+        const vTitleVi = typeof video.title === "object" ? video.title.vi : video.title;
+        executeVerifiedMaterialDownload(
+          user,
+          {
+            itemType: "video",
+            itemId: video.id,
+            itemTitle: vTitleVi,
+            fileName: `ThuysTalk_Checklist_${video.id || "video"}.txt`
+          },
+          () => downloadVideoChecklist(video),
+          true
+        );
+      }
+    } else if (pendingAct.itemType === "article") {
+      const art = state.articles.find((a) => a.id === pendingAct.itemId);
+      if (art) {
+        const aTitleVi = typeof art.title === "object" ? art.title.vi : art.title;
+        executeVerifiedMaterialDownload(
+          user,
+          {
+            itemType: "article",
+            itemId: art.id,
+            itemTitle: aTitleVi,
+            fileName: `ThuysTalk_Tai_Lieu_${art.id || "article"}.txt`
+          },
+          () => downloadArticleTemplate(art),
+          true
+        );
+      }
+    }
+  };
+
   function handleSendCourseKit(courseId) {
     const course = state.courses.find((c) => c.id === courseId) || state.courses[0];
     if (!course) return;
-
-    // Tải trực tiếp tài liệu & Checklist về máy người dùng không cần bắt buộc điền form
-    triggerChecklistDownload(course);
-    showToast(
-      state.lang === "vi"
-        ? "Đang tải bộ tài liệu & Checklist chuyên đề về máy..."
-        : "Downloading course resource kit & checklist..."
-    );
-
-    // Nếu đã đăng nhập email, ghi nhận tiến độ vào hệ thống
-    if (state.learnerEmail) {
-      const cTitleVi = typeof course.title === "object" ? course.title.vi : course.title;
-      recordLeadOrMaterial({
-        type: "Course Material Kit",
-        name: state.learnerEmail.split("@")[0],
-        email: state.learnerEmail,
-        phone: "-",
-        topic: cTitleVi
-      });
-    }
+    const cTitleVi = typeof course.title === "object" ? course.title.vi : course.title;
+    triggerGatedMaterialDownload({
+      itemType: "course",
+      itemId: course.id,
+      itemTitle: cTitleVi,
+      fileName: `ThuysTalk_Tai_Lieu_${course.id}.txt`,
+      performDownload: () => {
+        triggerChecklistDownload(course);
+        showToast(
+          state.lang === "vi"
+            ? "Đang tải bộ tài liệu & Checklist chuyên đề về máy..."
+            : "Downloading course resource kit & checklist..."
+        );
+      }
+    });
   }
 
   function triggerChecklistDownload(course) {
@@ -1654,7 +1838,14 @@
       </div>`;
 
     document.getElementById("videoRequestChecklistBtn").addEventListener("click", () => {
-      downloadVideoChecklist(video);
+      const vTitleVi = typeof video.title === "object" ? video.title.vi : video.title;
+      triggerGatedMaterialDownload({
+        itemType: "video",
+        itemId: video.id || "video",
+        itemTitle: vTitleVi,
+        fileName: `ThuysTalk_Checklist_${video.id || "video"}.txt`,
+        performDownload: () => downloadVideoChecklist(video)
+      });
     });
 
     document.getElementById("articleModal").classList.add("open");
@@ -1852,7 +2043,14 @@
       </div>`;
 
     document.getElementById("artSendTemplateBtn").addEventListener("click", () => {
-      downloadArticleTemplate(art);
+      const aTitleVi = typeof art.title === "object" ? art.title.vi : art.title;
+      triggerGatedMaterialDownload({
+        itemType: "article",
+        itemId: art.id || "article",
+        itemTitle: aTitleVi,
+        fileName: `ThuysTalk_Tai_Lieu_${art.id || "article"}.txt`,
+        performDownload: () => downloadArticleTemplate(art)
+      });
     });
     document.getElementById("artGoConsultBtn").addEventListener("click", () => {
       document.getElementById("articleModal").classList.remove("open");
@@ -6768,14 +6966,28 @@
           const name = ld.name || "Khách hàng";
           const email = ld.email || "-";
           const phone = ld.phone || "-";
-          const topic = ld.docTitle || ld.topic || "Tài liệu chuyên môn";
-          const type = ld.type || (ld.docTitle ? "Tải tài liệu" : "Tư vấn 1-1");
-          const typeBadge =
-            type.includes("Tư vấn")
-              ? `<span class="badge" style="background:#EA580C; color:#fff; font-weight:700; font-size:0.75rem;">Tư Vấn 1-1</span>`
-              : `<span class="badge" style="background:#0284C7; color:#fff; font-weight:700; font-size:0.75rem;">Tải Tài Liệu</span>`;
-          const timeStr = ld.requestedAt || ld.timestamp || "-";
-          const status = ld.status || "Đã gửi tài liệu / Đã ghi nhận";
+          const topicBase = ld.itemTitle || ld.docTitle || ld.topic || "Tài liệu chuyên môn";
+          const topic = ld.fileName ? `${topicBase} (${ld.fileName})` : topicBase;
+          const rawType = String(ld.type || (ld.itemTitle || ld.docTitle ? "download" : "Tư vấn 1-1"));
+          const isConsult = rawType.includes("Tư vấn");
+          const typeBadge = isConsult
+            ? `<span class="badge" style="background:#EA580C; color:#fff; font-weight:700; font-size:0.75rem;">Tư Vấn 1-1</span>`
+            : `<span class="badge" style="background:#0284C7; color:#fff; font-weight:700; font-size:0.75rem;">Tải Tài Liệu</span>`;
+          let timeStr = ld.requestedAt || ld.timestamp || "";
+          if (!timeStr && ld.createdAt) {
+            timeStr =
+              typeof ld.createdAt.toDate === "function"
+                ? ld.createdAt.toDate().toLocaleString("vi-VN")
+                : String(ld.createdAt);
+          }
+          if (!timeStr) timeStr = "-";
+          const status =
+            ld.status ||
+            (ld.type === "download"
+              ? ld.fileName
+                ? `Đã tải: ${ld.fileName}`
+                : "Đã ghi nhận lượt tải"
+              : "Đã ghi nhận");
 
           return `
             <tr>
@@ -7004,17 +7216,30 @@
 
     document.getElementById("exportLeadsCsvBtn").addEventListener("click", () => {
       const rows = [
-        ["STT", "Ho ten nguoi dung", "Email", "SDT/Zalo", "Noi dung tai lieu / Chu de tu van", "Phan loai", "Thoi gian", "Trang thai"],
-        ...currentLeads.map((ld, idx) => [
-          idx + 1,
-          ld.name || "",
-          ld.email || "",
-          ld.phone || "",
-          ld.docTitle || ld.topic || "",
-          ld.type || "Tai tai lieu",
-          ld.requestedAt || ld.timestamp || "",
-          ld.status || "Da ghi nhan"
-        ])
+        ["STT", "Ho ten nguoi dung", "Email", "SDT/Zalo", "Noi dung tai lieu / Chu de tu van", "Ten file", "Loai muc", "Ma muc", "Phan loai", "Thoi gian", "Trang thai"],
+        ...currentLeads.map((ld, idx) => {
+          const timeVal =
+            ld.requestedAt ||
+            ld.timestamp ||
+            (ld.createdAt
+              ? typeof ld.createdAt.toDate === "function"
+                ? ld.createdAt.toDate().toLocaleString("vi-VN")
+                : String(ld.createdAt)
+              : "");
+          return [
+            idx + 1,
+            ld.name || "",
+            ld.email || "",
+            ld.phone || "",
+            ld.itemTitle || ld.docTitle || ld.topic || "",
+            ld.fileName || "",
+            ld.itemType || "",
+            ld.itemId || "",
+            ld.type || "download",
+            timeVal,
+            ld.status || (ld.type === "download" ? "Da ghi nhan luot tai" : "Da ghi nhan")
+          ];
+        })
       ];
       const csv =
         "\uFEFF" +
