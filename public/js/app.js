@@ -18,6 +18,7 @@
     PENDING_REG_PROFILE: "thuystalk_pending_reg_profile_v1",
     PENDING_AUTH_CHALLENGE_UID: "thuystalk_pending_challenge_uid_v1",
     PENDING_GOOGLE_PROFILE_UID: "thuystalk_pending_google_profile_uid_v1",
+    NEW_GOOGLE_AUTH_UID: "thuystalk_new_google_uid_v1",
     PENDING_REDIRECT_REASON: "thuystalk_pending_redirect_reason_v1",
     PENDING_ACTION: "thuystalk_pending_action_v1",
     DOWNLOAD_DEDUP: "thuystalk_download_dedup_v1",
@@ -3899,6 +3900,7 @@
         pendingAuthSuccessCallback = null;
         setSessionFlag(STORAGE_KEYS.PENDING_AUTH_CHALLENGE_UID, "");
         setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, "");
+        setSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID, "");
         setSessionFlag(STORAGE_KEYS.PENDING_REDIRECT_REASON, "");
         setSessionFlag(STORAGE_KEYS.PENDING_ACTION, "");
         if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.clearPendingGoogleLink === "function") {
@@ -4246,6 +4248,7 @@
             source: "Google Sign-In"
           });
           setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, "");
+          setSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID, "");
           markTrustedGoogleBrowser(curUser.uid);
           activeAuthStep = "";
           await finalizeLearnerSession(curUser, { name, phone });
@@ -4263,21 +4266,30 @@
         const declineBtn = authDiv.querySelector("#authGoogleDeclineBtn");
         declineBtn.disabled = true;
         declineBtn.textContent = "Đang hủy...";
+        const curUser = window.ThuysTalkFirebase && window.ThuysTalkFirebase.getCurrentUser ? window.ThuysTalkFirebase.getCurrentUser() : null;
+        const shouldDeleteAccount = !!(curUser && curUser.uid && getSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID) === curUser.uid);
         activeAuthStep = "";
         pendingAuthSuccessCallback = null;
         setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, "");
+        setSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID, "");
         setSessionFlag(STORAGE_KEYS.PENDING_REDIRECT_REASON, "");
         setSessionFlag(STORAGE_KEYS.PENDING_ACTION, "");
         try {
           if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.deleteUnconsentedGoogleUser) {
-            await window.ThuysTalkFirebase.deleteUnconsentedGoogleUser();
+            await window.ThuysTalkFirebase.deleteUnconsentedGoogleUser(shouldDeleteAccount);
+          } else if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.logoutLearner) {
+            await window.ThuysTalkFirebase.logoutLearner();
           }
         } finally {
           declineBtn.disabled = false;
           declineBtn.textContent = "Không đồng ý";
           authDiv.classList.remove("open");
           clearLearnerClientState();
-          showToast("Đã hủy tạo tài khoản Google theo yêu cầu của bạn.");
+          showToast(
+            shouldDeleteAccount
+              ? "Đã hủy tạo tài khoản Google theo yêu cầu của bạn."
+              : "Bạn chưa đồng ý Chính sách bảo mật nên đã đăng xuất."
+          );
         }
       });
 
@@ -5064,6 +5076,17 @@
     }
 
     if (!docRes.exists || !docRes.data || !docRes.data.consentAt) {
+      const providers = Array.isArray(user.providerData) ? user.providerData : [];
+      const onlyGoogleProvider = providers.length === 1 && providers[0] && providers[0].providerId === "google.com";
+      const createdAt = user.metadata && user.metadata.creationTime ? user.metadata.creationTime : "";
+      const lastSignInAt = user.metadata && user.metadata.lastSignInTime ? user.metadata.lastSignInTime : "";
+      const isNewGoogleAccount =
+        !docRes.exists &&
+        onlyGoogleProvider &&
+        (gRes.isNewUser === true ||
+          (!gRes.fromSessionRestore && !!createdAt && !!lastSignInAt && createdAt === lastSignInAt) ||
+          (!!gRes.fromSessionRestore && getSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID) === user.uid));
+      setSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID, isNewGoogleAccount ? user.uid : "");
       activeAuthStep = "google_profile";
       setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, user.uid);
       ensureGlobalModals();
@@ -5082,6 +5105,8 @@
       }
       return;
     }
+
+    setSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID, "");
 
     markTrustedGoogleBrowser(user.uid);
     activeAuthStep = "";
@@ -5222,7 +5247,7 @@
         return;
       }
       if (!docRes.exists || !docRes.data || !docRes.data.consentAt || getSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID) === user.uid) {
-        await handleGoogleLoginOutcome({ user, email: user.email, isNewUser: !docRes.exists, provider: "google" }, false);
+        await handleGoogleLoginOutcome({ user, email: user.email, isNewUser: false, fromSessionRestore: true, provider: "google" }, false);
         return;
       }
       markTrustedGoogleBrowser(user.uid);

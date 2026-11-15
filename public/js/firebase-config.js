@@ -370,10 +370,12 @@
       await db.collection("learners").doc(user.uid).set(payload, { merge: true });
       return true;
     },
-    deleteUnconsentedGoogleUser: async function () {
+    deleteUnconsentedGoogleUser: async function (allowDeleteAccount = false) {
       initFirebase();
       const user = auth ? auth.currentUser : null;
-      if (user) {
+      const providers = user && Array.isArray(user.providerData) ? user.providerData : [];
+      const onlyGoogleProvider = providers.length === 1 && providers[0] && providers[0].providerId === "google.com";
+      if (user && allowDeleteAccount === true && onlyGoogleProvider) {
         try {
           await user.delete();
         } catch (err) {
