@@ -714,8 +714,10 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         with _DEVICE_LOCK:
             _prune_device_state(now)
-            user_recent = _DEVICE_USER_SENDS.get(uid, [])
+            user_recent = _DEVICE_USER_SENDS.setdefault(uid, [])
             if len(_DEVICE_GLOBAL_SENDS) >= global_limit or len(user_recent) >= per_user_limit:
+                if not user_recent:
+                    _DEVICE_USER_SENDS.pop(uid, None)
                 self._send_json(
                     429,
                     {
@@ -725,6 +727,9 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
                     },
                 )
                 return
+            reserved_ts = now
+            _DEVICE_GLOBAL_SENDS.append(reserved_ts)
+            user_recent.append(reserved_ts)
 
         code = f"{secrets.randbelow(1000000):06d}"
         secret = _get_device_code_secret()
@@ -755,6 +760,14 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             except Exception:
                 pass
         except Exception as exc:
+            with _DEVICE_LOCK:
+                if reserved_ts in _DEVICE_GLOBAL_SENDS:
+                    _DEVICE_GLOBAL_SENDS.remove(reserved_ts)
+                user_sends = _DEVICE_USER_SENDS.get(uid)
+                if user_sends and reserved_ts in user_sends:
+                    user_sends.remove(reserved_ts)
+                    if not user_sends:
+                        _DEVICE_USER_SENDS.pop(uid, None)
             print(f"[DEVICE CODE ERROR] Khong the gui email ma xac nhan ({type(exc).__name__})", flush=True)
             self._send_json(
                 503,
@@ -768,19 +781,6 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
         sent_at = time.time()
         with _DEVICE_LOCK:
             _prune_device_state(sent_at)
-            user_recent = _DEVICE_USER_SENDS.setdefault(uid, [])
-            if len(_DEVICE_GLOBAL_SENDS) >= global_limit or len(user_recent) >= per_user_limit:
-                self._send_json(
-                    429,
-                    {
-                        "ok": False,
-                        "rateLimited": True,
-                        "error": "Bạn đã yêu cầu gửi mã quá số lần quy định trong 1 giờ. Vui lòng chờ rồi thử lại sau.",
-                    },
-                )
-                return
-            _DEVICE_GLOBAL_SENDS.append(sent_at)
-            user_recent.append(sent_at)
             _DEVICE_CHALLENGES[(uid, device_id)] = {
                 "digest": challenge_digest,
                 "expires_at": sent_at + DEVICE_CODE_TTL_SECONDS,
