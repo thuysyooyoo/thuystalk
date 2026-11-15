@@ -30,6 +30,7 @@ service cloud.firestore {
         && (!('id' in d) || (d.id is string && d.id.size() <= 80))
         && (!('timestamp' in d) || (d.timestamp is string && d.timestamp.size() <= 80))
         && (!('source' in d) || (d.source is string && d.source.size() <= 120))
+        && (!('createdAt' in d) || d.createdAt == request.time)
         && d.consent_nd13 == true;
     }
 
@@ -53,7 +54,8 @@ service cloud.firestore {
         && d.itemType is string && d.itemType.size() > 0 && d.itemType.size() <= 40
         && d.itemId is string && d.itemId.size() > 0 && d.itemId.size() <= 120
         && d.itemTitle is string && d.itemTitle.size() > 0 && d.itemTitle.size() <= 300
-        && d.fileName is string && d.fileName.size() > 0 && d.fileName.size() <= 260;
+        && d.fileName is string && d.fileName.size() > 0 && d.fileName.size() <= 260
+        && (!('createdAt' in d) || d.createdAt == request.time);
     }
 
     // 1. Public-read Content & Settings (Admin-only writes)

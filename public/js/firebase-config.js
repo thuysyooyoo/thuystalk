@@ -600,6 +600,36 @@
       }
     },
 
+    // Record Verified Material Download Lead (Strictly matches isValidDownloadLead rules)
+    recordDownloadLead: async function (downloadInfo = {}) {
+      initFirebase();
+      const user = auth ? auth.currentUser : null;
+      if (!db || !user || !user.emailVerified || !user.email) return false;
+      try {
+        const displayName = String(
+          downloadInfo.name || user.displayName || user.email.split("@")[0] || "Hoc vien"
+        ).slice(0, 120);
+        await safeFirestoreWrite(
+          db.collection("leads").add({
+            type: "download",
+            uid: user.uid,
+            email: user.email,
+            name: displayName,
+            itemType: String(downloadInfo.itemType || "resource").slice(0, 40) || "resource",
+            itemId: String(downloadInfo.itemId || "item").slice(0, 120) || "item",
+            itemTitle: String(downloadInfo.itemTitle || "Tai lieu ThuysTalk").slice(0, 300) || "Tai lieu ThuysTalk",
+            fileName: String(downloadInfo.fileName || "ThuysTalk_Tai_Lieu.txt").slice(0, 260) || "ThuysTalk_Tai_Lieu.txt",
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          }),
+          2500
+        );
+        return true;
+      } catch (err) {
+        console.warn("Firestore recordDownloadLead error:", err);
+        return false;
+      }
+    },
+
     // Save Learner Account to Firestore
     saveLearner: async function (learnerData) {
       initFirebase();
