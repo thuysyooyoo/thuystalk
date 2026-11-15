@@ -3899,6 +3899,15 @@
                       <input type="tel" id="authRegPhone" class="form-control" placeholder="VD: 0912 345 678" />
                     </div>
                   </div>
+                  <div class="form-group" style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:10px; padding:11px 12px; margin-top:4px;">
+                    <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-weight:600; font-size:0.84rem; color:#0F172A; margin-bottom:5px;">
+                      <input type="checkbox" id="authRegisterConsentCheck" required style="margin-top:3px; width:16px; height:16px; flex-shrink:0;" />
+                      <span>Tôi đồng ý với <a href="#" class="open-privacy-link" style="color:#047857; font-weight:800; text-decoration:underline;">Chính sách bảo mật</a></span>
+                    </label>
+                    <div style="font-size:0.78rem; color:#475569; line-height:1.45; padding-left:26px;">
+                      ThuysTalk lưu tên, email, SĐT (nếu có) và lịch sử tải tài liệu để hỗ trợ tư vấn.
+                    </div>
+                  </div>
                   <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
                     <button type="button" class="btn btn-outline btn-sm" data-close-modal="learnerAuthModal">Hủy</button>
                     <button type="submit" class="btn btn-primary btn-sm" id="authRegSubmitBtn">
