@@ -3121,6 +3121,61 @@ body.admin-mode .photo-change-trigger {
   margin-bottom: 14px;
 }
 
+.auth-google-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border-radius: 10px;
+  border: 1.5px solid #CBD5E1;
+  background: #FFFFFF;
+  color: #0F172A;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: var(--transition);
+  box-shadow: var(--shadow-sm);
+}
+
+.auth-google-btn:hover:not(:disabled) {
+  background: #F8FAFC;
+  border-color: var(--jade-600);
+  color: var(--jade-900);
+}
+
+.auth-google-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0;
+  color: #64748B;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #E2E8F0;
+}
+
+.auth-code-input {
+  text-align: center;
+  letter-spacing: 0.35em;
+  font-size: 1.35rem !important;
+  font-weight: 800 !important;
+}
+
 /* ==========================================================================
    EMAIL MATERIAL DELIVERY MODAL
    ========================================================================== */

@@ -12,6 +12,15 @@
     LEARNER_EMAIL: "thuystalk_learner_email_v3",
     LEARNER_NAME: "thuystalk_learner_name_v4",
     LEARNER_PHONE: "thuystalk_learner_phone_v4",
+    DEVICE_ID: "thuystalk_device_id_v1",
+    DEVICE_TRUST_MAP: "thuystalk_device_trust_v1",
+    GOOGLE_TRUST_UIDS: "thuystalk_google_auth_uids_v1",
+    PENDING_REG_PROFILE: "thuystalk_pending_reg_profile_v1",
+    PENDING_AUTH_CHALLENGE_UID: "thuystalk_pending_challenge_uid_v1",
+    PENDING_GOOGLE_PROFILE_UID: "thuystalk_pending_google_profile_uid_v1",
+    PENDING_REDIRECT_REASON: "thuystalk_pending_redirect_reason_v1",
+    PENDING_ACTION: "thuystalk_pending_action_v1",
+    REG_TRUST_UIDS: "thuystalk_reg_verified_uids_v1",
     GUEST_QUERY_COUNT: "thuystalk_guest_query_count_v4",
     PROGRESS: "thuystalk_lesson_progress_v3",
     LEADS: "thuystalk_leads_ledger_v3",
@@ -25,6 +34,161 @@
     LAST_LESSON_MAP: "thuystalk_last_lesson_by_course_v1",
     BRIDGE_URL: "thuystalk_notebook_bridge_url_v3"
   };
+
+  function readStorageJson(storageObj, key, fallback = {}) {
+    try {
+      const raw = storageObj.getItem(key);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function writeStorageJson(storageObj, key, value) {
+    try {
+      storageObj.setItem(key, JSON.stringify(value));
+    } catch (e) {}
+  }
+
+  function getOrCreateDeviceId() {
+    try {
+      const existing = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
+      if (existing && /^[A-Za-z0-9_-]{16,128}$/.test(existing)) return existing;
+    } catch (e) {}
+    let hex = "";
+    try {
+      if (window.crypto && typeof window.crypto.getRandomValues === "function") {
+        const bytes = new Uint8Array(16);
+        window.crypto.getRandomValues(bytes);
+        hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+      }
+    } catch (e) {}
+    if (!hex) {
+      hex =
+        Date.now().toString(16).padStart(12, "0") +
+        Math.random().toString(16).slice(2).padEnd(20, "0").slice(0, 20);
+    }
+    try {
+      localStorage.setItem(STORAGE_KEYS.DEVICE_ID, hex);
+    } catch (e) {}
+    return hex;
+  }
+
+  function getDeviceTrust(uid) {
+    if (!uid) return null;
+    const deviceId = getOrCreateDeviceId();
+    const map = readStorageJson(localStorage, STORAGE_KEYS.DEVICE_TRUST_MAP, {});
+    const rec = map[uid];
+    if (
+      rec &&
+      typeof rec.trust === "string" &&
+      rec.trust.length >= 16 &&
+      typeof rec.issuedAt === "string" &&
+      rec.issuedAt.length > 0 &&
+      rec.deviceId === deviceId
+    ) {
+      return rec;
+    }
+    return null;
+  }
+
+  function saveDeviceTrust(uid, trust, issuedAt) {
+    if (!uid || !trust || !issuedAt) return;
+    const deviceId = getOrCreateDeviceId();
+    const map = readStorageJson(localStorage, STORAGE_KEYS.DEVICE_TRUST_MAP, {});
+    map[uid] = { deviceId, trust: String(trust), issuedAt: String(issuedAt) };
+    writeStorageJson(localStorage, STORAGE_KEYS.DEVICE_TRUST_MAP, map);
+  }
+
+  function hasTrustedGoogleBrowser(uid) {
+    if (!uid) return false;
+    const map = readStorageJson(localStorage, STORAGE_KEYS.GOOGLE_TRUST_UIDS, {});
+    return map[uid] === true;
+  }
+
+  function markTrustedGoogleBrowser(uid) {
+    if (!uid) return;
+    const map = readStorageJson(localStorage, STORAGE_KEYS.GOOGLE_TRUST_UIDS, {});
+    map[uid] = true;
+    writeStorageJson(localStorage, STORAGE_KEYS.GOOGLE_TRUST_UIDS, map);
+  }
+
+  function hasRegVerifiedBrowser(uid) {
+    if (!uid) return false;
+    const map = readStorageJson(localStorage, STORAGE_KEYS.REG_TRUST_UIDS, {});
+    return map[uid] === true;
+  }
+
+  function markRegVerifiedBrowser(uid) {
+    if (!uid) return;
+    const map = readStorageJson(localStorage, STORAGE_KEYS.REG_TRUST_UIDS, {});
+    map[uid] = true;
+    writeStorageJson(localStorage, STORAGE_KEYS.REG_TRUST_UIDS, map);
+  }
+
+  function setSessionFlag(key, value) {
+    try {
+      if (value) sessionStorage.setItem(key, String(value));
+      else sessionStorage.removeItem(key);
+    } catch (e) {}
+  }
+
+  function getSessionFlag(key) {
+    try {
+      return sessionStorage.getItem(key) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function getThuystalkApiUrl(apiPath) {
+    if (
+      typeof window !== "undefined" &&
+      window.location &&
+      (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") &&
+      window.location.port === "8099"
+    ) {
+      return `${window.location.origin}${apiPath}`;
+    }
+    const base = (state.notebookBridgeUrl || "http://localhost:8099/api/notebook-query")
+      .trim()
+      .replace(/\/api\/notebook-query\/?$/, "");
+    return `${base}${apiPath}`;
+  }
+
+  async function postDeviceApi(apiPath, bodyPayload) {
+    const token =
+      window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.getIdToken === "function"
+        ? await window.ThuysTalkFirebase.getIdToken(false)
+        : null;
+    if (!token) {
+      return { ok: false, status: 401, data: { error: "Phiên đăng nhập chưa sẵn sàng." } };
+    }
+    try {
+      const res = await fetch(getThuystalkApiUrl(apiPath), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token
+        },
+        body: JSON.stringify(bodyPayload || {})
+      });
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (e) {}
+      return { ok: res.ok, status: res.status, data };
+    } catch (err) {
+      return {
+        ok: false,
+        status: 0,
+        networkError: true,
+        data: { error: "Chưa gửi được mã xác nhận lúc này. Bạn có thể đăng nhập bằng Google hoặc thử lại sau." }
+      };
+    }
+  }
 
   function isHomePage() {
     return document.body && document.body.dataset.page === "home";
@@ -894,13 +1058,7 @@
             if (window.ThuysTalkFirebase) {
               await window.ThuysTalkFirebase.logoutLearner();
             }
-            state.learnerUid = "";
-            state.learnerEmail = "";
-            state.adminMode = false;
-            localStorage.removeItem(STORAGE_KEYS.LEARNER_EMAIL);
-            updateHeaderLearnerStatus();
-            updateConsultFormStatus();
-            renderElearningSection(window.THUYSTALK_I18N[state.lang]);
+            clearLearnerClientState();
             showToast("Đã đăng xuất tài khoản thành công.");
           });
         }
@@ -3448,7 +3606,7 @@
       });
     }
 
-    // 2. Learner Auth Modal with Firebase Email Verification
+    // 2. Learner Auth Modal (Google Sign-In + Email Verification Polling + 6-Digit Device Code + Google First-Time Consent)
     if (!document.getElementById("learnerAuthModal")) {
       const authDiv = document.createElement("div");
       authDiv.className = "modal-backdrop";
@@ -3462,79 +3620,156 @@
             <button class="modal-close" data-close-modal="learnerAuthModal" aria-label="Đóng" style="background:#F1F5F9 !important; color:#475569 !important; border:1px solid #CBD5E1; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.25rem; cursor:pointer;">&times;</button>
           </div>
           <div class="modal-body" style="padding:22px 24px; background:#FFFFFF !important; color:#0F172A !important;">
-            <div class="auth-tabs-nav" style="display:grid; grid-template-columns:1fr 1fr; background:#F1F5F9; border-radius:10px; padding:4px; margin-bottom:20px; gap:4px;">
-              <button type="button" class="auth-tab-btn active" id="authTabRegisterBtn">Đăng Ký Tài Khoản</button>
-              <button type="button" class="auth-tab-btn" id="authTabLoginBtn">Đăng Nhập</button>
+            <div id="authTabsWrapper">
+              <div class="auth-tabs-nav" style="display:grid; grid-template-columns:1fr 1fr; background:#F1F5F9; border-radius:10px; padding:4px; margin-bottom:20px; gap:4px;">
+                <button type="button" class="auth-tab-btn active" id="authTabRegisterBtn">Đăng Ký Tài Khoản</button>
+                <button type="button" class="auth-tab-btn" id="authTabLoginBtn">Đăng Nhập</button>
+              </div>
+
+              <!-- Tab 1: Registration Form -->
+              <div id="authRegisterPane">
+                <button type="button" class="auth-google-btn" id="authRegGoogleBtn">
+                  <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#064E3B;color:#FFFFFF;font-size:0.75rem;font-weight:900;">G</span>
+                  <span>Đăng nhập bằng Google</span>
+                </button>
+                <div class="auth-divider">hoặc đăng ký bằng Email</div>
+
+                <div class="auth-notice-box" id="authRegisterNoticeBox" style="background:#FFFBEB; border-left:3.5px solid #F59E0B; padding:12px 14px; border-radius:6px; margin-bottom:16px; font-size:0.83rem; color:#92400E; line-height:1.5;">
+                  <strong>Lưu ý:</strong> Mỗi địa chỉ email chỉ được tạo <strong>1 tài khoản duy nhất</strong>. Sau khi đăng ký, bấm link trong email để kích hoạt. Đăng nhập trên máy mới sẽ cần thêm mã gửi qua email.
+                </div>
+
+                <form id="authRegisterForm">
+                  <div class="form-group">
+                    <label>Họ và tên của bạn *</label>
+                    <input type="text" id="authRegName" class="form-control" required placeholder="VD: Nguyễn Thị Lan" />
+                  </div>
+                  <div class="form-group">
+                    <label>Địa chỉ Email nhận thư xác thực *</label>
+                    <input type="email" id="authRegEmail" class="form-control" required placeholder="VD: lan.nguyen@gmail.com" />
+                  </div>
+                  <div class="form-row-2">
+                    <div class="form-group">
+                      <label>Mật khẩu (tối thiểu 6 ký tự) *</label>
+                      <input type="password" id="authRegPass" class="form-control" required minlength="6" placeholder="Mật khẩu bảo mật" />
+                    </div>
+                    <div class="form-group">
+                      <label>Số điện thoại / Zalo *</label>
+                      <input type="tel" id="authRegPhone" class="form-control" required placeholder="VD: 0912 345 678" />
+                    </div>
+                  </div>
+                  <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
+                    <button type="button" class="btn btn-outline btn-sm" data-close-modal="learnerAuthModal">Hủy</button>
+                    <button type="submit" class="btn btn-primary btn-sm" id="authRegSubmitBtn">
+                      Tạo Tài Khoản &amp; Gửi Email Xác Thực
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <!-- Tab 2: Login Form -->
+              <div id="authLoginPane" style="display:none;">
+                <button type="button" class="auth-google-btn" id="authLogGoogleBtn">
+                  <span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#064E3B;color:#FFFFFF;font-size:0.75rem;font-weight:900;">G</span>
+                  <span>Đăng nhập bằng Google</span>
+                </button>
+                <div class="auth-divider">hoặc đăng nhập bằng Email</div>
+
+                <div id="authLoginNoticeBox" style="display:none;" class="auth-notice-box"></div>
+
+                <form id="authLoginForm">
+                  <div class="form-group">
+                    <label>Địa chỉ Email *</label>
+                    <input type="email" id="authLogEmail" class="form-control" required placeholder="VD: lan.nguyen@gmail.com" />
+                  </div>
+                  <div class="form-group">
+                    <label>Mật khẩu *</label>
+                    <input type="password" id="authLogPass" class="form-control" required placeholder="Mật khẩu của bạn" />
+                  </div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <button type="button" id="authForgotPassBtn" style="border:none; background:transparent; font-size:0.8rem; color:#047857; font-weight:700; cursor:pointer; padding:0; text-decoration:underline;">
+                      Quên mật khẩu?
+                    </button>
+                  </div>
+                  <div style="display:flex; justify-content:flex-end; gap:10px;">
+                    <button type="button" class="btn btn-outline btn-sm" data-close-modal="learnerAuthModal">Đóng</button>
+                    <button type="submit" class="btn btn-primary btn-sm" id="authLogSubmitBtn">
+                      Đăng Nhập
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
 
-            <!-- Tab 1: Registration Form -->
-            <div id="authRegisterPane">
-              <div class="auth-notice-box" style="background:#FFFBEB; border-left:3.5px solid #F59E0B; padding:12px 14px; border-radius:6px; margin-bottom:16px; font-size:0.83rem; color:#92400E; line-height:1.5;">
-                <strong>Lưu ý:</strong> Mỗi địa chỉ email chỉ được tạo <strong>1 tài khoản duy nhất</strong>. Sau khi đăng ký, hệ thống sẽ gửi thư xác thực đến hộp thư của bạn. Bắt buộc nhấn kích hoạt trước khi đăng nhập.
-              </div>
-
-              <div id="authRegisterSuccessBox" style="display:none;" class="auth-success-banner" style="background:#F0FDF4; border:1.5px solid #86EFAC; border-radius:12px; padding:16px 20px; text-align:center; color:#064E3B; margin-bottom:14px;">
-                <h4 style="color:#064E3B; margin-bottom:6px; font-weight:800;">Đã Gửi Email Xác Thực!</h4>
-                <p style="font-size:0.84rem; margin-bottom:10px; line-height:1.5;" id="authRegisterSuccessMsg">
-                  Một thư xác thực đã được gửi tới hộp thư của bạn. Vui lòng mở email và nhấn vào liên kết kích hoạt trước khi đăng nhập.
+            <!-- View 3: Waiting for Email Verification Polling (up to 10m, every 5s) -->
+            <div id="authVerifyEmailPane" style="display:none;">
+              <div class="auth-success-banner">
+                <h4 style="color:#064E3B; margin-bottom:8px; font-weight:800;">Kiểm tra hộp thư và bấm link xác thực</h4>
+                <p id="authVerifyEmailDesc" style="font-size:0.86rem; color:#1E293B; line-height:1.55; margin-bottom:10px;"></p>
+                <p id="authVerifyStatusText" style="font-size:0.8rem; color:#047857; font-weight:700; margin:0;">
+                  Đang chờ xác thực... Tab này tự động đi tiếp ngay khi bạn bấm link.
                 </p>
-                <button type="button" class="btn btn-primary btn-sm" id="authGoToLoginAfterRegisterBtn">Chuyển sang Đăng Nhập</button>
               </div>
+              <div id="authVerifyNoticeBox" style="display:none; margin-bottom:12px;" class="auth-notice-box"></div>
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px;">
+                <button type="button" class="btn btn-outline btn-sm" id="authVerifyCancelBtn">Quay lại</button>
+                <button type="button" class="btn btn-primary btn-sm" id="authVerifyResendBtn">Gửi lại thư</button>
+              </div>
+            </div>
 
-              <form id="authRegisterForm">
+            <!-- View 4: 6-Digit New Device Verification Code -->
+            <div id="authDeviceCodePane" style="display:none;">
+              <div class="auth-notice-box" style="margin-bottom:14px;">
+                <strong style="display:block; margin-bottom:4px; color:#064E3B;">Xác nhận đăng nhập trên thiết bị mới</strong>
+                <span id="authDeviceCodeDesc" style="font-size:0.84rem; color:#334155; line-height:1.5;">
+                  Mã xác nhận 6 số đã được gửi tới email của bạn (hiệu lực 10 phút).
+                </span>
+              </div>
+              <div id="authDeviceNoticeBox" style="display:none; margin-bottom:12px;" class="auth-notice-box"></div>
+              <form id="authDeviceCodeForm">
                 <div class="form-group">
-                  <label>Họ và tên của bạn *</label>
-                  <input type="text" id="authRegName" class="form-control" required placeholder="VD: Nguyễn Thị Lan" />
+                  <label>Nhập mã xác nhận 6 số *</label>
+                  <input type="text" id="authDeviceCodeInp" class="form-control auth-code-input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required placeholder="000000" />
                 </div>
-                <div class="form-group">
-                  <label>Địa chỉ Email nhận thư xác thực *</label>
-                  <input type="email" id="authRegEmail" class="form-control" required placeholder="VD: lan.nguyen@gmail.com" />
-                </div>
-                <div class="form-row-2">
-                  <div class="form-group">
-                    <label>Mật khẩu (tối thiểu 6 ký tự) *</label>
-                    <input type="password" id="authRegPass" class="form-control" required minlength="6" placeholder="Mật khẩu bảo mật" />
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-top:16px;">
+                  <button type="button" class="btn btn-outline btn-sm" id="authDeviceCancelBtn">Hủy &amp; Đăng xuất</button>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <button type="button" class="btn btn-outline btn-sm" id="authDeviceResendBtn">Gửi lại mã</button>
+                    <button type="submit" class="btn btn-primary btn-sm" id="authDeviceVerifyBtn">Xác nhận</button>
                   </div>
-                  <div class="form-group">
-                    <label>Số điện thoại / Zalo *</label>
-                    <input type="tel" id="authRegPhone" class="form-control" required placeholder="VD: 0912 345 678" />
-                  </div>
-                </div>
-                <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
-                  <button type="button" class="btn btn-outline btn-sm" data-close-modal="learnerAuthModal">Hủy</button>
-                  <button type="submit" class="btn btn-primary btn-sm" id="authRegSubmitBtn">
-                    Tạo Tài Khoản &amp; Gửi Email Xác Thực
-                  </button>
                 </div>
               </form>
             </div>
 
-            <!-- Tab 2: Login Form -->
-            <div id="authLoginPane" style="display:none;">
-              <div id="authLoginNoticeBox" style="display:none;" class="auth-notice-box"></div>
-
-              <form id="authLoginForm">
+            <!-- View 5: Google First-Time Profile Completion & Consent -->
+            <div id="authGoogleProfilePane" style="display:none;">
+              <div class="auth-notice-box" style="margin-bottom:14px;">
+                <strong style="display:block; margin-bottom:4px; color:#064E3B;">Hoàn tất hồ sơ</strong>
+                <span style="font-size:0.84rem; color:#334155; line-height:1.5;">
+                  Vui lòng kiểm tra thông tin và đồng ý Chính sách bảo mật để hoàn tất tài khoản ThuysTalk.
+                </span>
+              </div>
+              <div id="authGoogleProfileNoticeBox" style="display:none; margin-bottom:12px;" class="auth-notice-box"></div>
+              <form id="authGoogleProfileForm">
                 <div class="form-group">
-                  <label>Địa chỉ Email *</label>
-                  <input type="email" id="authLogEmail" class="form-control" required placeholder="VD: lan.nguyen@gmail.com" />
+                  <label>Họ và tên *</label>
+                  <input type="text" id="authGoogleNameInp" class="form-control" required placeholder="Họ và tên của bạn" />
                 </div>
                 <div class="form-group">
-                  <label>Mật khẩu *</label>
-                  <input type="password" id="authLogPass" class="form-control" required placeholder="Mật khẩu của bạn" />
+                  <label>Số điện thoại / Zalo (không bắt buộc)</label>
+                  <input type="tel" id="authGooglePhoneInp" class="form-control" placeholder="VD: 0912 345 678" />
                 </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-                  <button type="button" id="authForgotPassBtn" style="border:none; background:transparent; font-size:0.8rem; color:#047857; font-weight:700; cursor:pointer; padding:0; text-decoration:underline;">
-                    Quên mật khẩu?
-                  </button>
-                  <button type="button" id="authResendVerifyBtn" style="border:none; background:transparent; font-size:0.8rem; color:#EA580C; font-weight:700; cursor:pointer; padding:0; display:none;">
-                    Gửi lại email kích hoạt
-                  </button>
+                <div class="form-group" style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:10px; padding:12px;">
+                  <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-weight:600; font-size:0.84rem; color:#0F172A; margin-bottom:6px;">
+                    <input type="checkbox" id="authGoogleConsentCheck" style="margin-top:3px; width:16px; height:16px; flex-shrink:0;" />
+                    <span>Tôi đồng ý với <a href="#" class="open-privacy-link" style="color:#047857; font-weight:800; text-decoration:underline;">Chính sách bảo mật</a></span>
+                  </label>
+                  <div style="font-size:0.78rem; color:#475569; line-height:1.45; padding-left:26px;">
+                    ThuysTalk lưu tên, email, SĐT (nếu có) và lịch sử tải tài liệu để hỗ trợ tư vấn.
+                  </div>
                 </div>
-                <div style="display:flex; justify-content:flex-end; gap:10px;">
-                  <button type="button" class="btn btn-outline btn-sm" data-close-modal="learnerAuthModal">Đóng</button>
-                  <button type="submit" class="btn btn-primary btn-sm" id="authLogSubmitBtn">
-                    Đăng Nhập
-                  </button>
+                <div style="display:flex; justify-content:space-between; gap:10px; margin-top:16px; flex-wrap:wrap;">
+                  <button type="button" class="btn btn-outline btn-sm" id="authGoogleDeclineBtn" style="color:#DC2626; border-color:#FCA5A5;">Không đồng ý</button>
+                  <button type="submit" class="btn btn-primary btn-sm" id="authGoogleFinishBtn">Hoàn tất &amp; Tiếp tục</button>
                 </div>
               </form>
             </div>
@@ -3543,16 +3778,33 @@
       `;
       document.body.appendChild(authDiv);
 
+      const closeAndAbortAuthModal = async () => {
+        stopEmailVerificationPolling();
+        stopAuthResendCooldown();
+        const wasChallenge = activeAuthStep === "device_code" || activeAuthStep === "google_profile" || activeAuthStep === "verify_email";
+        activeAuthStep = "";
+        pendingAuthSuccessCallback = null;
+        setSessionFlag(STORAGE_KEYS.PENDING_AUTH_CHALLENGE_UID, "");
+        setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, "");
+        setSessionFlag(STORAGE_KEYS.PENDING_REDIRECT_REASON, "");
+        setSessionFlag(STORAGE_KEYS.PENDING_ACTION, "");
+        if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.clearPendingGoogleLink === "function") {
+          window.ThuysTalkFirebase.clearPendingGoogleLink();
+        }
+        authDiv.classList.remove("open");
+        if (wasChallenge && window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.logoutLearner === "function") {
+          await window.ThuysTalkFirebase.logoutLearner();
+        }
+      };
+
       authDiv.querySelectorAll("[data-close-modal]").forEach((b) => {
         b.addEventListener("click", () => {
-          pendingAuthSuccessCallback = null;
-          authDiv.classList.remove("open");
+          closeAndAbortAuthModal();
         });
       });
       authDiv.addEventListener("click", (e) => {
         if (e.target === authDiv) {
-          pendingAuthSuccessCallback = null;
-          authDiv.classList.remove("open");
+          closeAndAbortAuthModal();
         }
       });
 
@@ -3563,6 +3815,7 @@
       const paneLog = authDiv.querySelector("#authLoginPane");
 
       tabReg.addEventListener("click", () => {
+        showAuthSubView("tabs");
         tabReg.classList.add("active");
         tabLog.classList.remove("active");
         paneReg.style.display = "block";
@@ -3570,147 +3823,348 @@
       });
 
       tabLog.addEventListener("click", () => {
+        showAuthSubView("tabs");
         tabLog.classList.add("active");
         tabReg.classList.remove("active");
         paneLog.style.display = "block";
         paneReg.style.display = "none";
       });
 
-      authDiv.querySelector("#authGoToLoginAfterRegisterBtn").addEventListener("click", () => {
-        tabLog.click();
-      });
+      // Handle Google Sign-In buttons (Top of both Register & Login tabs)
+      const handleGoogleBtnClick = async (btnEl) => {
+        if (!window.ThuysTalkFirebase || typeof window.ThuysTalkFirebase.loginLearnerWithGoogle !== "function" || !window.ThuysTalkFirebase.isAuthReady()) {
+          alert("Dịch vụ đăng nhập Google chưa sẵn sàng trên trình duyệt.");
+          return;
+        }
+        const origHtml = btnEl.innerHTML;
+        const regGoogleBtn = authDiv.querySelector("#authRegGoogleBtn");
+        const logGoogleBtn = authDiv.querySelector("#authLogGoogleBtn");
+        if (regGoogleBtn) regGoogleBtn.disabled = true;
+        if (logGoogleBtn) logGoogleBtn.disabled = true;
+        btnEl.textContent = "Đang kết nối Google...";
+        activeAuthStep = "google_popup";
 
-      // Handle Register with Firebase Email Verification (1 Account per Email)
+        const noticeBox = authDiv.querySelector("#authLoginNoticeBox");
+        if (noticeBox) {
+          setSessionFlag(STORAGE_KEYS.PENDING_REDIRECT_REASON, noticeBox.style.display !== "none" ? noticeBox.textContent : "");
+        }
+
+        try {
+          const gRes = await window.ThuysTalkFirebase.loginLearnerWithGoogle();
+          if (gRes && gRes.redirected) {
+            return;
+          }
+          await handleGoogleLoginOutcome(gRes, false);
+        } catch (err) {
+          activeAuthStep = "";
+          const code = err && err.code ? err.code : "";
+          if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+            return;
+          }
+          showLoginNotice(
+            "Không thể đăng nhập bằng Google: " + (err && err.message ? err.message : err),
+            true
+          );
+        } finally {
+          if (regGoogleBtn) regGoogleBtn.disabled = false;
+          if (logGoogleBtn) logGoogleBtn.disabled = false;
+          btnEl.innerHTML = origHtml;
+        }
+      };
+
+      authDiv.querySelector("#authRegGoogleBtn").addEventListener("click", (e) => handleGoogleBtnClick(e.currentTarget));
+      authDiv.querySelector("#authLogGoogleBtn").addEventListener("click", (e) => handleGoogleBtnClick(e.currentTarget));
+
+      // Handle Register with Firebase Email Verification Polling (1 Account per Email)
       authDiv.querySelector("#authRegisterForm").addEventListener("submit", async (e) => {
         e.preventDefault();
         const name = authDiv.querySelector("#authRegName").value.trim();
         const email = authDiv.querySelector("#authRegEmail").value.trim();
         const pass = authDiv.querySelector("#authRegPass").value;
-        const phone = authDiv.querySelector("#authRegPhone").value.trim();
+        const phoneInp = authDiv.querySelector("#authRegPhone");
+        const phone = phoneInp ? phoneInp.value.trim() : "";
+        const regConsent = authDiv.querySelector("#authRegisterConsentCheck");
+        if (regConsent && !regConsent.checked) {
+          alert("Vui lòng đánh dấu đồng ý Chính sách bảo mật trước khi tạo tài khoản.");
+          regConsent.focus();
+          return;
+        }
 
         const btn = authDiv.querySelector("#authRegSubmitBtn");
         btn.disabled = true;
         btn.textContent = "Đang tạo tài khoản & gửi email...";
+        activeAuthStep = "registering";
 
         try {
           if (!window.ThuysTalkFirebase || !window.ThuysTalkFirebase.isAuthReady()) {
             throw new Error("Dịch vụ xác thực tài khoản chưa sẵn sàng trên trình duyệt.");
           }
-          await window.ThuysTalkFirebase.registerLearnerWithVerification(name, email, pass, phone);
-
-          authDiv.querySelector("#authRegisterForm").style.display = "none";
-          authDiv.querySelector("#authRegisterSuccessBox").style.display = "block";
-          authDiv.querySelector("#authRegisterSuccessMsg").innerHTML = `
-            Một thư xác thực đã được gửi tới: <strong>${escapeHtml(email)}</strong>.<br />
-            Theo quy định, bạn <strong>bắt buộc phải mở email và nhấn kích hoạt</strong> trước khi đăng nhập.
-          `;
+          const regRes = await window.ThuysTalkFirebase.registerLearnerWithVerification(name, email, pass, phone);
+          writeStorageJson(sessionStorage, STORAGE_KEYS.PENDING_REG_PROFILE, {
+            uid: regRes.uid || "",
+            email,
+            name,
+            phone,
+            consent: regConsent ? !!regConsent.checked : true
+          });
           authDiv.querySelector("#authLogEmail").value = email;
-          showToast(`Đã gửi email xác thực tới ${email}! Vui lòng kích hoạt tài khoản.`);
+          enterEmailVerificationView(email, true, true);
+          showToast(`Đã gửi email xác thực tới ${email}! Vui lòng bấm link kích hoạt.`);
         } catch (err) {
-          if (err.code === "auth/email-already-in-use" || (err.message && err.message.includes("email-already-in-use"))) {
-            alert("Email này đã được đăng ký tài khoản trên hệ thống! Mỗi địa chỉ email chỉ được tạo duy nhất 1 tài khoản. Vui lòng nhấn 'Quên mật khẩu?' để đặt lại mật khẩu qua email.");
+          activeAuthStep = "";
+          if (err && (err.code === "auth/email-already-in-use" || (err.message && err.message.includes("email-already-in-use")))) {
             tabLog.click();
             authDiv.querySelector("#authLogEmail").value = email;
+            showLoginNotice(
+              "Email này đã được đăng ký tài khoản trên hệ thống! Vui lòng đăng nhập hoặc bấm 'Quên mật khẩu?' nếu bạn quên mật khẩu.",
+              true
+            );
             return;
           }
-          alert("Lỗi đăng ký tài khoản: " + (err.message || err));
+          alert("Lỗi đăng ký tài khoản: " + (err && err.message ? err.message : err));
         } finally {
           btn.disabled = false;
           btn.textContent = "Tạo Tài Khoản & Gửi Email Xác Thực";
         }
       });
 
-      // Handle Login with Email & Password (Chưa kích hoạt thì KHÔNG cho đăng nhập)
+      // Handle Login with Email & Password (Keep session alive for verification polling & device verification)
       authDiv.querySelector("#authLoginForm").addEventListener("submit", async (e) => {
         e.preventDefault();
         const email = authDiv.querySelector("#authLogEmail").value.trim();
         const pass = authDiv.querySelector("#authLogPass").value;
         const btn = authDiv.querySelector("#authLogSubmitBtn");
         const noticeBox = authDiv.querySelector("#authLoginNoticeBox");
-        const resendBtn = authDiv.querySelector("#authResendVerifyBtn");
 
         btn.disabled = true;
         btn.textContent = "Đang kiểm tra đăng nhập...";
         noticeBox.style.display = "none";
+        activeAuthStep = "password_login";
 
         try {
           if (!window.ThuysTalkFirebase || !window.ThuysTalkFirebase.isAuthReady()) {
             throw new Error("Dịch vụ xác thực tài khoản chưa sẵn sàng trên trình duyệt.");
           }
           const userRes = await window.ThuysTalkFirebase.loginLearner(email, pass);
-          if (!userRes || userRes.emailVerified === false) {
-            if (window.ThuysTalkFirebase) {
-              await window.ThuysTalkFirebase.logoutLearner();
+          const fbUser = (window.ThuysTalkFirebase.getCurrentUser && window.ThuysTalkFirebase.getCurrentUser()) || (userRes && userRes.user);
+          if (!fbUser) {
+            throw new Error("Không thể khởi tạo phiên đăng nhập.");
+          }
+
+          if (window.ThuysTalkFirebase.hasPendingGoogleLink && window.ThuysTalkFirebase.hasPendingGoogleLink()) {
+            try {
+              await window.ThuysTalkFirebase.linkPendingGoogleCredentialToCurrentUser();
+              const linkedUser = await window.ThuysTalkFirebase.reloadCurrentUser() || fbUser;
+              markTrustedGoogleBrowser(linkedUser.uid);
+              showToast("Đã liên kết tài khoản Google thành công!");
+              await handleGoogleLoginOutcome({ user: linkedUser, email: linkedUser.email || email, isNewUser: false, provider: "google" }, false);
+              return;
+            } catch (linkErr) {
+              activeAuthStep = "";
+              showLoginNotice("Không thể liên kết Google: " + (linkErr && linkErr.message ? linkErr.message : linkErr), true);
+              return;
             }
-            state.learnerUid = "";
-            state.learnerEmail = "";
-            localStorage.removeItem(STORAGE_KEYS.LEARNER_EMAIL);
-            noticeBox.style.display = "block";
-            noticeBox.innerHTML = `
-              <div style="background:#FEF2F2; border:1.5px solid #F87171; border-radius:8px; padding:12px; margin-bottom:8px;">
-                <strong style="color:#DC2626; font-size:0.9rem;">Tài khoản chưa được kích hoạt qua Email!</strong><br />
-                <span style="color:#7F1D1D; font-size:0.84rem; line-height:1.5; display:block; margin-top:4px;">
-                  Theo quy định, bạn <strong>bắt buộc phải kích hoạt tài khoản</strong> trước khi đăng nhập. Vui lòng mở hộp thư email <strong>${escapeHtml(email)}</strong> và nhấn vào liên kết kích hoạt tài khoản.
-                </span>
-              </div>
-            `;
-            resendBtn.style.display = "inline-block";
-            btn.disabled = false;
-            btn.textContent = "Đăng Nhập";
+          }
+
+          if (!userRes || userRes.emailVerified === false || fbUser.emailVerified !== true) {
+            enterEmailVerificationView(fbUser.email || email, false, false);
             return;
           }
 
-          state.learnerUid = userRes.uid || "";
-          state.learnerEmail = userRes.email || email;
-          localStorage.setItem(STORAGE_KEYS.LEARNER_EMAIL, state.learnerEmail);
-          if (userRes && userRes.name) {
-            state.learnerName = userRes.name;
-            localStorage.setItem(STORAGE_KEYS.LEARNER_NAME, userRes.name);
-          }
-          if (userRes && userRes.phone) {
-            state.learnerPhone = userRes.phone;
-            localStorage.setItem(STORAGE_KEYS.LEARNER_PHONE, userRes.phone);
-          }
-
-          if (window.ThuysTalkFirebase) {
-            window.ThuysTalkFirebase.fetchLearnerProgress(state.learnerEmail).then((cloudProg) => {
-              if (cloudProg && typeof cloudProg === "object") {
-                state.completedLessons = Object.assign({}, state.completedLessons, cloudProg);
-                localStorage.setItem(STORAGE_KEYS.PROGRESS, JSON.stringify(state.completedLessons));
-                renderElearningSection(window.THUYSTALK_I18N[state.lang]);
-              }
-            }).catch(() => {});
-          }
-
-          authDiv.classList.remove("open");
-          showToast(`Chào mừng bạn trở lại! Đăng nhập thành công.`);
-          renderElearningSection(window.THUYSTALK_I18N[state.lang]);
-          updateHeaderLearnerStatus();
-          updateConsultFormStatus();
-
-          // Clear any active chat gate
-          const gate = document.querySelector(".chat-login-gate-card");
-          if (gate) gate.remove();
-
-          consumePendingAuthCallback(window.ThuysTalkFirebase.getCurrentUser() || userRes);
+          await handlePostPasswordAuth(fbUser, false);
         } catch (err) {
+          activeAuthStep = "";
           noticeBox.style.display = "block";
-          noticeBox.textContent = "Lỗi đăng nhập: " + (err.message || "Email hoặc mật khẩu chưa chính xác.");
+          noticeBox.innerHTML = `<div style="background:#FEF2F2; border:1.5px solid #F87171; border-radius:8px; padding:12px; color:#991B1B; font-size:0.84rem;">Lỗi đăng nhập: ${escapeHtml(err && err.message ? err.message : "Email hoặc mật khẩu chưa chính xác.")}</div>`;
         } finally {
           btn.disabled = false;
           btn.textContent = "Đăng Nhập";
         }
       });
 
-      // Resend verification email
-      authDiv.querySelector("#authResendVerifyBtn").addEventListener("click", async () => {
+      // Verify Email pane: Resend button (60s cooldown) & Cancel button
+      authDiv.querySelector("#authVerifyResendBtn").addEventListener("click", async () => {
+        const resendBtn = authDiv.querySelector("#authVerifyResendBtn");
+        const verifyNotice = authDiv.querySelector("#authVerifyNoticeBox");
+        if (resendBtn.disabled) return;
+        resendBtn.disabled = true;
+        if (verifyNotice) verifyNotice.style.display = "none";
         try {
           if (window.ThuysTalkFirebase) {
             await window.ThuysTalkFirebase.resendVerificationEmail();
+            startVerifyResendCooldown(60);
             showToast("Đã gửi lại email xác thực thành công!");
           }
-        } catch (e) {
-          alert("Lỗi gửi lại thư: " + e.message);
+        } catch (err) {
+          resendBtn.disabled = false;
+          if (verifyNotice) {
+            verifyNotice.style.display = "block";
+            verifyNotice.textContent = "Không thể gửi lại thư lúc này: " + (err && err.message ? err.message : err);
+          }
+        }
+      });
+
+      authDiv.querySelector("#authVerifyCancelBtn").addEventListener("click", async () => {
+        stopEmailVerificationPolling();
+        stopAuthResendCooldown();
+        activeAuthStep = "";
+        setSessionFlag(STORAGE_KEYS.PENDING_REG_PROFILE, "");
+        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.logoutLearner) {
+          await window.ThuysTalkFirebase.logoutLearner();
+        }
+        showAuthSubView("tabs");
+        tabLog.click();
+      });
+
+      // 6-Digit Device Code form submit
+      authDiv.querySelector("#authDeviceCodeForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const codeInp = authDiv.querySelector("#authDeviceCodeInp");
+        const verifyBtn = authDiv.querySelector("#authDeviceVerifyBtn");
+        const devNotice = authDiv.querySelector("#authDeviceNoticeBox");
+        const code = codeInp.value.replace(/\D/g, "").slice(0, 6);
+        if (code.length !== 6) {
+          devNotice.style.display = "block";
+          devNotice.innerHTML = `<div style="background:#FEF2F2; border:1px solid #F87171; padding:10px 12px; border-radius:8px; color:#991B1B; font-size:0.84rem;">Vui lòng nhập đủ 6 chữ số trong email xác nhận.</div>`;
+          codeInp.focus();
+          return;
+        }
+        const curUser = window.ThuysTalkFirebase && window.ThuysTalkFirebase.getCurrentUser ? window.ThuysTalkFirebase.getCurrentUser() : null;
+        if (!curUser) {
+          await abortDeviceChallengeWithError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.", true);
+          return;
+        }
+
+        verifyBtn.disabled = true;
+        verifyBtn.textContent = "Đang xác nhận...";
+        devNotice.style.display = "none";
+
+        const deviceId = getOrCreateDeviceId();
+        const res = await postDeviceApi("/api/device/verify", { deviceId, code });
+        verifyBtn.disabled = false;
+        verifyBtn.textContent = "Xác nhận";
+
+        if (res.networkError || res.status === 0 || res.status >= 500) {
+          await abortDeviceChallengeWithError(
+            "Chưa gửi được mã xác nhận lúc này. Bạn có thể đăng nhập bằng Google hoặc thử lại sau.",
+            true
+          );
+          return;
+        }
+
+        if (res.ok && res.data && res.data.ok && res.data.trust && res.data.issuedAt) {
+          saveDeviceTrust(curUser.uid, res.data.trust, res.data.issuedAt);
+          setSessionFlag(STORAGE_KEYS.PENDING_AUTH_CHALLENGE_UID, "");
+          activeAuthStep = "";
+          const docRes = window.ThuysTalkFirebase.fetchLearnerDoc ? await window.ThuysTalkFirebase.fetchLearnerDoc(curUser.uid) : { error: false, exists: false, data: null };
+          await finalizeLearnerSession(curUser, docRes && docRes.data ? docRes.data : {});
+          showToast("Xác nhận thiết bị thành công!");
+          return;
+        }
+
+        const errMsg = (res.data && res.data.error) || "Mã xác nhận không đúng hoặc đã hết hạn.";
+        devNotice.style.display = "block";
+        devNotice.innerHTML = `<div style="background:#FEF2F2; border:1px solid #F87171; padding:10px 12px; border-radius:8px; color:#991B1B; font-size:0.84rem;">${escapeHtml(errMsg)}</div>`;
+      });
+
+      authDiv.querySelector("#authDeviceResendBtn").addEventListener("click", async () => {
+        const resendBtn = authDiv.querySelector("#authDeviceResendBtn");
+        const devNotice = authDiv.querySelector("#authDeviceNoticeBox");
+        if (resendBtn.disabled) return;
+        resendBtn.disabled = true;
+        resendBtn.textContent = "Đang gửi...";
+        devNotice.style.display = "none";
+        const deviceId = getOrCreateDeviceId();
+        const res = await postDeviceApi("/api/device/send-code", { deviceId });
+        if (res.networkError || res.status === 0 || res.status >= 500) {
+          resendBtn.disabled = false;
+          resendBtn.textContent = "Gửi lại mã";
+          await abortDeviceChallengeWithError(
+            "Chưa gửi được mã xác nhận lúc này. Bạn có thể đăng nhập bằng Google hoặc thử lại sau.",
+            true
+          );
+          return;
+        }
+        if (res.ok && res.data && res.data.ok) {
+          devNotice.style.display = "block";
+          devNotice.innerHTML = `<div style="background:#F0FDF4; border:1px solid #34D399; padding:10px 12px; border-radius:8px; color:#065F46; font-size:0.84rem;">Đã gửi lại mã 6 số mới tới email của bạn.</div>`;
+          startDeviceResendCooldown(60);
+        } else {
+          resendBtn.disabled = false;
+          resendBtn.textContent = "Gửi lại mã";
+          const errMsg = (res.data && res.data.error) || "Chưa thể gửi lại mã lúc này.";
+          devNotice.style.display = "block";
+          devNotice.innerHTML = `<div style="background:#FEF2F2; border:1px solid #F87171; padding:10px 12px; border-radius:8px; color:#991B1B; font-size:0.84rem;">${escapeHtml(errMsg)}</div>`;
+        }
+      });
+
+      authDiv.querySelector("#authDeviceCancelBtn").addEventListener("click", async () => {
+        await closeAndAbortAuthModal();
+      });
+
+      // Google First-Time Profile Completion & Consent form
+      authDiv.querySelector("#authGoogleProfileForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = authDiv.querySelector("#authGoogleNameInp").value.trim();
+        const phone = authDiv.querySelector("#authGooglePhoneInp").value.trim();
+        const consentCheck = authDiv.querySelector("#authGoogleConsentCheck");
+        const gNotice = authDiv.querySelector("#authGoogleProfileNoticeBox");
+        if (!consentCheck || !consentCheck.checked) {
+          gNotice.style.display = "block";
+          gNotice.innerHTML = `<div style="background:#FEF2F2; border:1px solid #F87171; padding:10px 12px; border-radius:8px; color:#991B1B; font-size:0.84rem;">Vui lòng đánh dấu đồng ý Chính sách bảo mật để tiếp tục.</div>`;
+          if (consentCheck) consentCheck.focus();
+          return;
+        }
+        const curUser = window.ThuysTalkFirebase && window.ThuysTalkFirebase.getCurrentUser ? window.ThuysTalkFirebase.getCurrentUser() : null;
+        if (!curUser) {
+          await closeAndAbortAuthModal();
+          return;
+        }
+        const finishBtn = authDiv.querySelector("#authGoogleFinishBtn");
+        finishBtn.disabled = true;
+        finishBtn.textContent = "Đang lưu hồ sơ...";
+        gNotice.style.display = "none";
+        try {
+          await window.ThuysTalkFirebase.saveVerifiedLearnerDoc({
+            name,
+            phone,
+            isNew: true,
+            recordConsent: true,
+            source: "Google Sign-In"
+          });
+          setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, "");
+          markTrustedGoogleBrowser(curUser.uid);
+          activeAuthStep = "";
+          await finalizeLearnerSession(curUser, { name, phone });
+          showToast("Hoàn tất hồ sơ thành công!");
+        } catch (err) {
+          gNotice.style.display = "block";
+          gNotice.innerHTML = `<div style="background:#FEF2F2; border:1px solid #F87171; padding:10px 12px; border-radius:8px; color:#991B1B; font-size:0.84rem;">Không thể lưu hồ sơ: ${escapeHtml(err && err.message ? err.message : err)}</div>`;
+        } finally {
+          finishBtn.disabled = false;
+          finishBtn.textContent = "Hoàn tất & Tiếp tục";
+        }
+      });
+
+      authDiv.querySelector("#authGoogleDeclineBtn").addEventListener("click", async () => {
+        const declineBtn = authDiv.querySelector("#authGoogleDeclineBtn");
+        declineBtn.disabled = true;
+        declineBtn.textContent = "Đang hủy...";
+        activeAuthStep = "";
+        pendingAuthSuccessCallback = null;
+        setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, "");
+        setSessionFlag(STORAGE_KEYS.PENDING_REDIRECT_REASON, "");
+        setSessionFlag(STORAGE_KEYS.PENDING_ACTION, "");
+        try {
+          if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.deleteUnconsentedGoogleUser) {
+            await window.ThuysTalkFirebase.deleteUnconsentedGoogleUser();
+          }
+        } finally {
+          declineBtn.disabled = false;
+          declineBtn.textContent = "Không đồng ý";
+          authDiv.classList.remove("open");
+          clearLearnerClientState();
+          showToast("Đã hủy tạo tài khoản Google theo yêu cầu của bạn.");
         }
       });
 
@@ -4171,6 +4625,438 @@
   }
 
   let pendingAuthSuccessCallback = null;
+  let activeAuthStep = "";
+  let isHandlingRedirectInit = false;
+  let verifyPollIntervalId = null;
+  let verifyPollFocusHandler = null;
+  let authResendTimerId = null;
+
+  function clearLearnerClientState() {
+    state.learnerUid = "";
+    state.learnerEmail = "";
+    state.learnerName = "";
+    state.learnerPhone = "";
+    state.adminMode = false;
+    localStorage.removeItem(STORAGE_KEYS.LEARNER_EMAIL);
+    localStorage.removeItem(STORAGE_KEYS.LEARNER_NAME);
+    localStorage.removeItem(STORAGE_KEYS.LEARNER_PHONE);
+    updateHeaderLearnerStatus();
+    updateConsultFormStatus();
+    renderElearningSection(window.THUYSTALK_I18N[state.lang]);
+  }
+
+  function stopEmailVerificationPolling() {
+    if (verifyPollIntervalId) {
+      clearInterval(verifyPollIntervalId);
+      verifyPollIntervalId = null;
+    }
+    if (verifyPollFocusHandler) {
+      window.removeEventListener("focus", verifyPollFocusHandler);
+      document.removeEventListener("visibilitychange", verifyPollFocusHandler);
+      verifyPollFocusHandler = null;
+    }
+  }
+
+  function stopAuthResendCooldown() {
+    if (authResendTimerId) {
+      clearInterval(authResendTimerId);
+      authResendTimerId = null;
+    }
+  }
+
+  function startCooldownOnButton(btnId, baseLabel, seconds) {
+    stopAuthResendCooldown();
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    let remaining = seconds;
+    btn.disabled = true;
+    btn.textContent = `${baseLabel} (${remaining}s)`;
+    authResendTimerId = setInterval(() => {
+      remaining -= 1;
+      const liveBtn = document.getElementById(btnId);
+      if (!liveBtn || remaining <= 0) {
+        stopAuthResendCooldown();
+        if (liveBtn) {
+          liveBtn.disabled = false;
+          liveBtn.textContent = baseLabel;
+        }
+        return;
+      }
+      liveBtn.textContent = `${baseLabel} (${remaining}s)`;
+    }, 1000);
+  }
+
+  function startVerifyResendCooldown(seconds) {
+    startCooldownOnButton("authVerifyResendBtn", "Gửi lại thư", seconds);
+  }
+
+  function startDeviceResendCooldown(seconds) {
+    startCooldownOnButton("authDeviceResendBtn", "Gửi lại mã", seconds);
+  }
+
+  function showAuthSubView(viewName) {
+    const authDiv = document.getElementById("learnerAuthModal");
+    if (!authDiv) return;
+    const views = {
+      tabs: authDiv.querySelector("#authTabsWrapper"),
+      verify_email: authDiv.querySelector("#authVerifyEmailPane"),
+      device_code: authDiv.querySelector("#authDeviceCodePane"),
+      google_profile: authDiv.querySelector("#authGoogleProfilePane")
+    };
+    Object.keys(views).forEach((k) => {
+      if (views[k]) views[k].style.display = k === viewName ? "block" : "none";
+    });
+  }
+
+  function showLoginNotice(message, isError = false) {
+    const authDiv = document.getElementById("learnerAuthModal");
+    if (!authDiv) return;
+    showAuthSubView("tabs");
+    const tabLog = authDiv.querySelector("#authTabLoginBtn");
+    if (tabLog) tabLog.click();
+    const noticeBox = authDiv.querySelector("#authLoginNoticeBox");
+    if (!noticeBox) return;
+    if (!message) {
+      noticeBox.style.display = "none";
+      noticeBox.textContent = "";
+      return;
+    }
+    noticeBox.style.display = "block";
+    if (isError) {
+      noticeBox.innerHTML = `<div style="background:#FEF2F2; border:1.5px solid #F87171; border-radius:8px; padding:12px; color:#991B1B; font-size:0.84rem; line-height:1.5;">${escapeHtml(message)}</div>`;
+    } else {
+      noticeBox.textContent = message;
+    }
+  }
+
+  async function abortDeviceChallengeWithError(message, shouldSignOut) {
+    activeAuthStep = "";
+    setSessionFlag(STORAGE_KEYS.PENDING_AUTH_CHALLENGE_UID, "");
+    if (shouldSignOut && window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.logoutLearner === "function") {
+      try {
+        await window.ThuysTalkFirebase.logoutLearner();
+      } catch (e) {}
+    }
+    clearLearnerClientState();
+    ensureGlobalModals();
+    const authDiv = document.getElementById("learnerAuthModal");
+    if (authDiv) authDiv.classList.add("open");
+    showLoginNotice(message, true);
+  }
+
+  function startEmailVerificationPolling(isFromRegistration) {
+    stopEmailVerificationPolling();
+    const startedAt = Date.now();
+    const MAX_WAIT_MS = 10 * 60 * 1000;
+    let isChecking = false;
+
+    const checkOnce = async () => {
+      if (activeAuthStep !== "verify_email" || isChecking) return;
+      if (Date.now() - startedAt >= MAX_WAIT_MS) {
+        stopEmailVerificationPolling();
+        const stEl = document.getElementById("authVerifyStatusText");
+        if (stEl) {
+          stEl.style.color = "#B45309";
+          stEl.textContent = "Đã hết 10 phút tự động kiểm tra. Sau khi bấm link trong email, bạn có thể bấm Gửi lại thư hoặc đăng nhập lại.";
+        }
+        return;
+      }
+      if (!window.ThuysTalkFirebase || typeof window.ThuysTalkFirebase.reloadCurrentUser !== "function") return;
+      isChecking = true;
+      try {
+        const freshUser = await window.ThuysTalkFirebase.reloadCurrentUser();
+        if (!freshUser) {
+          stopEmailVerificationPolling();
+          return;
+        }
+        if (freshUser.emailVerified === true) {
+          stopEmailVerificationPolling();
+          stopAuthResendCooldown();
+          await handlePostPasswordAuth(freshUser, isFromRegistration);
+        }
+      } catch (e) {
+      } finally {
+        isChecking = false;
+      }
+    };
+
+    verifyPollFocusHandler = () => {
+      if (document.visibilityState === "hidden") return;
+      checkOnce();
+    };
+    window.addEventListener("focus", verifyPollFocusHandler);
+    document.addEventListener("visibilitychange", verifyPollFocusHandler);
+    verifyPollIntervalId = setInterval(checkOnce, 5000);
+  }
+
+  function enterEmailVerificationView(email, isFromRegistration, startResendCooldownNow) {
+    ensureGlobalModals();
+    const authDiv = document.getElementById("learnerAuthModal");
+    if (!authDiv) return;
+    activeAuthStep = "verify_email";
+    authDiv.classList.add("open");
+    showAuthSubView("verify_email");
+    const descEl = authDiv.querySelector("#authVerifyEmailDesc");
+    if (descEl) {
+      descEl.innerHTML = `Một liên kết xác thực đã được gửi tới <strong>${escapeHtml(email)}</strong>. Vui lòng kiểm tra hộp thư đến (hoặc mục Spam) và bấm vào đường link trong email.`;
+    }
+    const statusEl = authDiv.querySelector("#authVerifyStatusText");
+    if (statusEl) {
+      statusEl.style.color = "#047857";
+      statusEl.textContent = "Đang chờ xác thực... Tab này tự động kiểm tra mỗi 5 giây và sẽ đi tiếp ngay khi bạn bấm link.";
+    }
+    const noticeEl = authDiv.querySelector("#authVerifyNoticeBox");
+    if (noticeEl) noticeEl.style.display = "none";
+
+    const resendBtn = authDiv.querySelector("#authVerifyResendBtn");
+    if (startResendCooldownNow) {
+      startVerifyResendCooldown(60);
+    } else if (resendBtn) {
+      stopAuthResendCooldown();
+      resendBtn.disabled = false;
+      resendBtn.textContent = "Gửi lại thư";
+    }
+    startEmailVerificationPolling(isFromRegistration);
+  }
+
+  async function handlePostPasswordAuth(user, isFromRegistration) {
+    if (!user || user.emailVerified !== true) return;
+    const pendingReg = readStorageJson(sessionStorage, STORAGE_KEYS.PENDING_REG_PROFILE, null);
+    const matchesPendingReg =
+      pendingReg &&
+      pendingReg.email &&
+      ((pendingReg.uid && pendingReg.uid === user.uid) || pendingReg.email === user.email);
+
+    let docRes = { error: false, exists: false, data: null };
+    if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchLearnerDoc === "function") {
+      docRes = await window.ThuysTalkFirebase.fetchLearnerDoc(user.uid);
+    }
+
+    if (isFromRegistration || (matchesPendingReg && (!docRes.exists || !docRes.data))) {
+      const regName = (matchesPendingReg && pendingReg.name) || user.displayName || "";
+      const regPhone = (matchesPendingReg && pendingReg.phone) || "";
+      const regConsent = !!(matchesPendingReg && pendingReg.consent);
+      if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.saveVerifiedLearnerDoc === "function") {
+        try {
+          await window.ThuysTalkFirebase.saveVerifiedLearnerDoc({
+            name: regName,
+            phone: regPhone,
+            isNew: !docRes.exists,
+            recordConsent: regConsent,
+            source: "ThuysTalk Email Registration"
+          });
+        } catch (err) {
+          console.warn("saveVerifiedLearnerDoc warning:", err);
+        }
+      }
+      setSessionFlag(STORAGE_KEYS.PENDING_REG_PROFILE, "");
+      markRegVerifiedBrowser(user.uid);
+      activeAuthStep = "";
+      await finalizeLearnerSession(user, { name: regName, phone: regPhone });
+      showToast("Xác thực email thành công! Chào mừng bạn đến với ThuysTalk.");
+      return;
+    }
+
+    setSessionFlag(STORAGE_KEYS.PENDING_REG_PROFILE, "");
+
+    const deviceTrusted = !!getDeviceTrust(user.uid) || hasRegVerifiedBrowser(user.uid);
+    if (deviceTrusted) {
+      activeAuthStep = "";
+      if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.saveVerifiedLearnerDoc === "function") {
+        window.ThuysTalkFirebase
+          .saveVerifiedLearnerDoc({
+            name: (docRes.data && docRes.data.name) || user.displayName || "",
+            isNew: !docRes.exists,
+            recordConsent: false,
+            source: "ThuysTalk Email Login"
+          })
+          .catch(() => {});
+      }
+      await finalizeLearnerSession(user, (docRes && docRes.data) || {});
+      showToast("Chào mừng bạn trở lại! Đăng nhập thành công.");
+      return;
+    }
+
+    // New device for password login -> require 6-digit email verification code
+    activeAuthStep = "device_code";
+    setSessionFlag(STORAGE_KEYS.PENDING_AUTH_CHALLENGE_UID, user.uid);
+    ensureGlobalModals();
+    const authDiv = document.getElementById("learnerAuthModal");
+    if (!authDiv) return;
+    authDiv.classList.add("open");
+    showAuthSubView("device_code");
+
+    const codeInp = authDiv.querySelector("#authDeviceCodeInp");
+    const devNotice = authDiv.querySelector("#authDeviceNoticeBox");
+    const devDesc = authDiv.querySelector("#authDeviceCodeDesc");
+    const resendBtn = authDiv.querySelector("#authDeviceResendBtn");
+    const verifyBtn = authDiv.querySelector("#authDeviceVerifyBtn");
+    if (codeInp) codeInp.value = "";
+    if (devNotice) devNotice.style.display = "none";
+    if (devDesc) {
+      devDesc.innerHTML = `Đang gửi mã xác nhận 6 số tới <strong>${escapeHtml(user.email || "")}</strong>...`;
+    }
+    if (verifyBtn) verifyBtn.disabled = true;
+    if (resendBtn) resendBtn.disabled = true;
+
+    const sendRes = await postDeviceApi("/api/device/send-code", { deviceId: getOrCreateDeviceId() });
+    if (verifyBtn) verifyBtn.disabled = false;
+
+    if (sendRes.networkError || sendRes.status === 0 || sendRes.status >= 500) {
+      if (resendBtn) resendBtn.disabled = false;
+      await abortDeviceChallengeWithError(
+        "Chưa gửi được mã xác nhận lúc này. Bạn có thể đăng nhập bằng Google hoặc thử lại sau.",
+        true
+      );
+      return;
+    }
+    if (!sendRes.ok || !sendRes.data || !sendRes.data.ok) {
+      if (resendBtn) resendBtn.disabled = false;
+      const errMsg =
+        (sendRes.data && sendRes.data.error) ||
+        "Chưa gửi được mã xác nhận lúc này. Bạn có thể đăng nhập bằng Google hoặc thử lại sau.";
+      await abortDeviceChallengeWithError(errMsg, true);
+      return;
+    }
+
+    if (devDesc) {
+      devDesc.innerHTML = `Mã xác nhận 6 số đã được gửi tới <strong>${escapeHtml(user.email || "")}</strong> (hiệu lực 10 phút).`;
+    }
+    startDeviceResendCooldown(60);
+    if (codeInp) codeInp.focus();
+  }
+
+  async function handleGoogleLoginOutcome(gRes, fromRedirect) {
+    if (!gRes) {
+      activeAuthStep = "";
+      return;
+    }
+    if (gRes.accountExists) {
+      activeAuthStep = "";
+      ensureGlobalModals();
+      const authDiv = document.getElementById("learnerAuthModal");
+      if (authDiv) {
+        authDiv.classList.add("open");
+        showLoginNotice("Email này đã có tài khoản. Đăng nhập bằng mật khẩu một lần để liên kết với Google", false);
+        const logEmail = authDiv.querySelector("#authLogEmail");
+        if (logEmail && gRes.email) logEmail.value = gRes.email;
+      }
+      return;
+    }
+    const user = gRes.user;
+    if (!user) {
+      activeAuthStep = "";
+      return;
+    }
+    const docRes =
+      window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchLearnerDoc === "function"
+        ? await window.ThuysTalkFirebase.fetchLearnerDoc(user.uid)
+        : { error: false, exists: false, data: null };
+
+    if (docRes.error) {
+      activeAuthStep = "";
+      if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.logoutLearner) {
+        await window.ThuysTalkFirebase.logoutLearner();
+      }
+      clearLearnerClientState();
+      ensureGlobalModals();
+      const authDiv = document.getElementById("learnerAuthModal");
+      if (authDiv) {
+        authDiv.classList.add("open");
+        showLoginNotice("Không thể tải hồ sơ người dùng lúc này. Vui lòng thử lại sau.", true);
+      }
+      return;
+    }
+
+    if (!docRes.exists || !docRes.data || !docRes.data.consentAt) {
+      activeAuthStep = "google_profile";
+      setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, user.uid);
+      ensureGlobalModals();
+      const authDiv = document.getElementById("learnerAuthModal");
+      if (authDiv) {
+        authDiv.classList.add("open");
+        showAuthSubView("google_profile");
+        const nameInp = authDiv.querySelector("#authGoogleNameInp");
+        const phoneInp = authDiv.querySelector("#authGooglePhoneInp");
+        const consentChk = authDiv.querySelector("#authGoogleConsentCheck");
+        const gNotice = authDiv.querySelector("#authGoogleProfileNoticeBox");
+        if (nameInp) nameInp.value = (docRes.data && docRes.data.name) || user.displayName || (user.email ? user.email.split("@")[0] : "");
+        if (phoneInp) phoneInp.value = (docRes.data && docRes.data.phone) || "";
+        if (consentChk) consentChk.checked = false;
+        if (gNotice) gNotice.style.display = "none";
+      }
+      return;
+    }
+
+    markTrustedGoogleBrowser(user.uid);
+    activeAuthStep = "";
+    if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.saveVerifiedLearnerDoc === "function") {
+      window.ThuysTalkFirebase
+        .saveVerifiedLearnerDoc({
+          name: docRes.data.name || user.displayName || "",
+          isNew: false,
+          recordConsent: false,
+          source: "Google Sign-In"
+        })
+        .catch(() => {});
+    }
+    await finalizeLearnerSession(user, docRes.data);
+    showToast("Đăng nhập Google thành công!");
+  }
+
+  async function executePendingRedirectAction(user) {
+    const pendingAct = readStorageJson(sessionStorage, STORAGE_KEYS.PENDING_ACTION, null);
+    if (!pendingAct || !pendingAct.type) return;
+    setSessionFlag(STORAGE_KEYS.PENDING_ACTION, "");
+    if (typeof window.__thuystalkResumePendingAction === "function") {
+      window.__thuystalkResumePendingAction(pendingAct, user);
+    }
+  }
+
+  async function finalizeLearnerSession(user, profileDoc) {
+    if (!user || user.emailVerified !== true || !user.email) return;
+    let docData = profileDoc && typeof profileDoc === "object" ? profileDoc : null;
+    if (!docData && window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchLearnerDoc === "function") {
+      const res = await window.ThuysTalkFirebase.fetchLearnerDoc(user.uid);
+      if (res && !res.error && res.data) docData = res.data;
+    }
+
+    state.learnerUid = user.uid;
+    state.learnerEmail = user.email;
+    const resolvedName = (docData && docData.name) || user.displayName || user.email.split("@")[0];
+    state.learnerName = resolvedName;
+    localStorage.setItem(STORAGE_KEYS.LEARNER_NAME, resolvedName);
+    if (docData && typeof docData.phone === "string") {
+      state.learnerPhone = docData.phone;
+      if (docData.phone) localStorage.setItem(STORAGE_KEYS.LEARNER_PHONE, docData.phone);
+      else localStorage.removeItem(STORAGE_KEYS.LEARNER_PHONE);
+    }
+    localStorage.setItem(STORAGE_KEYS.LEARNER_EMAIL, user.email);
+    state.adminMode = !!(window.ThuysTalkFirebase && window.ThuysTalkFirebase.isAdminUser(user));
+
+    if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchLearnerProgress === "function") {
+      window.ThuysTalkFirebase.fetchLearnerProgress(user.email).then((cloudProg) => {
+        if (cloudProg && typeof cloudProg === "object") {
+          state.completedLessons = Object.assign({}, state.completedLessons, cloudProg);
+          localStorage.setItem(STORAGE_KEYS.PROGRESS, JSON.stringify(state.completedLessons));
+          renderElearningSection(window.THUYSTALK_I18N[state.lang]);
+        }
+      }).catch(() => {});
+    }
+
+    const modal = document.getElementById("learnerAuthModal");
+    if (modal) modal.classList.remove("open");
+    showAuthSubView("tabs");
+    const gate = document.querySelector(".chat-login-gate-card");
+    if (gate) gate.remove();
+
+    updateHeaderLearnerStatus();
+    updateConsultFormStatus();
+    renderElearningSection(window.THUYSTALK_I18N[state.lang]);
+    setSessionFlag(STORAGE_KEYS.PENDING_REDIRECT_REASON, "");
+    consumePendingAuthCallback(user);
+    await executePendingRedirectAction(user);
+  }
 
   function consumePendingAuthCallback(user) {
     if (typeof pendingAuthSuccessCallback === "function") {
@@ -4185,6 +5071,7 @@
   function requireLearnerLogin(options = {}) {
     const reason = options && options.reason ? String(options.reason) : "";
     const onSuccess = options && typeof options.onSuccess === "function" ? options.onSuccess : null;
+    const pendingAction = options && options.pendingAction ? options.pendingAction : null;
     const fbUser = window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.getCurrentUser === "function"
       ? window.ThuysTalkFirebase.getCurrentUser()
       : null;
@@ -4195,64 +5082,83 @@
     }
 
     pendingAuthSuccessCallback = onSuccess;
+    if (pendingAction) {
+      writeStorageJson(sessionStorage, STORAGE_KEYS.PENDING_ACTION, pendingAction);
+    }
     ensureGlobalModals();
     const div = document.getElementById("learnerAuthModal");
     if (!div) return;
+    showAuthSubView("tabs");
     const tabLog = div.querySelector("#authTabLoginBtn");
     if (tabLog) tabLog.click();
-    const noticeBox = div.querySelector("#authLoginNoticeBox");
-    if (noticeBox) {
-      if (reason) {
-        noticeBox.textContent = reason;
-        noticeBox.style.display = "block";
-      } else {
-        noticeBox.style.display = "none";
-        noticeBox.textContent = "";
-      }
-    }
+    showLoginNotice(reason, false);
     div.classList.add("open");
   }
 
-  function syncLearnerStateFromAuthUser(user) {
-    if (user && user.emailVerified === true && user.email) {
-      state.learnerUid = user.uid;
-      state.learnerEmail = user.email;
-      if (user.displayName) {
-        state.learnerName = user.displayName;
-        localStorage.setItem(STORAGE_KEYS.LEARNER_NAME, user.displayName);
-      }
-      localStorage.setItem(STORAGE_KEYS.LEARNER_EMAIL, user.email);
-      state.adminMode = !!(window.ThuysTalkFirebase && window.ThuysTalkFirebase.isAdminUser(user));
-      if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchLearnerProgress === "function") {
-        window.ThuysTalkFirebase.fetchLearnerProgress(user.email).then((cloudProg) => {
-          if (cloudProg && typeof cloudProg === "object") {
-            state.completedLessons = Object.assign({}, state.completedLessons, cloudProg);
-            localStorage.setItem(STORAGE_KEYS.PROGRESS, JSON.stringify(state.completedLessons));
-            renderElearningSection(window.THUYSTALK_I18N[state.lang]);
-          }
-        }).catch(() => {});
-      }
-    } else {
-      state.learnerUid = "";
-      state.learnerEmail = "";
-      state.adminMode = false;
-      localStorage.removeItem(STORAGE_KEYS.LEARNER_EMAIL);
+  async function syncLearnerStateFromAuthUser(user) {
+    if (isHandlingRedirectInit || activeAuthStep) {
+      return;
     }
-    updateHeaderLearnerStatus();
-    updateConsultFormStatus();
-    renderElearningSection(window.THUYSTALK_I18N[state.lang]);
-    if (user && user.emailVerified === true) {
-      const gate = document.querySelector(".chat-login-gate-card");
-      if (gate) gate.remove();
-      consumePendingAuthCallback(user);
+    if (!user || user.emailVerified !== true || !user.email) {
+      clearLearnerClientState();
+      return;
     }
+    if (state.learnerUid === user.uid && state.learnerEmail === user.email) {
+      return;
+    }
+
+    let isGoogleSession = hasTrustedGoogleBrowser(user.uid);
+    try {
+      const tokenRes = await user.getIdTokenResult();
+      if (tokenRes && tokenRes.signInProvider === "google.com") {
+        isGoogleSession = true;
+      } else if (tokenRes && tokenRes.signInProvider === "password") {
+        isGoogleSession = false;
+      }
+    } catch (e) {}
+
+    if (isGoogleSession) {
+      const docRes =
+        window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchLearnerDoc === "function"
+          ? await window.ThuysTalkFirebase.fetchLearnerDoc(user.uid)
+          : { error: true, exists: false, data: null };
+      if (docRes.error) {
+        clearLearnerClientState();
+        return;
+      }
+      if (!docRes.exists || !docRes.data || !docRes.data.consentAt || getSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID) === user.uid) {
+        await handleGoogleLoginOutcome({ user, email: user.email, isNewUser: !docRes.exists, provider: "google" }, false);
+        return;
+      }
+      markTrustedGoogleBrowser(user.uid);
+      await finalizeLearnerSession(user, docRes.data);
+      return;
+    }
+
+    // Password session restored on load -> enforce device trust / prevent reload bypass
+    const hasDevice = !!getDeviceTrust(user.uid) || hasRegVerifiedBrowser(user.uid);
+    if (!hasDevice || getSessionFlag(STORAGE_KEYS.PENDING_AUTH_CHALLENGE_UID) === user.uid) {
+      setSessionFlag(STORAGE_KEYS.PENDING_AUTH_CHALLENGE_UID, "");
+      if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.logoutLearner === "function") {
+        await window.ThuysTalkFirebase.logoutLearner();
+      }
+      clearLearnerClientState();
+      return;
+    }
+
+    await finalizeLearnerSession(user, null);
   }
 
   function openLearnerAuthModal(tab = "register") {
+    stopEmailVerificationPolling();
+    stopAuthResendCooldown();
+    activeAuthStep = "";
     pendingAuthSuccessCallback = null;
+    setSessionFlag(STORAGE_KEYS.PENDING_ACTION, "");
     ensureGlobalModals();
     const div = document.getElementById("learnerAuthModal");
     if (!div) return;
+    showAuthSubView("tabs");
     const noticeBox = div.querySelector("#authLoginNoticeBox");
     if (noticeBox) {
       noticeBox.style.display = "none";
@@ -4307,13 +5213,7 @@
             if (window.ThuysTalkFirebase) {
               await window.ThuysTalkFirebase.logoutLearner();
             }
-            state.learnerUid = "";
-            state.learnerEmail = "";
-            state.adminMode = false;
-            localStorage.removeItem(STORAGE_KEYS.LEARNER_EMAIL);
-            updateHeaderLearnerStatus();
-            updateConsultFormStatus();
-            renderElearningSection(window.THUYSTALK_I18N[state.lang]);
+            clearLearnerClientState();
             showToast("Đã đăng xuất tài khoản thành công.");
           });
         }
@@ -6356,6 +7256,26 @@
     if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.onAuthStateChanged === "function") {
       window.ThuysTalkFirebase.onAuthStateChanged(syncLearnerStateFromAuthUser);
     }
+    (async function initLearnerAuthStartup() {
+      isHandlingRedirectInit = true;
+      let redirectOutcome = null;
+      try {
+        if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.checkLearnerRedirectResult === "function") {
+          redirectOutcome = await window.ThuysTalkFirebase.checkLearnerRedirectResult();
+        }
+      } catch (err) {
+        console.warn("Google redirect login warning:", err && err.message ? err.message : err);
+        showToast("Không thể hoàn tất đăng nhập Google: " + (err && err.message ? err.message : err));
+      } finally {
+        isHandlingRedirectInit = false;
+      }
+
+      if (redirectOutcome) {
+        await handleGoogleLoginOutcome(redirectOutcome, true);
+      } else if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.getCurrentUser === "function") {
+        await syncLearnerStateFromAuthUser(window.ThuysTalkFirebase.getCurrentUser());
+      }
+    })();
 
     // Auto-open unfinished tài liệu / Mini Test if redirected via ?openCourse=...&lesson=...
     try {
