@@ -997,18 +997,43 @@
   function prepareRichHtmlForStorage(sanitizedHtml) {
     const html = String(sanitizedHtml || "").trim();
     if (!html) return "";
+    let strippedInlineDataCount = 0;
     try {
       const tpl = document.createElement("template");
       tpl.innerHTML = html;
-      tpl.content.querySelectorAll("img[data-media-id]").forEach((img) => {
-        const currentSrc = img.getAttribute("src") || "";
-        if (!currentSrc || currentSrc.startsWith("data:")) {
-          img.removeAttribute("src");
+      tpl.content.querySelectorAll("img").forEach((img) => {
+        const mediaId = String(img.getAttribute("data-media-id") || "").trim();
+        const currentSrc = String(img.getAttribute("src") || "").trim();
+        if (mediaId && /^[A-Za-z0-9_-]{8,64}$/.test(mediaId)) {
+          if (!currentSrc || /^data:/i.test(currentSrc)) {
+            img.removeAttribute("src");
+          }
+        } else if (/^data:/i.test(currentSrc)) {
+          const parentFig = img.closest("figure");
+          img.remove();
+          if (parentFig && !parentFig.querySelector("img") && !parentFig.querySelector("[data-yt-id]")) {
+            parentFig.remove();
+          }
+          strippedInlineDataCount++;
         }
       });
+      if (strippedInlineDataCount > 0) {
+        showToast(
+          `Đã loại bỏ ${strippedInlineDataCount} ảnh dạng base64 trực tiếp (chỉ giữ ảnh đã nén lưu vào media_images).`
+        );
+      }
       return tpl.innerHTML.trim();
     } catch (e) {
-      return html.replace(/(<img\b[^>]*?\bdata-media-id=["'][A-Za-z0-9_-]{8,64}["'][^>]*?)\s+src=["']data:[^"']*["']/gi, "$1");
+      let cleaned = html.replace(
+        /(<img\b[^>]*?\bdata-media-id=["'][A-Za-z0-9_-]{8,64}["'][^>]*?)\s+src=["']data:[^"']*["']/gi,
+        "$1"
+      );
+      const beforeLen = cleaned.length;
+      cleaned = cleaned.replace(/<img\b(?![^>]*\bdata-media-id=)[^>]*\bsrc=["']data:[^"']*["'][^>]*>/gi, "");
+      if (cleaned.length !== beforeLen) {
+        showToast("Đã loại bỏ ảnh dạng base64 trực tiếp (chỉ giữ ảnh đã nén lưu vào media_images).");
+      }
+      return cleaned;
     }
   }
 
@@ -4423,50 +4448,163 @@
       });
     }
 
+    function dataUrlToImageFile(dataUrl, baseName = "pasted-image") {
+      const parts = String(dataUrl || "").split(",");
+      if (parts.length < 2) return null;
+      const mimeMatch = parts[0].match(/^data:(image\/[a-zA-Z0-9.+-]+);base64$/i);
+      if (!mimeMatch) return null;
+      try {
+        const mime = mimeMatch[1].toLowerCase();
+        const binStr = window.atob(parts[1].trim());
+        const bytes = new Uint8Array(binStr.length);
+        for (let i = 0; i < binStr.length; i++) {
+          bytes[i] = binStr.charCodeAt(i);
+        }
+        const ext = mime.split("/")[1].replace("jpeg", "jpg") || "png";
+        return new File([bytes], `${baseName}.${ext}`, { type: mime });
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function insertHtmlAtSelection(htmlSnippet, useSavedCursor = true) {
+      canvas.focus();
+      if (useSavedCursor && savedRange) {
+        restoreSelection();
+        try {
+          document.execCommand("insertHTML", false, htmlSnippet);
+        } catch (err) {
+          canvas.insertAdjacentHTML("beforeend", htmlSnippet);
+        }
+      } else {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0 && canvas.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+          try {
+            document.execCommand("insertHTML", false, htmlSnippet);
+          } catch (err) {
+            canvas.insertAdjacentHTML("beforeend", htmlSnippet);
+          }
+        } else {
+          canvas.insertAdjacentHTML("beforeend", htmlSnippet);
+        }
+      }
+      saveSelection();
+      updateStats();
+    }
+
+    async function compressAndInsertImageFiles(rawFiles, useSavedCursor = true) {
+      const files = Array.from(rawFiles || []);
+      if (!files.length) return 0;
+      showToast("Đang nén ảnh và lưu vào thư viện ảnh (media_images)...");
+      let insertedCount = 0;
+      for (const file of files) {
+        const fname = file.name || `anh_${Date.now()}.png`;
+        const isVideoFile =
+          (file.type && file.type.startsWith("video/")) || /\.(webm|mp4|mov|avi|mkv)$/i.test(fname);
+        if (
+          isVideoFile ||
+          ((!file.type || !file.type.startsWith("image/")) && !/\.(png|jpe?g|webp|gif|bmp)$/i.test(fname))
+        ) {
+          showToast("Không hỗ trợ chèn tệp video trực tiếp. Vui lòng dùng nút '+ Video YouTube'.");
+          continue;
+        }
+        try {
+          const uploaded = await uploadAndRegisterImage(file);
+          const mediaHtml = `
+            <figure style="margin:16px auto; text-align:center; max-width:100%;">
+              <img src="${uploaded.dataUrl}" data-media-id="${escapeHtml(uploaded.mediaId)}" alt="${escapeHtml(fname)}" style="max-width:100%; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); display:block; margin:0 auto;" />
+              <figcaption style="font-size:0.8rem; color:#64748B; margin-top:6px;">${escapeHtml(fname)}</figcaption>
+            </figure>
+            <p><br></p>
+          `;
+          insertHtmlAtSelection(mediaHtml, useSavedCursor);
+          insertedCount++;
+        } catch (err) {
+          showToast(err && err.message ? err.message : `Lỗi tải ảnh "${fname}".`);
+        }
+      }
+      if (insertedCount > 0) {
+        showToast(`Đã nén và chèn ${insertedCount} ảnh vào nội dung!`);
+      }
+      return insertedCount;
+    }
+
+    // Intercept Paste (Ctrl+V) for clipboard image blobs or inline data:image HTML
+    canvas.addEventListener("paste", async (e) => {
+      const cb = e.clipboardData;
+      if (!cb) return;
+      saveSelection();
+
+      const clipFiles = [];
+      if (cb.items && cb.items.length) {
+        Array.from(cb.items).forEach((item) => {
+          if (item.kind === "file") {
+            const f = item.getAsFile();
+            if (f) clipFiles.push(f);
+          }
+        });
+      }
+      if (!clipFiles.length && cb.files && cb.files.length) {
+        clipFiles.push(...Array.from(cb.files));
+      }
+
+      if (clipFiles.length > 0) {
+        e.preventDefault();
+        await compressAndInsertImageFiles(clipFiles, true);
+        return;
+      }
+
+      const pastedHtml = cb.getData("text/html") || "";
+      if (pastedHtml && /<img\b[^>]*\bsrc=["']data:image\//i.test(pastedHtml)) {
+        e.preventDefault();
+        const tpl = document.createElement("template");
+        tpl.innerHTML = sanitizeRichHtml(pastedHtml);
+        const imgs = Array.from(tpl.content.querySelectorAll("img"));
+        for (let idx = 0; idx < imgs.length; idx++) {
+          const img = imgs[idx];
+          const src = String(img.getAttribute("src") || "").trim();
+          if (/^data:image\//i.test(src) && !img.getAttribute("data-media-id")) {
+            const fileObj = dataUrlToImageFile(src, `pasted-img-${Date.now()}-${idx}`);
+            if (fileObj) {
+              try {
+                const uploaded = await uploadAndRegisterImage(fileObj);
+                img.setAttribute("src", uploaded.dataUrl);
+                img.setAttribute("data-media-id", uploaded.mediaId);
+              } catch (err) {
+                showToast(err && err.message ? err.message : "Ảnh dán vượt giới hạn cho phép và đã bị loại bỏ.");
+                img.remove();
+              }
+            } else {
+              img.remove();
+            }
+          }
+        }
+        insertHtmlAtSelection(tpl.innerHTML, true);
+      }
+    });
+
+    // Intercept Drag & Drop files onto editor canvas
+    canvas.addEventListener("dragover", (e) => {
+      if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files")) {
+        e.preventDefault();
+      }
+    });
+
+    canvas.addEventListener("drop", async (e) => {
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        await compressAndInsertImageFiles(e.dataTransfer.files, false);
+      }
+    });
+
     // Compressed Image Upload -> media_images/{id}
     const mediaInput = containerEl.querySelector(".word-media-upload-input");
     if (mediaInput) {
       mediaInput.addEventListener("change", async (ev) => {
         const files = Array.from(ev.target.files || []);
         if (!files.length) return;
-        showToast("Đang nén ảnh và lưu vào thư viện ảnh (media_images)...");
-        let insertedCount = 0;
-        for (const file of files) {
-          const isVideoFile = file.type.startsWith("video/") || /\.(webm|mp4|mov|avi|mkv)$/i.test(file.name);
-          if (isVideoFile || (!file.type.startsWith("image/") && !/\.(png|jpe?g|webp|gif|bmp)$/i.test(file.name))) {
-            showToast("Không hỗ trợ chèn tệp video trực tiếp. Vui lòng dùng nút '+ Video YouTube'.");
-            continue;
-          }
-          try {
-            const uploaded = await uploadAndRegisterImage(file);
-            const mediaHtml = `
-              <figure style="margin:16px auto; text-align:center; max-width:100%;">
-                <img src="${uploaded.dataUrl}" data-media-id="${escapeHtml(uploaded.mediaId)}" alt="${escapeHtml(file.name)}" style="max-width:100%; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); display:block; margin:0 auto;" />
-                <figcaption style="font-size:0.8rem; color:#64748B; margin-top:6px;">${escapeHtml(file.name)}</figcaption>
-              </figure>
-              <p><br></p>
-            `;
-            canvas.focus();
-            if (savedRange) {
-              restoreSelection();
-              try {
-                document.execCommand("insertHTML", false, mediaHtml);
-              } catch (err) {
-                canvas.insertAdjacentHTML("beforeend", mediaHtml);
-              }
-            } else {
-              canvas.insertAdjacentHTML("beforeend", mediaHtml);
-            }
-            saveSelection();
-            updateStats();
-            insertedCount++;
-          } catch (err) {
-            showToast(err && err.message ? err.message : `Lỗi tải ảnh "${file.name}".`);
-          }
-        }
-        if (insertedCount > 0) {
-          showToast(`Đã nén và chèn ${insertedCount} ảnh vào nội dung!`);
-        }
+        await compressAndInsertImageFiles(files, true);
         mediaInput.value = "";
       });
     }
