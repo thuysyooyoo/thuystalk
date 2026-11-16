@@ -3127,9 +3127,13 @@
 
       // Numbered items: 1. item, 2. item
       const numMatch = rawLine.match(/^(\d+)[\.\)]\s+(.*)$/);
-      if (numMatch && inNumList) {
+      if (numMatch) {
         if (inBulletList) { out.push("</ul>"); inBulletList = false; }
-        if (!inNumList) { out.push('<ol class="ai-chat-numlist">'); inNumList = true; }
+        if (!inNumList) {
+          const startNum = Math.max(1, parseInt(numMatch[1], 10) || 1);
+          out.push(`<ol class="ai-chat-numlist" start="${startNum}">`);
+          inNumList = true;
+        }
         out.push("<li>" + formatInlineAi(numMatch[2]) + "</li>");
         continue;
       }
