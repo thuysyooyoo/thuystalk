@@ -518,17 +518,33 @@
     return true;
   }
 
-  function saveCustomMedia() {
+  async function saveCustomMedia() {
+    const cleanPayload = {};
+    Object.keys(state.media || {}).forEach((k) => {
+      const m = Object.assign({}, state.media[k]);
+      if (m.mediaId && typeof m.url === "string" && m.url.startsWith("data:")) {
+        m.url = (window.THUYSTALK_DEFAULT_MEDIA && window.THUYSTALK_DEFAULT_MEDIA[k] && window.THUYSTALK_DEFAULT_MEDIA[k].url) || "";
+      }
+      cleanPayload[k] = m;
+    });
+
     try {
-      localStorage.setItem(STORAGE_KEYS.MEDIA, JSON.stringify(state.media));
+      localStorage.setItem(STORAGE_KEYS.MEDIA, JSON.stringify(cleanPayload));
     } catch (e) {}
 
     // Auto-sync Profile Photos & Settings to Cloud Firestore
     if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
-      window.ThuysTalkFirebase.saveSiteSettings("media_profile", state.media).catch((err) => {
-        console.warn("Cloud Firestore auto-sync error for media_profile:", err);
-      });
+      const ok = await window.ThuysTalkFirebase.saveSiteSettings("media_profile", cleanPayload);
+      if (!ok) {
+        const errDetail =
+          typeof window.ThuysTalkFirebase.getLastError === "function"
+            ? window.ThuysTalkFirebase.getLastError()
+            : "";
+        showToast("Lỗi lưu cấu hình ảnh lên Cloud Firestore: " + (errDetail || "Vui lòng kiểm tra đăng nhập Admin."));
+        return false;
+      }
     }
+    return true;
   }
 
   function saveSocialLinks() {
@@ -908,7 +924,7 @@
       }
 
       if (node.hasAttribute("src")) {
-        if (tag === "IMG" || tag === "VIDEO" || tag === "SOURCE") {
+        if (tag === "IMG") {
           const srcVal = normalizeUrlForCheck(node.getAttribute("src"));
           if (isAllowedMediaSrc(srcVal)) {
             node.setAttribute("src", srcVal);
@@ -922,8 +938,15 @@
 
       if (node.hasAttribute("data-media-id")) {
         const mediaId = String(node.getAttribute("data-media-id") || "").trim();
-        if (tag !== "IMG" || !/^[A-Za-z0-9_-]{10,40}$/.test(mediaId)) {
+        if (tag !== "IMG" || !/^[A-Za-z0-9_-]{8,64}$/.test(mediaId)) {
           node.removeAttribute("data-media-id");
+        }
+      }
+
+      if (node.hasAttribute("data-yt-id")) {
+        const ytId = String(node.getAttribute("data-yt-id") || "").trim();
+        if (!/^[A-Za-z0-9_-]{11}$/.test(ytId)) {
+          node.removeAttribute("data-yt-id");
         }
       }
     });
@@ -936,18 +959,112 @@
     if (typeof window !== "undefined" && window.DOMPurify && typeof window.DOMPurify.sanitize === "function") {
       ensureDomPurifyHooks();
       return window.DOMPurify.sanitize(raw, {
-        FORBID_TAGS: ["script", "iframe", "object", "embed", "svg", "math", "form", "input", "textarea", "style"],
+        FORBID_TAGS: ["script", "iframe", "object", "embed", "svg", "math", "form", "input", "textarea", "style", "video", "source"],
         FORBID_ATTR: [
           "onerror", "onload", "onclick", "onmouseover", "onmouseout", "onmouseenter",
           "onmouseleave", "onfocus", "onblur", "onchange", "onsubmit", "onkeydown",
           "onkeyup", "onkeypress", "formaction"
         ],
-        ADD_TAGS: ["video", "source", "figure", "figcaption"],
-        ADD_ATTR: ["target", "rel", "controls", "playsinline", "preload", "data-media-id"],
+        ADD_TAGS: ["figure", "figcaption"],
+        ADD_ATTR: ["target", "rel", "data-media-id", "data-yt-id"],
         ALLOW_UNKNOWN_PROTOCOLS: false
       });
     }
     return `<p>${escapeHtml(raw)}</p>`;
+  }
+
+  const localMediaFallbackCache = new Map();
+
+  function cacheMediaDataUrl(mediaId, dataUrl) {
+    if (!mediaId || !dataUrl) return;
+    localMediaFallbackCache.set(String(mediaId), dataUrl);
+    if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.cacheMediaImage === "function") {
+      window.ThuysTalkFirebase.cacheMediaImage(mediaId, dataUrl);
+    }
+  }
+
+  function getCachedMediaDataUrl(mediaId) {
+    if (!mediaId) return "";
+    if (localMediaFallbackCache.has(String(mediaId))) {
+      return localMediaFallbackCache.get(String(mediaId)) || "";
+    }
+    if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.getCachedMediaImage === "function") {
+      return window.ThuysTalkFirebase.getCachedMediaImage(mediaId) || "";
+    }
+    return "";
+  }
+
+  function prepareRichHtmlForStorage(sanitizedHtml) {
+    const html = String(sanitizedHtml || "").trim();
+    if (!html) return "";
+    try {
+      const tpl = document.createElement("template");
+      tpl.innerHTML = html;
+      tpl.content.querySelectorAll("img[data-media-id]").forEach((img) => {
+        const currentSrc = img.getAttribute("src") || "";
+        if (!currentSrc || currentSrc.startsWith("data:")) {
+          img.removeAttribute("src");
+        }
+      });
+      return tpl.innerHTML.trim();
+    } catch (e) {
+      return html.replace(/(<img\b[^>]*?\bdata-media-id=["'][A-Za-z0-9_-]{8,64}["'][^>]*?)\s+src=["']data:[^"']*["']/gi, "$1");
+    }
+  }
+
+  function hydrateMediaImages(rootEl, opts = {}) {
+    const scope = rootEl || document;
+    const renderYt = opts.renderYoutubePlaceholders !== false;
+    if (!scope || typeof scope.querySelectorAll !== "function") return;
+
+    scope.querySelectorAll("img[data-media-id]").forEach((img) => {
+      const mediaId = String(img.getAttribute("data-media-id") || "").trim();
+      if (!/^[A-Za-z0-9_-]{8,64}$/.test(mediaId)) return;
+      const curSrc = img.getAttribute("src") || "";
+      if (curSrc.startsWith("data:image/")) return;
+
+      const cached = getCachedMediaDataUrl(mediaId);
+      if (cached) {
+        const safeCached = sanitizeSafeMediaUrl(cached, "");
+        if (safeCached) {
+          img.src = safeCached;
+          return;
+        }
+      }
+
+      if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchMediaImage === "function") {
+        window.ThuysTalkFirebase.fetchMediaImage(mediaId).then((fetchedUrl) => {
+          if (fetchedUrl && img.isConnected) {
+            const safeFetched = sanitizeSafeMediaUrl(fetchedUrl, "");
+            if (safeFetched) {
+              cacheMediaDataUrl(mediaId, safeFetched);
+              img.src = safeFetched;
+            }
+          }
+        });
+      }
+    });
+
+    if (renderYt) {
+      scope.querySelectorAll("[data-yt-id]").forEach((node) => {
+        if (node.dataset.ytHydrated === "1") return;
+        const ytId = String(node.getAttribute("data-yt-id") || "").trim();
+        if (!isValidYoutubeId(ytId)) return;
+        node.dataset.ytHydrated = "1";
+        node.innerHTML = `
+          <div style="position:relative; width:100%; max-width:640px; margin:12px auto; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#042820;">
+            <iframe
+              src="https://www.youtube.com/embed/${escapeHtml(ytId)}?rel=0"
+              title="YouTube video player"
+              frameborder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerpolicy="strict-origin-when-cross-origin"
+              allowfullscreen
+              style="position:absolute; inset:0; width:100%; height:100%; border:0;"
+            ></iframe>
+          </div>`;
+      });
+    }
   }
 
   function showToast(msg) {
@@ -973,7 +1090,17 @@
 
   function getPhotoUrl(slotKey) {
     const m = state.media[slotKey] || window.THUYSTALK_DEFAULT_MEDIA[slotKey];
-    return m ? sanitizeSafeMediaUrl(m.url, "") : "";
+    if (!m) return "";
+    if (m.mediaId) {
+      const cached = getCachedMediaDataUrl(m.mediaId);
+      if (cached) return sanitizeSafeMediaUrl(cached, "");
+    }
+    return sanitizeSafeMediaUrl(m.url, "");
+  }
+
+  function getSlotMediaId(slotKey) {
+    const m = state.media[slotKey];
+    return m && m.mediaId && /^[A-Za-z0-9_-]{8,64}$/.test(String(m.mediaId)) ? String(m.mediaId) : "";
   }
 
   function isValidYoutubeId(id) {
@@ -1199,8 +1326,18 @@
   function applySlotPhoto(imgId, slotKey) {
     const img = document.getElementById(imgId);
     if (!img) return;
-    img.src = getPhotoUrl(slotKey);
+    const mediaId = getSlotMediaId(slotKey);
+    if (mediaId) {
+      img.setAttribute("data-media-id", mediaId);
+    } else {
+      img.removeAttribute("data-media-id");
+    }
+    const url = getPhotoUrl(slotKey);
+    if (url) img.src = url;
     img.setAttribute("style", getPhotoStyle(slotKey));
+    if (mediaId && !url) {
+      hydrateMediaImages(img.parentElement || document);
+    }
   }
 
   // ==========================================================================
@@ -1304,8 +1441,10 @@
     grid.innerHTML = displayedCourses
       .map((c) => {
         const pct = Number(getCourseProgress(c)) || 0;
-        const photoUrl = sanitizeSafeMediaUrl(c.customCover || getPhotoUrl(c.photoSlot || "aboutSpeaker"), "assets/images/about-speaker.webp");
-        const photoStyle = c.customCover ? "" : getPhotoStyle(c.photoSlot || "aboutSpeaker");
+        const slotKey = c.photoSlot || "aboutSpeaker";
+        const slotMediaId = c.customCover ? "" : getSlotMediaId(slotKey);
+        const photoUrl = sanitizeSafeMediaUrl(c.customCover || getPhotoUrl(slotKey), "assets/images/about-speaker.webp");
+        const photoStyle = c.customCover ? "" : getPhotoStyle(slotKey);
         const titleText = typeof c.title === "object" ? c.title[state.lang] || c.title.vi : c.title;
         const descText = typeof c.desc === "object" ? c.desc[state.lang] || c.desc.vi : c.desc;
         const metaText = typeof c.meta === "object" ? c.meta[state.lang] || c.meta.vi : c.meta;
@@ -1315,7 +1454,7 @@
         return `
         <article class="course-card">
           <div class="course-thumb editable-photo-wrap">
-            <img src="${escapeHtml(photoUrl)}" alt="${escapeHtml(titleText)}" style="${photoStyle}" />
+            <img src="${escapeHtml(photoUrl)}" ${slotMediaId ? `data-media-id="${escapeHtml(slotMediaId)}"` : ""} alt="${escapeHtml(titleText)}" style="${photoStyle}" />
             <span class="course-badge-top">${escapeHtml(badgeText)}</span>
             ${
               c.photoSlot
@@ -1361,6 +1500,7 @@
     });
 
     bindPhotoTriggers(grid);
+    hydrateMediaImages(grid);
   }
 
   function getNextUnfinishedLessonIndex(course) {
@@ -1540,6 +1680,8 @@
         renderClassroomModal();
       });
     });
+
+    hydrateMediaImages(bodyEl);
 
     bodyEl.querySelectorAll(".quiz-option").forEach((optBtn) => {
       optBtn.addEventListener("click", () => {
@@ -1918,10 +2060,12 @@
       const vTitle = typeof activeVid.title === "object" ? activeVid.title[state.lang] || activeVid.title.vi : activeVid.title;
       const vDesc = typeof activeVid.desc === "object" ? activeVid.desc[state.lang] || activeVid.desc.vi : activeVid.desc;
       const vCmLabel = getVideoCategoryLabel(activeVid.cm, activeVid.cmLabel, state.lang);
+      const thumbSlotKey = activeVid.thumbSlot || "aboutSpeaker";
+      const thumbSlotMediaId = ytId ? "" : getSlotMediaId(thumbSlotKey);
       const thumbUrl = ytId
         ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`
-        : sanitizeSafeMediaUrl(getPhotoUrl(activeVid.thumbSlot || "aboutSpeaker"), "assets/images/about-speaker.webp");
-      const thumbStyle = ytId ? "" : getPhotoStyle(activeVid.thumbSlot || "aboutSpeaker");
+        : sanitizeSafeMediaUrl(getPhotoUrl(thumbSlotKey), "assets/images/about-speaker.webp");
+      const thumbStyle = ytId ? "" : getPhotoStyle(thumbSlotKey);
       const safeWatchHref = escapeHtml(
         ytId
           ? `https://www.youtube.com/watch?v=${ytId}`
@@ -1944,7 +2088,7 @@
             </div>`
           : `<iframe width="560" height="315" src="${escapeHtml(embedSrc)}" title="${escapeHtml(vTitle)}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`
         : `
-          <img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(vTitle)}" style="${thumbStyle}" />
+          <img src="${escapeHtml(thumbUrl)}" ${thumbSlotMediaId ? `data-media-id="${escapeHtml(thumbSlotMediaId)}"` : ""} alt="${escapeHtml(vTitle)}" style="${thumbStyle}" />
           ${
             activeVid.thumbSlot
               ? `<button type="button" class="photo-change-trigger" data-slot="${escapeHtml(activeVid.thumbSlot)}">
@@ -1985,6 +2129,7 @@
       if (overlayBtn) overlayBtn.addEventListener("click", () => openVideoModal(activeVid));
       document.getElementById("readFullScriptBtn").addEventListener("click", () => openVideoModal(activeVid));
       bindPhotoTriggers(stageEl);
+      hydrateMediaImages(stageEl);
     }
 
     const listEl = document.getElementById("videoPlaylistCol");
@@ -2004,16 +2149,18 @@
             (!v.youtubeEmbedId || isValidYoutubeId(v.youtubeEmbedId)) && isValidYoutubeId(rawItemYtId)
               ? rawItemYtId
               : "";
+          const tSlotKey = v.thumbSlot || "aboutSpeaker";
+          const tMediaId = ytId ? "" : getSlotMediaId(tSlotKey);
           const tUrl = ytId
             ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`
-            : sanitizeSafeMediaUrl(getPhotoUrl(v.thumbSlot || "aboutSpeaker"), "assets/images/about-speaker.webp");
-          const tStyle = ytId ? "" : getPhotoStyle(v.thumbSlot || "aboutSpeaker");
+            : sanitizeSafeMediaUrl(getPhotoUrl(tSlotKey), "assets/images/about-speaker.webp");
+          const tStyle = ytId ? "" : getPhotoStyle(tSlotKey);
           const vTitle = typeof v.title === "object" ? v.title[state.lang] || v.title.vi : v.title;
           const vCmLabel = getVideoCategoryLabel(v.cm, v.cmLabel, state.lang);
           return `
           <div class="video-list-item ${activeVid && v.id === activeVid.id ? "active" : ""}" data-vid="${escapeHtml(v.id)}">
             <div class="video-list-thumb">
-              <img src="${escapeHtml(tUrl)}" alt="${escapeHtml(vTitle)}" style="${tStyle}" />
+              <img src="${escapeHtml(tUrl)}" ${tMediaId ? `data-media-id="${escapeHtml(tMediaId)}"` : ""} alt="${escapeHtml(vTitle)}" style="${tStyle}" />
               <span class="dur">${escapeHtml(v.duration || "08:00")}</span>
             </div>
             <div class="video-list-meta">
@@ -2031,6 +2178,7 @@
           renderVideoSection(window.THUYSTALK_I18N[state.lang]);
         });
       });
+      hydrateMediaImages(listEl);
     }
   }
 
@@ -2072,6 +2220,7 @@
       });
     });
 
+    hydrateMediaImages(document.getElementById("articleModalBody"));
     document.getElementById("articleModal").classList.add("open");
   }
 
@@ -2199,8 +2348,10 @@
 
     grid.innerHTML = displayedArticles
       .map((a) => {
-        const pUrl = sanitizeSafeMediaUrl(a.customImg || getPhotoUrl(a.photoSlot || "heroPortrait"), "assets/images/hero-portrait.webp");
-        const pStyle = a.customImg ? "" : getPhotoStyle(a.photoSlot || "heroPortrait");
+        const pSlotKey = a.photoSlot || "heroPortrait";
+        const pMediaId = a.customImg ? "" : getSlotMediaId(pSlotKey);
+        const pUrl = sanitizeSafeMediaUrl(a.customImg || getPhotoUrl(pSlotKey), "assets/images/hero-portrait.webp");
+        const pStyle = a.customImg ? "" : getPhotoStyle(pSlotKey);
         const aTitle = typeof a.title === "object" ? a.title[state.lang] || a.title.vi : a.title;
         const aExcerpt = typeof a.excerpt === "object" ? a.excerpt[state.lang] || a.excerpt.vi : a.excerpt;
         const aPillar = typeof a.pillarLabel === "object" ? a.pillarLabel[state.lang] || a.pillarLabel.vi : a.pillar;
@@ -2209,7 +2360,7 @@
         return `
         <article class="article-card">
           <div class="article-thumb editable-photo-wrap">
-            <img src="${escapeHtml(pUrl)}" alt="${escapeHtml(aTitle)}" style="${pStyle}" />
+            <img src="${escapeHtml(pUrl)}" ${pMediaId ? `data-media-id="${escapeHtml(pMediaId)}"` : ""} alt="${escapeHtml(aTitle)}" style="${pStyle}" />
             <span class="article-pillar-badge">${escapeHtml(aPillar)}</span>
             ${
               a.photoSlot && !a.customImg
@@ -2242,6 +2393,7 @@
     });
 
     bindPhotoTriggers(grid);
+    hydrateMediaImages(grid);
   }
 
   function openArticleReader(art) {
@@ -2293,6 +2445,7 @@
       document.getElementById("articleModal").classList.remove("open");
     });
 
+    hydrateMediaImages(document.getElementById("articleModalBody"));
     document.getElementById("articleModal").classList.add("open");
   }
 
@@ -3482,11 +3635,13 @@
     const slotsHtml = Object.keys(state.media)
       .map((key) => {
         const m = state.media[key];
+        const slotImgUrl = getPhotoUrl(key);
+        const slotMediaId = getSlotMediaId(key);
         const isHighlighted = highlightSlot === key;
         return `
         <div class="admin-photo-slot" style="${isHighlighted ? "border-color:var(--orange-500); box-shadow:var(--shadow-orange); background:#FFF;" : ""}">
           <div class="admin-photo-preview">
-            <img src="${m.url}" id="adminPrev_${key}" alt="${escapeHtml(m.label)}" style="${getPhotoStyle(key)}" />
+            <img src="${escapeHtml(slotImgUrl)}" ${slotMediaId ? `data-media-id="${escapeHtml(slotMediaId)}"` : ""} id="adminPrev_${key}" alt="${escapeHtml(m.label)}" style="${getPhotoStyle(key)}" />
           </div>
           <div>
             <h4 style="font-size:0.94rem; font-weight:800; color:var(--ink-900); margin-bottom:4px;">${m.label}</h4>
@@ -3644,19 +3799,31 @@
     }
 
     body.querySelectorAll("[data-upload-slot]").forEach((inp) => {
-      inp.addEventListener("change", (ev) => {
+      inp.addEventListener("change", async (ev) => {
         const file = ev.target.files && ev.target.files[0];
         if (!file) return;
         const slotKey = inp.dataset.uploadSlot;
-        compressAndLoadImage(file, (dataUrl) => {
-          state.media[slotKey].url = dataUrl;
-          saveCustomMedia();
+        try {
+          showToast("Đang nén ảnh và lưu vào thư viện ảnh (media_images)...");
+          const uploaded = await uploadAndRegisterImage(file);
+          state.media[slotKey].mediaId = uploaded.mediaId;
+          state.media[slotKey].url = "";
+          const savedOk = await saveCustomMedia();
+          if (!savedOk) {
+            inp.value = "";
+            return;
+          }
           renderAll();
           renderAdminStudioModal(slotKey);
-          showToast(`Đã cập nhật ${state.media[slotKey].label}`);
-        });
+          showToast(`Đã cập nhật ${state.media[slotKey].label} (${Math.round(uploaded.bytes / 1024)} KB)`);
+        } catch (err) {
+          showToast(err && err.message ? err.message : "Không thể tải ảnh lên. Vui lòng thử ảnh nhỏ hơn 600 KB.");
+          inp.value = "";
+        }
       });
     });
+
+    hydrateMediaImages(body);
 
     body.querySelectorAll("[data-pos-slot]").forEach((rng) => {
       rng.addEventListener("input", () => {
@@ -3690,106 +3857,17 @@
     });
   }
 
-  // --- HELPER: RICH HTML / ARTICLE & MEDIA UPLOADER (.jpg, .png, .webp, .webm, .mp4) ---
+  // --- HELPER: RICH HTML / ARTICLE & MEDIA UPLOADER ---
   function formatRawOrHtmlContent(rawText) {
     const s = String(rawText || "").trim();
     if (!s) return "";
-    if (/<(p|h2|h3|h4|ul|ol|div|figure|img|video|blockquote|table)\b/i.test(s)) {
+    if (/<(p|h2|h3|h4|ul|ol|div|figure|img|blockquote|table)\b/i.test(s)) {
       return sanitizeRichHtml(s);
     }
     return s
       .split(/\n+/)
       .map((line) => `<p>${escapeHtml(line)}</p>`)
       .join("");
-  }
-
-  function bindRichEditorToolbar(textareaId, previewId, htmlFileInputId, mediaFileInputId, toolbarId) {
-    const textarea = document.getElementById(textareaId);
-    const preview = document.getElementById(previewId);
-    const htmlInput = document.getElementById(htmlFileInputId);
-    const mediaInput = document.getElementById(mediaFileInputId);
-    const toolbar = document.getElementById(toolbarId);
-    if (!textarea || !preview) return;
-
-    function updatePreview() {
-      const val = textarea.value.trim();
-      if (!val) {
-        preview.innerHTML = `<span style="color:var(--ink-400); font-size:0.82rem;">Xem trước bài giảng (HTML &amp; Hình ảnh / Video minh họa sẽ hiển thị trực tiếp tại đây)...</span>`;
-        return;
-      }
-      preview.innerHTML = `<div class="reader-content">${sanitizeRichHtml(formatRawOrHtmlContent(val))}</div>`;
-    }
-
-    textarea.addEventListener("input", updatePreview);
-    updatePreview();
-
-    if (toolbar) {
-      toolbar.querySelectorAll("[data-insert-tag]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const tagType = btn.dataset.insertTag;
-          let snippet = "";
-          if (tagType === "h3") snippet = `\n<h3>Tiêu đề mục chính trong tài liệu</h3>\n`;
-          else if (tagType === "p") snippet = `\n<p>Nội dung phân tích chi tiết...</p>\n`;
-          else if (tagType === "ul") snippet = `\n<ul>\n  <li>Điểm lưu ý thực tế số 1</li>\n  <li>Điểm lưu ý thực tế số 2</li>\n</ul>\n`;
-          else if (tagType === "quote")
-            snippet = `\n<blockquote style="border-left:4px solid #0E8C6B; background:#EAFBF5; padding:12px 16px; border-radius:8px; font-weight:700; margin:12px 0;">Lưu ý pháp lý quan trọng: Đối chiếu kỹ chứng từ gốc trước khi truyền tờ khai.</blockquote>\n`;
-          const start = textarea.selectionStart || textarea.value.length;
-          const end = textarea.selectionEnd || textarea.value.length;
-          textarea.value = textarea.value.slice(0, start) + snippet + textarea.value.slice(end);
-          updatePreview();
-          textarea.focus();
-        });
-      });
-    }
-
-    if (htmlInput) {
-      htmlInput.addEventListener("change", (ev) => {
-        const file = ev.target.files && ev.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          let content = String(e.target.result || "").trim();
-          const bodyMatch = content.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-          if (bodyMatch) content = bodyMatch[1].trim();
-          textarea.value = textarea.value
-            ? textarea.value + "\n\n" + content
-            : content;
-          updatePreview();
-          showToast(`Đã tải nội dung từ tệp "${file.name}" vào trình soạn thảo!`);
-        };
-        reader.readAsText(file, "utf-8");
-      });
-    }
-
-    if (mediaInput) {
-      mediaInput.addEventListener("change", (ev) => {
-        const files = Array.from(ev.target.files || []);
-        if (!files.length) return;
-        files.forEach((file) => {
-          const isVideo =
-            file.type.startsWith("video/") || /\.(webm|mp4|mov)$/i.test(file.name);
-          if (isVideo) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              const dataUrl = e.target.result;
-              const mime = file.type || (file.name.toLowerCase().endsWith(".webm") ? "video/webm" : "video/mp4");
-              const mediaHtml = `\n<figure class="lesson-media-figure">\n  <video controls playsinline preload="metadata">\n    <source src="${dataUrl}" type="${mime}" />\n  </video>\n  <figcaption>Video minh họa: ${escapeHtml(file.name)}</figcaption>\n</figure>\n`;
-              textarea.value = (textarea.value ? textarea.value + "\n" : "") + mediaHtml;
-              updatePreview();
-              showToast(`Đã chèn video "${file.name}" vào nội dung bài giảng!`);
-            };
-            reader.readAsDataURL(file);
-          } else {
-            compressAndLoadImage(file, (dataUrl) => {
-              const mediaHtml = `\n<figure class="lesson-media-figure">\n  <img src="${dataUrl}" alt="${escapeHtml(file.name)}" />\n  <figcaption>Hình minh họa: ${escapeHtml(file.name)}</figcaption>\n</figure>\n`;
-              textarea.value = (textarea.value ? textarea.value + "\n" : "") + mediaHtml;
-              updatePreview();
-              showToast(`Đã tải và chèn ảnh "${file.name}" vào nội dung bài giảng!`);
-            });
-          }
-        });
-      });
-    }
   }
 
   
@@ -3857,10 +3935,11 @@
 
           <!-- Inserts (Media, Link, Table, Callout) -->
           <div class="word-tool-group">
-            <label class="word-tool-btn" style="cursor:pointer; display:inline-flex; align-items:center; gap:3px;" title="Tải ảnh hoặc video từ máy tính">
-              <span>+ Tải Ảnh/Video</span>
-              <input type="file" class="word-media-upload-input" accept="image/*,video/mp4,video/webm" multiple style="display:none;" />
+            <label class="word-tool-btn" style="cursor:pointer; display:inline-flex; align-items:center; gap:3px;" title="Tải ảnh đã nén lên Cloud Firestore (≤ 300 KB)">
+              <span>+ Tải Ảnh</span>
+              <input type="file" class="word-media-upload-input" accept="image/*" multiple style="display:none;" />
             </label>
+            <button type="button" class="word-tool-btn" data-role="insert-youtube-video" title="Chèn video bằng đường link YouTube">+ Video YouTube</button>
             <button type="button" class="word-tool-btn" data-role="insert-img-url" title="Chèn ảnh từ link web online">+ Link Ảnh</button>
             <button type="button" class="word-tool-btn" data-role="insert-link" title="Gán link vào chữ (Bôi đen chữ rồi bấm nút này)">🔗 Link</button>
             <button type="button" class="word-tool-btn" data-role="insert-table" title="Chèn bảng 3x3">+ Bảng</button>
@@ -3882,7 +3961,7 @@
 
         <!-- Status Bar -->
         <div class="word-status-bar">
-          <span>Chế độ soạn thảo kiểu Word · Gõ trực tiếp, bôi đen chữ để gán link, chèn ảnh/video tức thì</span>
+          <span>Chế độ soạn thảo kiểu Word · Gõ trực tiếp, bôi đen chữ để gán link, tải ảnh nén tự động hoặc chèn video YouTube</span>
           <span class="word-stat-counter" id="${editorCanvasId}_counter">0 từ · 0 ký tự</span>
         </div>
       </div>
@@ -4130,62 +4209,92 @@
       });
     }
 
-    // Instant Image & Video Upload (100% Free, Zero Blaze Paywall!)
+    // Compressed Image Upload -> media_images/{id}
     const mediaInput = containerEl.querySelector(".word-media-upload-input");
     if (mediaInput) {
       mediaInput.addEventListener("change", async (ev) => {
         const files = Array.from(ev.target.files || []);
         if (!files.length) return;
-        showToast("Đang đọc tệp và chèn vào bài viết...");
+        showToast("Đang nén ảnh và lưu vào thư viện ảnh (media_images)...");
+        let insertedCount = 0;
         for (const file of files) {
-          const isVideo = file.type.startsWith("video/") || /\.(webm|mp4|mov)$/i.test(file.name);
-
-          const dataUrl = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (e) => resolve(e.target.result);
-            reader.onerror = () => resolve("");
-            reader.readAsDataURL(file);
-          });
-
-          if (!dataUrl) continue;
-
-          let mediaHtml = "";
-          if (isVideo) {
-            mediaHtml = `
+          const isVideoFile = file.type.startsWith("video/") || /\.(webm|mp4|mov|avi|mkv)$/i.test(file.name);
+          if (isVideoFile || (!file.type.startsWith("image/") && !/\.(png|jpe?g|webp|gif|bmp)$/i.test(file.name))) {
+            showToast("Không hỗ trợ chèn tệp video trực tiếp. Vui lòng dùng nút '+ Video YouTube'.");
+            continue;
+          }
+          try {
+            const uploaded = await uploadAndRegisterImage(file);
+            const mediaHtml = `
               <figure style="margin:16px auto; text-align:center; max-width:100%;">
-                <video controls playsinline preload="metadata" style="max-width:100%; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); display:block; margin:0 auto;">
-                  <source src="${dataUrl}" type="${file.type || 'video/mp4'}" />
-                </video>
-                <figcaption style="font-size:0.8rem; color:#64748B; margin-top:6px;">Video: ${escapeHtml(file.name)}</figcaption>
-              </figure>
-              <p><br></p>
-            `;
-          } else {
-            mediaHtml = `
-              <figure style="margin:16px auto; text-align:center; max-width:100%;">
-                <img src="${dataUrl}" alt="${escapeHtml(file.name)}" style="max-width:100%; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); display:block; margin:0 auto;" />
+                <img src="${uploaded.dataUrl}" data-media-id="${escapeHtml(uploaded.mediaId)}" alt="${escapeHtml(file.name)}" style="max-width:100%; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); display:block; margin:0 auto;" />
                 <figcaption style="font-size:0.8rem; color:#64748B; margin-top:6px;">${escapeHtml(file.name)}</figcaption>
               </figure>
               <p><br></p>
             `;
-          }
-
-          canvas.focus();
-          if (savedRange) {
-            restoreSelection();
-            try {
-              document.execCommand("insertHTML", false, mediaHtml);
-            } catch (err) {
+            canvas.focus();
+            if (savedRange) {
+              restoreSelection();
+              try {
+                document.execCommand("insertHTML", false, mediaHtml);
+              } catch (err) {
+                canvas.insertAdjacentHTML("beforeend", mediaHtml);
+              }
+            } else {
               canvas.insertAdjacentHTML("beforeend", mediaHtml);
             }
-          } else {
-            canvas.insertAdjacentHTML("beforeend", mediaHtml);
+            saveSelection();
+            updateStats();
+            insertedCount++;
+          } catch (err) {
+            showToast(err && err.message ? err.message : `Lỗi tải ảnh "${file.name}".`);
           }
-          saveSelection();
-          updateStats();
         }
-        showToast("Đã chèn ảnh/video thành công!");
+        if (insertedCount > 0) {
+          showToast(`Đã nén và chèn ${insertedCount} ảnh vào nội dung!`);
+        }
         mediaInput.value = "";
+      });
+    }
+
+    // Insert YouTube Video by Link ONLY
+    const ytInsertBtn = containerEl.querySelector("[data-role='insert-youtube-video']");
+    if (ytInsertBtn) {
+      ytInsertBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        saveSelection();
+        const rawUrl = prompt("Dán đường link Video YouTube (VD: https://www.youtube.com/watch?v=... hoặc https://youtu.be/...):");
+        if (!rawUrl) return;
+        const ytId = extractYoutubeId(rawUrl);
+        if (!isValidYoutubeId(ytId)) {
+          showToast("Link YouTube không hợp lệ. Vui lòng kiểm tra lại đường link (cần có mã video 11 ký tự).");
+          return;
+        }
+        const safeWatch = `https://www.youtube.com/watch?v=${ytId}`;
+        const thumbUrl = `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
+        const ytHtml = `
+          <figure class="yt-video-embed" data-yt-id="${escapeHtml(ytId)}" style="margin:16px auto; text-align:center; max-width:640px; border:1px solid #cbd5e1; border-radius:10px; padding:8px; background:#f8fafc;">
+            <img src="${thumbUrl}" alt="YouTube Video (${escapeHtml(ytId)})" style="max-width:100%; border-radius:8px; display:block; margin:0 auto;" />
+            <figcaption style="font-size:0.8rem; color:#0f766e; font-weight:700; margin-top:6px;">
+              Video YouTube: <a href="${safeWatch}" target="_blank" rel="noopener noreferrer">${safeWatch}</a>
+            </figcaption>
+          </figure>
+          <p><br></p>
+        `;
+        canvas.focus();
+        if (savedRange) {
+          restoreSelection();
+          try {
+            document.execCommand("insertHTML", false, ytHtml);
+          } catch (err) {
+            canvas.insertAdjacentHTML("beforeend", ytHtml);
+          }
+        } else {
+          canvas.insertAdjacentHTML("beforeend", ytHtml);
+        }
+        saveSelection();
+        updateStats();
+        showToast(`Đã chèn Video YouTube (ID: ${ytId})!`);
       });
     }
 
@@ -4215,9 +4324,10 @@
     }
 
     return {
-      getHtml: () => sanitizeRichHtml(canvas.innerHTML.trim()),
+      getHtml: () => prepareRichHtmlForStorage(sanitizeRichHtml(canvas.innerHTML.trim())),
       setHtml: (val) => {
         canvas.innerHTML = sanitizeRichHtml(val || "");
+        hydrateMediaImages(canvas, { renderYoutubePlaceholders: false });
         updateStats();
       },
       clear: () => {
@@ -6038,7 +6148,7 @@
             <input type="text" id="cmsArtExcerpt" class="form-control" required placeholder="Tóm tắt 1-2 câu về vấn đề cốt lõi và giải pháp trong bài..." />
           </div>
           <div class="form-group">
-            <label>Nội dung toàn văn bài viết (Gõ trực tiếp kiểu Word, căn lề, chèn bảng, chèn ảnh/video .jpg, .png, .webp, .webm, .mp4) *</label>
+            <label>Nội dung toàn văn bài viết (Gõ trực tiếp kiểu Word, căn lề, chèn bảng, ảnh nén hoặc link YouTube) *</label>
             ${renderWordEditorMarkup("cmsArtEditor", "Nhập nội dung bài viết trực tiếp tại đây như trong Word, căn lề, bôi màu và chèn ảnh dễ dàng...")}
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -6912,7 +7022,7 @@
               </div>
             </div>
             <div class="form-group">
-              <label>Nội dung kiến thức bài giảng (Gõ trực tiếp kiểu Word, căn lề, chèn bảng, chèn ảnh/video .jpg, .png, .webp, .webm, .mp4) *</label>
+              <label>Nội dung kiến thức bài giảng (Gõ trực tiếp kiểu Word, căn lề, chèn bảng, ảnh nén hoặc link YouTube) *</label>
               ${renderWordEditorMarkup("cmsLessonEditor", "Dán nội dung bài giảng, gõ trực tiếp kiểu Word hoặc chèn ảnh/video minh họa...")}
             </div>
             <div class="form-group" style="margin-bottom:0;">
@@ -7894,33 +8004,139 @@
     });
   }
 
-  function compressAndLoadImage(file, callback) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const maxDim = 1280;
-        let w = img.width;
-        let h = img.height;
-        if (w > maxDim || h > maxDim) {
-          if (w > h) {
-            h = Math.round((h * maxDim) / w);
-            w = maxDim;
-          } else {
-            w = Math.round((w * maxDim) / h);
-            h = maxDim;
+  function estimateDataUrlBytes(dataUrl) {
+    const s = String(dataUrl || "");
+    const commaIdx = s.indexOf(",");
+    if (commaIdx < 0) return s.length;
+    const b64 = s.slice(commaIdx + 1).trim();
+    const pad = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
+    return Math.max(0, Math.ceil((b64.length * 3) / 4) - pad);
+  }
+
+  function compressImageFile(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) {
+        reject(new Error("Chưa chọn tệp ảnh."));
+        return;
+      }
+      const isImg =
+        (file.type && file.type.startsWith("image/")) ||
+        /\.(png|jpe?g|webp|gif|bmp)$/i.test(file.name || "");
+      if (!isImg) {
+        reject(new Error("Chỉ hỗ trợ tệp hình ảnh (JPG, PNG, WEBP)."));
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Không đọc được tệp ảnh."));
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("Tệp ảnh không hợp lệ hoặc bị hỏng."));
+        img.onload = () => {
+          const maxWidth = 1600;
+          let targetW = img.width || 800;
+          let targetH = img.height || 600;
+          if (targetW > maxWidth) {
+            targetH = Math.max(1, Math.round((targetH * maxWidth) / targetW));
+            targetW = maxWidth;
           }
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, w, h);
-        callback(canvas.toDataURL("image/webp", 0.88));
+
+          function encodeAt(w, h, mime, q) {
+            const canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, w, h);
+            let out = canvas.toDataURL(mime, q);
+            if (mime === "image/webp" && !out.startsWith("data:image/webp")) {
+              out = canvas.toDataURL("image/jpeg", q);
+            }
+            return {
+              dataUrl: out,
+              width: w,
+              height: h,
+              bytes: estimateDataUrlBytes(out)
+            };
+          }
+
+          const targetBytes = 300 * 1024;
+          const hardLimitBytes = 600 * 1024;
+          let best = encodeAt(targetW, targetH, "image/webp", 0.8);
+
+          const attempts = [
+            [1.0, 0.68],
+            [1.0, 0.55],
+            [1.0, 0.42],
+            [0.75, 0.72],
+            [0.75, 0.55],
+            [0.55, 0.65],
+            [0.55, 0.45]
+          ];
+          for (const [scaleFactor, quality] of attempts) {
+            if (best.bytes <= targetBytes) break;
+            const w = Math.max(120, Math.round(targetW * scaleFactor));
+            const h = Math.max(120, Math.round(targetH * scaleFactor));
+            best = encodeAt(w, h, "image/webp", quality);
+          }
+
+          if (best.bytes > hardLimitBytes) {
+            reject(
+              new Error(
+                `Ảnh sau khi nén vẫn còn ${Math.round(best.bytes / 1024)} KB (vượt quá giới hạn 600 KB). Vui lòng cắt nhỏ ảnh hoặc giảm độ phân giải trước khi tải lên.`
+              )
+            );
+            return;
+          }
+
+          resolve(best);
+        };
+        img.src = e.target.result;
       };
-      img.src = e.target.result;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadAndRegisterImage(file) {
+    const compressed = await compressImageFile(file);
+    const mediaId =
+      "med_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+    cacheMediaDataUrl(mediaId, compressed.dataUrl);
+    if (
+      window.ThuysTalkFirebase &&
+      window.ThuysTalkFirebase.isReady() &&
+      typeof window.ThuysTalkFirebase.saveMediaImage === "function"
+    ) {
+      const ok = await window.ThuysTalkFirebase.saveMediaImage(mediaId, compressed);
+      if (!ok) {
+        const errDetail =
+          typeof window.ThuysTalkFirebase.getLastError === "function"
+            ? window.ThuysTalkFirebase.getLastError()
+            : "";
+        throw new Error(
+          "Lỗi lưu ảnh lên Cloud Firestore (media_images): " +
+            (errDetail || "Vui lòng kiểm tra quyền Quản trị viên và kết nối mạng.")
+        );
+      }
+    }
+    return {
+      mediaId,
+      dataUrl: compressed.dataUrl,
+      width: compressed.width,
+      height: compressed.height,
+      bytes: compressed.bytes
     };
-    reader.readAsDataURL(file);
+  }
+
+  function compressAndLoadImage(file, callback, onError = null) {
+    compressImageFile(file)
+      .then((res) => {
+        if (typeof callback === "function") callback(res.dataUrl, res);
+      })
+      .catch((err) => {
+        const msg = err && err.message ? err.message : "Không thể nén ảnh.";
+        showToast(msg);
+        if (typeof onError === "function") onError(err);
+      });
   }
 
   let isAdminProtectedListening = false;

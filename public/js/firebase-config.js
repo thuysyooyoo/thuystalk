@@ -54,6 +54,8 @@
     localStorage.setItem(STORAGE_KEY_FIREBASE, JSON.stringify(cfg));
   }
 
+  const mediaImageCache = new Map();
+  const mediaImagePending = new Map();
   let lastWriteError = "";
 
   function setLastWriteError(err) {
@@ -793,6 +795,84 @@
         console.warn(`fetchSiteSettings error (${settingKey}):`, err);
         return null;
       }
+    },
+
+    cacheMediaImage: function (imageId, dataUrl) {
+      if (imageId && typeof dataUrl === "string" && dataUrl.startsWith("data:image/")) {
+        mediaImageCache.set(String(imageId), dataUrl);
+      }
+    },
+
+    getCachedMediaImage: function (imageId) {
+      return imageId ? mediaImageCache.get(String(imageId)) || "" : "";
+    },
+
+    saveMediaImage: async function (imageId, payload) {
+      initFirebase();
+      const id = String(imageId || "").trim();
+      if (!id || !/^[A-Za-z0-9_-]{8,64}$/.test(id)) {
+        setLastWriteError("Mã ảnh media_images không hợp lệ.");
+        return false;
+      }
+      if (!payload || typeof payload.dataUrl !== "string" || !/^data:image\/(webp|jpeg|png);base64,/i.test(payload.dataUrl)) {
+        setLastWriteError("Dữ liệu ảnh nén không hợp lệ.");
+        return false;
+      }
+      mediaImageCache.set(id, payload.dataUrl);
+      if (!db) {
+        setLastWriteError("Firestore chưa sẵn sàng để lưu ảnh.");
+        return false;
+      }
+      try {
+        await safeFirestoreWrite(
+          db.collection("media_images").doc(id).set({
+            dataUrl: payload.dataUrl,
+            width: Number(payload.width) || 0,
+            height: Number(payload.height) || 0,
+            bytes: Number(payload.bytes) || 0,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          }),
+          10000
+        );
+        return true;
+      } catch (err) {
+        setLastWriteError(err);
+        console.warn(`saveMediaImage error (${id}):`, err);
+        return false;
+      }
+    },
+
+    fetchMediaImage: async function (imageId) {
+      const id = String(imageId || "").trim();
+      if (!id || !/^[A-Za-z0-9_-]{8,64}$/.test(id)) return null;
+      if (mediaImageCache.has(id)) {
+        return mediaImageCache.get(id);
+      }
+      if (mediaImagePending.has(id)) {
+        return mediaImagePending.get(id);
+      }
+      initFirebase();
+      if (!db) return null;
+      const req = (async () => {
+        try {
+          const snap = await db.collection("media_images").doc(id).get();
+          if (snap.exists) {
+            const data = snap.data() || {};
+            if (typeof data.dataUrl === "string" && data.dataUrl.startsWith("data:image/")) {
+              mediaImageCache.set(id, data.dataUrl);
+              return data.dataUrl;
+            }
+          }
+          return null;
+        } catch (err) {
+          console.warn(`fetchMediaImage error (${id}):`, err);
+          return null;
+        } finally {
+          mediaImagePending.delete(id);
+        }
+      })();
+      mediaImagePending.set(id, req);
+      return req;
     },
 
     // 10. REAL-TIME LISTENER FOR INSTANT CROSS-BROWSER SYNCHRONIZATION
