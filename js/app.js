@@ -1718,7 +1718,7 @@
             ${state.lang === "en" ? "No courses available yet" : "Chưa có tài liệu nào"}
           </strong>
           <span style="font-size:0.88rem;">
-            ${state.lang === "en" ? "New e-learning modules and templates will be published here soon." : "Các chuyên đề E-Learning và bộ câu hỏi thực hành mới sẽ được cập nhật sớm."}
+            ${state.lang === "en" ? "New practical modules and templates will be published here soon." : "Các chuyên đề Tài liệu & Mini Test mới sẽ được cập nhật sớm."}
           </span>
         </div>`;
       return;
@@ -5737,7 +5737,7 @@
             <h4 style="color:#064E3B; margin:16px 0 6px; font-size:0.95rem; font-weight:800;">1. Mục Đích Thu Thập Dữ Liệu</h4>
             <p style="margin:0 0 10px; color:#334155;">Chúng tôi chỉ thu thập thông tin cần thiết phục vụ trực tiếp cho các mục đích:</p>
             <ul style="margin:0 0 14px 20px; padding:0; color:#334155;">
-              <li>Lưu trữ tiến trình học tập các khóa E-Learning, kết quả Mini-test chuyên môn.</li>
+              <li>Lưu trữ tiến trình đọc tài liệu chuyên đề, kết quả Mini-test chuyên môn.</li>
               <li>Cung cấp và gửi tài liệu, checklist nghiệp vụ, biểu mẫu hải quan qua email theo yêu cầu.</li>
               <li>Phản hồi và tư vấn chuyên sâu 1-1 về thủ tục hải quan, chính sách XNK, quản trị rủi ro.</li>
             </ul>
@@ -7688,7 +7688,7 @@
     body.innerHTML = `
       <div class="cms-panel-box" style="margin-bottom:18px; border-color:var(--jade-300); background:var(--jade-50);">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
-          <h4 style="margin:0; color:var(--jade-900);">Quản lý Chuyên đề E-Learning (${state.courses.length} chuyên đề)</h4>
+          <h4 style="margin:0; color:var(--jade-900);">Quản lý Chuyên đề Tài liệu &amp; Mini Test (${state.courses.length} chuyên đề)</h4>
           ${renderDemoCounterBadge("courses", state.courses)}
         </div>
         <form id="cmsNewCourseForm" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">
