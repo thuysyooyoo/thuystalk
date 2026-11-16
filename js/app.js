@@ -666,8 +666,9 @@
       const firestoreStatusPill = document.getElementById("adminSidebarFirestoreStatus");
       if (firestoreStatusPill) {
         firestoreStatusPill.textContent = "Cloud Firestore SSoT: Đã kết nối trực tiếp (5/5 phân hệ)";
-        firestoreStatusPill.style.color = "var(--jade-800)";
-        firestoreStatusPill.style.borderColor = "var(--jade-500)";
+        firestoreStatusPill.style.background = "rgba(255, 255, 255, 0.12)";
+        firestoreStatusPill.style.color = "#A7F3D0";
+        firestoreStatusPill.style.borderColor = "rgba(167, 243, 208, 0.45)";
       }
 
       // Kích hoạt Real-Time bi-directional synchronization trên Firestore onSnapshot
