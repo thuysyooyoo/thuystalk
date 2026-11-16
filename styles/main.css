@@ -1777,6 +1777,43 @@ body.admin-mode .editable-photo-wrap:hover .photo-change-trigger {
   border-bottom: 1px solid var(--ink-200);
 }
 
+.notebook-section-home {
+  padding: 56px 0;
+}
+
+.home-lookup-card {
+  background: #FFFFFF;
+  border: 1.5px solid var(--jade-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 28px 30px;
+}
+
+.home-lookup-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.home-lookup-head .section-title {
+  margin-bottom: 4px;
+}
+
+.home-lookup-form {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.home-quick-chips {
+  padding: 0;
+  background: transparent;
+}
+
 .notebook-chat-messages {
   padding: 24px 26px;
   max-height: 420px;
@@ -2682,6 +2719,10 @@ body.admin-mode .editable-photo-wrap:hover .photo-change-trigger {
   .notebook-chat-messages {
     padding-left: 16px;
     padding-right: 16px;
+  }
+
+  .home-lookup-card {
+    padding: 20px 16px;
   }
 }
 

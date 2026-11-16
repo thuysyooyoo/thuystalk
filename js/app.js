@@ -2822,6 +2822,9 @@
     const inp = document.getElementById("notebookQueryInput");
     if (inp) inp.placeholder = t.notebook.inputPlaceholder;
 
+    const homeInp = document.getElementById("homeQuickQueryInput");
+    if (homeInp) homeInp.placeholder = t.notebook.inputPlaceholder;
+
     const routesEl = document.getElementById("notebookRoutingPills");
     if (routesEl) {
       routesEl.innerHTML = window.THUYSTALK_NOTEBOOK_ROUTES.map((r) => {
@@ -9251,6 +9254,29 @@
     });
 
     // NotebookLM & AI Search Events
+    const homeQuickForm = document.getElementById("homeQuickSearchForm");
+    if (homeQuickForm) {
+      homeQuickForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const inp = document.getElementById("homeQuickQueryInput");
+        const q = inp ? inp.value.trim() : "";
+        if (!q) {
+          showToast(state.lang === "en" ? "Please enter a lookup question." : "Vui lòng nhập câu hỏi cần tra cứu.");
+          if (inp) inp.focus();
+          return;
+        }
+        window.location.href = "tra-cuu.html?q=" + encodeURIComponent(q);
+      });
+    }
+
+    document.querySelectorAll("[data-home-quick-prompt]").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const q = (chip.dataset.homeQuickPrompt || "").trim();
+        if (!q) return;
+        window.location.href = "tra-cuu.html?q=" + encodeURIComponent(q);
+      });
+    });
+
     const nbForm = document.getElementById("notebookSearchForm");
     if (nbForm) {
       nbForm.addEventListener("submit", (e) => {
@@ -9278,6 +9304,17 @@
         }
       });
     });
+
+    // Execute ?q=... query ONCE on tra-cuu.html, then clear URL search param
+    const initialLookupQuery = (params.get("q") || "").trim();
+    const nbInput = document.getElementById("notebookQueryInput");
+    if (initialLookupQuery && nbInput && document.getElementById("notebookChatMessages")) {
+      nbInput.value = initialLookupQuery;
+      if (window.history && typeof window.history.replaceState === "function") {
+        window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+      }
+      handleNotebookSearch(true);
+    }
 
     // Close Modals
     document.querySelectorAll("[data-close-modal]").forEach((btn) => {
