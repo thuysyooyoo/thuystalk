@@ -18,6 +18,7 @@ import html
 import http.server
 import io
 import json
+import math
 import os
 import re
 import secrets
@@ -28,6 +29,7 @@ import sys
 import threading
 import time
 import urllib.parse
+import uuid
 import webbrowser
 from email import encoders
 from email.mime.base import MIMEBase
@@ -65,6 +67,35 @@ _DEVICE_LOCK = threading.Lock()
 _DEVICE_CHALLENGES = {}
 _DEVICE_USER_SENDS = {}
 _DEVICE_GLOBAL_SENDS = []
+
+AI_JOB_TTL_SECONDS = 1800
+AI_MAX_JOBS = 100
+AI_CACHE_TTL_SECONDS = 86400
+AI_MAX_CACHE_ENTRIES = 200
+AI_QUERY_TIMEOUT_SECONDS = 300
+VN_TZ = datetime.timezone(datetime.timedelta(hours=7))
+AI_QUOTA_ERROR_PATTERNS = (
+    "usage limit",
+    "limit reached",
+    "quota",
+    "rate limit",
+    "resource exhausted",
+    "resource_exhausted",
+    "query_resource_exhausted",
+    "error code 8",
+    "code 8:",
+    "429",
+)
+
+_AI_LOCK = threading.Lock()
+_AI_SEMAPHORE = threading.Semaphore(2)
+_AI_JOBS = {}
+_AI_RESPONSE_CACHE = {}
+_AI_USER_SENDS = {}
+_AI_IP_SENDS = {}
+_AI_GLOBAL_HOURLY_SENDS = []
+_AI_GLOBAL_DAILY_SENDS = []
+_AI_PAUSED_UNTIL = 0.0
 
 
 def _load_dotenv(dotenv_path: Path):
@@ -172,6 +203,440 @@ def _prune_device_state(now: float):
     expired_keys = [k for k, v in _DEVICE_CHALLENGES.items() if now > float(v.get("expires_at", 0))]
     for k in expired_keys:
         del _DEVICE_CHALLENGES[k]
+
+
+def _normalize_ai_query(query: str) -> str:
+    """Chuẩn hóa câu hỏi làm khóa cache tra cứu AI."""
+    collapsed = re.sub(r"\s+", " ", str(query or "").strip().lower())
+    return collapsed.strip(" ?!.,;:")
+
+
+def _format_vn_hh_mm(epoch_ts: float) -> str:
+    """Định dạng mốc giờ HH:MM theo múi giờ Việt Nam (UTC+7)."""
+    dt = datetime.datetime.fromtimestamp(float(epoch_ts), tz=VN_TZ)
+    return dt.strftime("%H:%M")
+
+
+def _format_wait_duration_vi(seconds: int) -> str:
+    """Chuyển số giây chờ thành chuỗi Tiếng Việt dễ hiểu."""
+    sec = max(1, int(seconds))
+    if sec < 60:
+        return f"{sec} giây"
+    mins = math.ceil(sec / 60.0)
+    if mins < 60:
+        return f"{mins} phút"
+    hours = mins // 60
+    rem_mins = mins % 60
+    if rem_mins == 0:
+        return f"{hours} giờ"
+    return f"{hours} giờ {rem_mins} phút"
+
+
+def _prune_ai_state(now: float):
+    """Dọn lịch sử quota AI, cache quá hạn và giới hạn tối đa 100 job / 30 phút (yêu cầu đang giữ _AI_LOCK)."""
+    global _AI_PAUSED_UNTIL
+    if _AI_PAUSED_UNTIL and now >= _AI_PAUSED_UNTIL:
+        _AI_PAUSED_UNTIL = 0.0
+
+    hour_cutoff = now - 3600.0
+    day_cutoff = now - 86400.0
+    _AI_GLOBAL_HOURLY_SENDS[:] = [ts for ts in _AI_GLOBAL_HOURLY_SENDS if ts >= hour_cutoff]
+    _AI_GLOBAL_DAILY_SENDS[:] = [ts for ts in _AI_GLOBAL_DAILY_SENDS if ts >= day_cutoff]
+
+    for store in (_AI_USER_SENDS, _AI_IP_SENDS):
+        for key in list(store.keys()):
+            recent = [ts for ts in store[key] if ts >= hour_cutoff]
+            if recent:
+                store[key] = recent
+            else:
+                del store[key]
+
+    cache_cutoff = now - AI_CACHE_TTL_SECONDS
+    for ckey in list(_AI_RESPONSE_CACHE.keys()):
+        if float(_AI_RESPONSE_CACHE[ckey].get("cached_at", 0)) < cache_cutoff:
+            del _AI_RESPONSE_CACHE[ckey]
+    if len(_AI_RESPONSE_CACHE) > AI_MAX_CACHE_ENTRIES:
+        oldest_first = sorted(
+            _AI_RESPONSE_CACHE.items(),
+            key=lambda kv: float(kv[1].get("cached_at", 0)),
+        )
+        for ckey, _ in oldest_first[: len(_AI_RESPONSE_CACHE) - AI_MAX_CACHE_ENTRIES]:
+            _AI_RESPONSE_CACHE.pop(ckey, None)
+
+    job_cutoff = now - AI_JOB_TTL_SECONDS
+    for jid in list(_AI_JOBS.keys()):
+        if float(_AI_JOBS[jid].get("created_at", 0)) < job_cutoff:
+            del _AI_JOBS[jid]
+    if len(_AI_JOBS) > AI_MAX_JOBS:
+        evict_order = sorted(
+            _AI_JOBS.items(),
+            key=lambda kv: (
+                0 if kv[1].get("status") in ("done", "error") else 1,
+                float(kv[1].get("created_at", 0)),
+            ),
+        )
+        for jid, _ in evict_order[: len(_AI_JOBS) - AI_MAX_JOBS]:
+            _AI_JOBS.pop(jid, None)
+
+
+def _has_quota_keyword(text: str) -> bool:
+    low = str(text or "").lower()
+    return any(pat in low for pat in AI_QUOTA_ERROR_PATTERNS)
+
+
+def _extract_nlm_output(stdout_str: str):
+    """Bóc tách câu trả lời và JSON gốc từ stdout của CLI nlm."""
+    text = (stdout_str or "").strip()
+    if not text:
+        return "", None
+    try:
+        parsed = json.loads(text)
+    except Exception:
+        return text, None
+    if isinstance(parsed, dict):
+        val = parsed.get("value") if isinstance(parsed.get("value"), dict) else parsed
+        ans = val.get("answer") or val.get("response") or val.get("text") or ""
+        return str(ans or "").strip(), parsed
+    return text, None
+
+
+def _is_nlm_quota_error(stdout_str: str, stderr_str: str, parsed_json, returncode: int, answer_text: str) -> bool:
+    """Nhận diện hết hạn mức NotebookLM/Gemini Notebook từ đầu ra hoặc lỗi của nlm."""
+    if _has_quota_keyword(stderr_str):
+        return True
+    if isinstance(parsed_json, dict):
+        err_bits = []
+        for container in (parsed_json, parsed_json.get("value") if isinstance(parsed_json.get("value"), dict) else {}):
+            for field in ("error", "message", "detail", "details", "debug_code", "status"):
+                if container.get(field) is not None:
+                    err_bits.append(str(container.get(field)))
+        if _has_quota_keyword(" ".join(err_bits)):
+            return True
+    if (returncode != 0 or not answer_text) and _has_quota_keyword(stdout_str):
+        return True
+    if answer_text and len(answer_text) < 400 and _has_quota_keyword(answer_text):
+        low_ans = answer_text.lower()
+        if any(p in low_ans for p in ("temporarily rejected", "usage limit", "limit reached", "resource exhausted", "resource_exhausted", "rate limit", "429")):
+            return True
+    return False
+
+
+def _parse_nlm_usage_reset_ts(stdout_str: str, now: float) -> float:
+    """Đọc windows[].resets_at (ISO 8601 UTC) từ JSON của `nlm usage --json`; fallback 60 phút."""
+    default_ts = now + 3600.0
+    text = (stdout_str or "").strip()
+    if not text:
+        return default_ts
+    try:
+        data = json.loads(text)
+    except Exception:
+        return default_ts
+    windows = data.get("windows") if isinstance(data, dict) else None
+    if not isinstance(windows, list):
+        return default_ts
+    candidates = []
+    for win in windows:
+        if not isinstance(win, dict):
+            continue
+        raw_reset = str(win.get("resets_at") or "").strip()
+        if not raw_reset:
+            continue
+        try:
+            iso = raw_reset[:-1] + "+00:00" if raw_reset.endswith("Z") else raw_reset
+            dt = datetime.datetime.fromisoformat(iso)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=datetime.timezone.utc)
+            ts = dt.timestamp()
+            if ts > now:
+                candidates.append(ts)
+        except Exception:
+            continue
+    return min(candidates) if candidates else default_ts
+
+
+def _fetch_nlm_reset_timestamp(now: float) -> float:
+    """Chạy `nlm usage --json` để lấy giờ hồi hạn mức; fallback sau 60 phút nếu không đọc được."""
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["NOTEBOOKLM_RATE_LIMIT_MAX_RETRIES"] = "0"
+    try:
+        proc = subprocess.run(
+            ["nlm", "usage", "--json"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+            timeout=15,
+        )
+        return _parse_nlm_usage_reset_ts(proc.stdout or "", now)
+    except Exception:
+        return now + 3600.0
+
+
+def _invoke_nlm_query(notebook_id: str, query: str) -> tuple:
+    """Gọi `nlm query notebook --json --new-conversation --timeout 300` với retry=0."""
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["NOTEBOOKLM_RATE_LIMIT_MAX_RETRIES"] = "0"
+    proc = subprocess.run(
+        [
+            "nlm",
+            "query",
+            "notebook",
+            "--json",
+            "--new-conversation",
+            "--timeout",
+            str(AI_QUERY_TIMEOUT_SECONDS),
+            notebook_id,
+            query,
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        timeout=AI_QUERY_TIMEOUT_SECONDS + 10,
+    )
+    return proc.returncode, proc.stdout or "", proc.stderr or ""
+
+
+def postprocess_ai_answer(answer_text: str) -> str:
+    """Chuẩn hóa cơ bản câu trả lời AI (sẽ mở rộng chi tiết theo R4-14)."""
+    return str(answer_text or "").strip()
+
+
+def _release_ai_quota_slot(actor_type: str, actor_key: str, reserved_ts: float):
+    """Hoàn trả lượt quota vừa giữ chỗ nếu quá trình gọi `nlm` lỗi hoặc chạm hạn mức."""
+    if not reserved_ts:
+        return
+    with _AI_LOCK:
+        if reserved_ts in _AI_GLOBAL_HOURLY_SENDS:
+            _AI_GLOBAL_HOURLY_SENDS.remove(reserved_ts)
+        if reserved_ts in _AI_GLOBAL_DAILY_SENDS:
+            _AI_GLOBAL_DAILY_SENDS.remove(reserved_ts)
+        store = _AI_USER_SENDS if actor_type == "user" else _AI_IP_SENDS
+        recent = store.get(actor_key)
+        if recent and reserved_ts in recent:
+            recent.remove(reserved_ts)
+            if not recent:
+                store.pop(actor_key, None)
+
+
+def _reserve_ai_quota_slot(actor_type: str, actor_key: str, now: float):
+    """Kiểm tra trạng thái tạm nghỉ, các trần quota (uid/IP, giờ, ngày) và giữ chỗ trước khi gọi `nlm`."""
+    per_user_hourly = _get_positive_int_env("THUYSTALK_AI_PER_USER_HOURLY", 10)
+    per_ip_hourly = _get_positive_int_env("THUYSTALK_AI_PER_GUEST_IP_HOURLY", 20)
+    global_hourly = _get_positive_int_env("THUYSTALK_AI_GLOBAL_HOURLY_LIMIT", 20)
+    global_daily = _get_positive_int_env("THUYSTALK_AI_GLOBAL_DAILY_LIMIT", 120)
+    actor_limit = per_user_hourly if actor_type == "user" else per_ip_hourly
+
+    with _AI_LOCK:
+        _prune_ai_state(now)
+        if _AI_PAUSED_UNTIL > now:
+            hh_mm = _format_vn_hh_mm(_AI_PAUSED_UNTIL)
+            return (
+                False,
+                429,
+                {
+                    "ok": False,
+                    "error_code": "ai_quota",
+                    "paused_until": _AI_PAUSED_UNTIL,
+                    "reset_time_str": hh_mm,
+                    "error": f"Tra cứu AI đang tạm nghỉ đến {hh_mm}. Câu hỏi phổ biến vẫn trả lời ngay",
+                },
+                None,
+            )
+
+        store = _AI_USER_SENDS if actor_type == "user" else _AI_IP_SENDS
+        actor_recent = store.setdefault(actor_key, [])
+
+        if len(_AI_GLOBAL_DAILY_SENDS) >= global_daily:
+            if not actor_recent:
+                store.pop(actor_key, None)
+            oldest = min(_AI_GLOBAL_DAILY_SENDS)
+            wait_sec = max(1, math.ceil(oldest + 86400.0 - now))
+            hh_mm = _format_vn_hh_mm(now + wait_sec)
+            wait_vi = _format_wait_duration_vi(wait_sec)
+            return (
+                False,
+                429,
+                {
+                    "ok": False,
+                    "error_code": "rate_limit",
+                    "rateLimited": True,
+                    "scope": "global_daily",
+                    "retry_after_seconds": wait_sec,
+                    "reset_time_str": hh_mm,
+                    "error": f"Hệ thống tra cứu AI đã đạt giới hạn lượt hỏi trong ngày. Bạn có thể hỏi lại sau {wait_vi} (khoảng {hh_mm}).",
+                },
+                None,
+            )
+
+        if len(_AI_GLOBAL_HOURLY_SENDS) >= global_hourly:
+            if not actor_recent:
+                store.pop(actor_key, None)
+            oldest = min(_AI_GLOBAL_HOURLY_SENDS)
+            wait_sec = max(1, math.ceil(oldest + 3600.0 - now))
+            hh_mm = _format_vn_hh_mm(now + wait_sec)
+            wait_vi = _format_wait_duration_vi(wait_sec)
+            return (
+                False,
+                429,
+                {
+                    "ok": False,
+                    "error_code": "rate_limit",
+                    "rateLimited": True,
+                    "scope": "global_hourly",
+                    "retry_after_seconds": wait_sec,
+                    "reset_time_str": hh_mm,
+                    "error": f"Hệ thống tra cứu AI đang phục vụ tối đa lượt hỏi trong giờ. Vui lòng thử lại sau {wait_vi} (lúc {hh_mm}).",
+                },
+                None,
+            )
+
+        if len(actor_recent) >= actor_limit:
+            oldest = min(actor_recent)
+            wait_sec = max(1, math.ceil(oldest + 3600.0 - now))
+            hh_mm = _format_vn_hh_mm(now + wait_sec)
+            wait_vi = _format_wait_duration_vi(wait_sec)
+            scope = "user_hourly" if actor_type == "user" else "ip_hourly"
+            subject = "tài khoản của bạn" if actor_type == "user" else "địa chỉ mạng này"
+            return (
+                False,
+                429,
+                {
+                    "ok": False,
+                    "error_code": "rate_limit",
+                    "rateLimited": True,
+                    "scope": scope,
+                    "retry_after_seconds": wait_sec,
+                    "reset_time_str": hh_mm,
+                    "error": f"Lượt tra cứu AI chuyên sâu của {subject} đã đạt {actor_limit} câu/giờ. Bạn có thể hỏi lại sau {wait_vi} (lúc {hh_mm}).",
+                },
+                None,
+            )
+
+        reserved_ts = now
+        _AI_GLOBAL_HOURLY_SENDS.append(reserved_ts)
+        _AI_GLOBAL_DAILY_SENDS.append(reserved_ts)
+        actor_recent.append(reserved_ts)
+        return True, 200, None, reserved_ts
+
+
+def _execute_notebook_job_worker(
+    job_id: str,
+    notebook_id: str,
+    query: str,
+    norm_query: str,
+    actor_type: str,
+    actor_key: str,
+    reserved_ts: float,
+):
+    """Luồng nền chạy `nlm` có Semaphore(2), tự nhận diện ai_quota và hoàn trả slot nếu lỗi."""
+    global _AI_PAUSED_UNTIL
+    branch_name = ALLOWED_NOTEBOOK_IDS.get(notebook_id, "Kho Tri Thức Pháp Lý ThuysTalk")
+    with _AI_SEMAPHORE:
+        with _AI_LOCK:
+            job = _AI_JOBS.get(job_id)
+            if not job:
+                _release_ai_quota_slot_unlocked = True
+            else:
+                job["status"] = "running"
+                job["started_at"] = time.time()
+                _release_ai_quota_slot_unlocked = False
+        if _release_ai_quota_slot_unlocked:
+            _release_ai_quota_slot(actor_type, actor_key, reserved_ts)
+            return
+
+        try:
+            returncode, stdout_str, stderr_str = _invoke_nlm_query(notebook_id, query)
+            raw_answer, parsed_json = _extract_nlm_output(stdout_str)
+            now = time.time()
+
+            if _is_nlm_quota_error(stdout_str, stderr_str, parsed_json, returncode, raw_answer):
+                _release_ai_quota_slot(actor_type, actor_key, reserved_ts)
+                reset_ts = _fetch_nlm_reset_timestamp(now)
+                hh_mm = _format_vn_hh_mm(reset_ts)
+                with _AI_LOCK:
+                    _AI_PAUSED_UNTIL = max(_AI_PAUSED_UNTIL, reset_ts)
+                    job = _AI_JOBS.get(job_id)
+                    if job:
+                        job.update(
+                            {
+                                "status": "error",
+                                "finished_at": time.time(),
+                                "error_code": "ai_quota",
+                                "paused_until": _AI_PAUSED_UNTIL,
+                                "reset_time_str": hh_mm,
+                                "error": f"Tra cứu AI đang tạm nghỉ đến {hh_mm}. Câu hỏi phổ biến vẫn trả lời ngay",
+                            }
+                        )
+                return
+
+            if returncode != 0 or not raw_answer:
+                _release_ai_quota_slot(actor_type, actor_key, reserved_ts)
+                with _AI_LOCK:
+                    job = _AI_JOBS.get(job_id)
+                    if job:
+                        job.update(
+                            {
+                                "status": "error",
+                                "finished_at": time.time(),
+                                "error_code": "ai_error",
+                                "error": "Hệ thống tra cứu chuyên sâu hiện chưa thể xử lý câu hỏi này. Vui lòng thử lại hoặc gửi câu hỏi cho Thúy.",
+                            }
+                        )
+                return
+
+            final_answer = postprocess_ai_answer(raw_answer)
+            if not final_answer:
+                _release_ai_quota_slot(actor_type, actor_key, reserved_ts)
+                with _AI_LOCK:
+                    job = _AI_JOBS.get(job_id)
+                    if job:
+                        job.update(
+                            {
+                                "status": "error",
+                                "finished_at": time.time(),
+                                "error_code": "ai_error",
+                                "error": "Chưa nhận được nội dung trả lời phù hợp từ kho dữ liệu. Vui lòng thử lại hoặc gửi câu hỏi cho Thúy.",
+                            }
+                        )
+                return
+
+            done_ts = time.time()
+            with _AI_LOCK:
+                _AI_RESPONSE_CACHE[(notebook_id, norm_query)] = {
+                    "answer": final_answer,
+                    "branch_name": branch_name,
+                    "cached_at": done_ts,
+                }
+                _prune_ai_state(done_ts)
+                job = _AI_JOBS.get(job_id)
+                if job:
+                    job.update(
+                        {
+                            "status": "done",
+                            "finished_at": done_ts,
+                            "branch_name": branch_name,
+                            "answer": final_answer,
+                            "cached": False,
+                        }
+                    )
+        except Exception as exc:
+            _release_ai_quota_slot(actor_type, actor_key, reserved_ts)
+            with _AI_LOCK:
+                job = _AI_JOBS.get(job_id)
+                if job:
+                    job.update(
+                        {
+                            "status": "error",
+                            "finished_at": time.time(),
+                            "error_code": "ai_error",
+                            "error": f"Quá trình tra cứu gặp gián đoạn ({type(exc).__name__}). Vui lòng thử lại sau giây lát.",
+                        }
+                    )
 
 
 ALLOWED_NOTEBOOK_IDS = {
@@ -357,6 +822,14 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "notebooks": ALLOWED_NOTEBOOK_IDS,
                 },
             )
+            return
+
+        if parsed.path == "/api/notebook-job":
+            if not self._is_origin_allowed():
+                self.close_connection = True
+                self._send_json(403, {"ok": False, "error": "Origin không được phép."})
+                return
+            self.handle_notebook_job_status(parsed)
             return
 
         raw_path = urllib.parse.unquote(parsed.path)
@@ -621,6 +1094,51 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as exc:
             self._send_json(400, {"ok": False, "error": f"Lỗi đọc file Excel/CSV: {exc}"})
 
+    def _resolve_ai_caller_identity(self):
+        """Lấy định danh tính quota AI: ưu tiên uid từ ID token hợp lệ, không tin uid body; nếu chưa đăng nhập lấy IP."""
+        auth_header = (self.headers.get("Authorization") or "").strip()
+        if auth_header.startswith("Bearer "):
+            ok, _status, identity, _msg = self._verify_firebase_id_token()
+            if ok and identity and identity.get("uid"):
+                return "user", identity["uid"]
+        cf_ip = (self.headers.get("CF-Connecting-IP") or "").split(",", 1)[0].strip()
+        client_ip = cf_ip or (self.client_address[0] if getattr(self, "client_address", None) else "") or "127.0.0.1"
+        return "ip", str(client_ip)[:64]
+
+    def handle_notebook_job_status(self, parsed):
+        params = urllib.parse.parse_qs(parsed.query)
+        job_id = (params.get("id") or [""])[0].strip()
+        if not job_id or len(job_id) > 64:
+            self._send_json(400, {"ok": False, "error": "Mã phiên tra cứu không hợp lệ."})
+            return
+
+        now = time.time()
+        with _AI_LOCK:
+            _prune_ai_state(now)
+            job = _AI_JOBS.get(job_id)
+            if not job:
+                self._send_json(404, {"ok": False, "error": "Phiên tra cứu không tồn tại hoặc đã hết hạn."})
+                return
+            snapshot = {
+                "ok": job.get("status") != "error",
+                "job_id": job_id,
+                "status": job.get("status", "queued"),
+                "branch_name": job.get("branch_name", ""),
+                "query": job.get("query", ""),
+                "cached": bool(job.get("cached", False)),
+            }
+            if job.get("status") == "done":
+                snapshot["answer"] = job.get("answer", "")
+            elif job.get("status") == "error":
+                snapshot["error"] = job.get("error", "Đã xảy ra lỗi khi tra cứu.")
+                snapshot["error_code"] = job.get("error_code", "ai_error")
+                if job.get("paused_until"):
+                    snapshot["paused_until"] = job["paused_until"]
+                if job.get("reset_time_str"):
+                    snapshot["reset_time_str"] = job["reset_time_str"]
+
+        self._send_json(200, snapshot)
+
     def handle_notebook_query(self, payload: dict):
         try:
             notebook_id = str(payload.get("notebook_id", "")).strip()
@@ -630,63 +1148,80 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
                 notebook_id = "c3b76775-2095-4866-b634-139c71e0df40"
 
             if not query or len(query) > 600:
-                self._send_json(400, {"error": "Câu hỏi không hợp lệ hoặc quá dài."})
+                self._send_json(400, {"ok": False, "error": "Câu hỏi không hợp lệ hoặc quá dài."})
                 return
 
-            env = os.environ.copy()
-            env["PYTHONIOENCODING"] = "utf-8"
+            branch_name = ALLOWED_NOTEBOOK_IDS.get(notebook_id, "Kho Tri Thức Pháp Lý ThuysTalk")
+            norm_query = _normalize_ai_query(query)
+            now = time.time()
 
-            proc = subprocess.run(
-                ["nlm", "query", "notebook", "--json", notebook_id, query],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                env=env,
-                timeout=90,
+            with _AI_LOCK:
+                _prune_ai_state(now)
+                cached = _AI_RESPONSE_CACHE.get((notebook_id, norm_query))
+                if cached and (now - float(cached.get("cached_at", 0))) <= AI_CACHE_TTL_SECONDS:
+                    job_id = uuid.uuid4().hex
+                    _AI_JOBS[job_id] = {
+                        "job_id": job_id,
+                        "status": "done",
+                        "created_at": now,
+                        "finished_at": now,
+                        "branch_name": cached.get("branch_name", branch_name),
+                        "query": query,
+                        "answer": cached.get("answer", ""),
+                        "cached": True,
+                    }
+                    _prune_ai_state(now)
+                    self._send_json(
+                        200,
+                        {
+                            "ok": True,
+                            "job_id": job_id,
+                            "status": "done",
+                            "cached": True,
+                            "branch_name": cached.get("branch_name", branch_name),
+                            "query": query,
+                            "answer": cached.get("answer", ""),
+                        },
+                    )
+                    return
+
+            actor_type, actor_key = self._resolve_ai_caller_identity()
+            allowed, err_status, err_payload, reserved_ts = _reserve_ai_quota_slot(actor_type, actor_key, now)
+            if not allowed:
+                self._send_json(err_status, err_payload)
+                return
+
+            job_id = uuid.uuid4().hex
+            with _AI_LOCK:
+                _AI_JOBS[job_id] = {
+                    "job_id": job_id,
+                    "status": "queued",
+                    "created_at": now,
+                    "branch_name": branch_name,
+                    "query": query,
+                    "cached": False,
+                }
+                _prune_ai_state(now)
+
+            worker = threading.Thread(
+                target=_execute_notebook_job_worker,
+                args=(job_id, notebook_id, query, norm_query, actor_type, actor_key, reserved_ts),
+                daemon=True,
             )
-
-            stdout_str = (proc.stdout or "").strip()
-            answer_text = ""
-
-            if stdout_str:
-                try:
-                    parsed_json = json.loads(stdout_str)
-                    if isinstance(parsed_json, dict):
-                        val = parsed_json.get("value") or parsed_json
-                        answer_text = (
-                            val.get("answer")
-                            or val.get("response")
-                            or val.get("text")
-                            or stdout_str
-                        )
-                    else:
-                        answer_text = stdout_str
-                except Exception:
-                    answer_text = stdout_str
-
-            if not answer_text:
-                stderr_str = (proc.stderr or "").strip()
-                self._send_json(
-                    502,
-                    {
-                        "error": "Hệ thống tra cứu chuyên sâu đang bận, vui lòng thử lại sau giây lát.",
-                        "details": stderr_str[:300],
-                    },
-                )
-                return
+            worker.start()
 
             self._send_json(
                 200,
                 {
                     "ok": True,
-                    "branch_name": ALLOWED_NOTEBOOK_IDS.get(notebook_id, "Kho Tri Thức Pháp Lý ThuysTalk"),
+                    "job_id": job_id,
+                    "status": "queued",
+                    "branch_name": branch_name,
                     "query": query,
-                    "answer": answer_text,
                 },
             )
         except Exception as exc:
-            self._send_json(500, {"error": str(exc)})
+            self._send_json(500, {"ok": False, "error": f"Lỗi khởi tạo phiên tra cứu: {type(exc).__name__}"})
 
     def handle_device_send_code(self, payload: dict, identity: dict):
         uid = identity["uid"]
