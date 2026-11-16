@@ -3146,7 +3146,26 @@
     return out.join("");
   }
 
-  function appendChatMessage(role, text, citation, legalMetaItem = null) {
+  function isAiNoInfoAnswer(rawText) {
+    const s = String(rawText || "").toLowerCase();
+    if (!s) return false;
+    return (
+      s.includes("kho không có thông tin") ||
+      s.includes("không có thông tin") ||
+      s.includes("không tìm thấy thông tin") ||
+      s.includes("chưa có dữ liệu") ||
+      s.includes("chưa có thông tin") ||
+      s.includes("ngoài phạm vi") ||
+      s.includes("không được đề cập") ||
+      s.includes("không nằm trong tài liệu") ||
+      s.includes("tài liệu được cung cấp không") ||
+      s.includes("no information") ||
+      s.includes("does not contain information") ||
+      s.includes("not mentioned in")
+    );
+  }
+
+  function appendChatMessage(role, text, citation, legalMetaItem = null, options = {}) {
     const box = document.getElementById("notebookChatMessages");
     if (!box) return null;
     const div = document.createElement("div");
@@ -3158,15 +3177,35 @@
       const formatted = formatAiResponseHtml(text);
       const legalHtml = legalMetaItem ? renderLegalMetadataBlockHtml(legalMetaItem) : "";
       const hasPersistentBar = !!document.querySelector(".chat-disclaimer-bar");
+      const showSendToThuy = !!options.showSendToThuy || isAiNoInfoAnswer(text);
+      let resolvedQuery = String(options.query || "").trim();
+      if (!resolvedQuery) {
+        const userBubbles = box.querySelectorAll(".chat-bubble-user .chat-msg-text");
+        if (userBubbles.length) {
+          resolvedQuery = (userBubbles[userBubbles.length - 1].textContent || "").trim();
+        }
+      }
       div.innerHTML = `
         <div class="chat-msg-text">${formatted}</div>
         ${legalHtml}
         ${citation ? `<div class="chat-source-citation">Nguồn trích xuất: ${escapeHtml(citation)}</div>` : ""}
+        ${showSendToThuy ? `
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+          <button type="button" class="btn btn-outline btn-sm ai-send-thuy-btn">Gửi câu hỏi này cho Thúy</button>
+        </div>` : ""}
         ${hasPersistentBar ? "" : `
         <div class="chat-bubble-disclaimer">
           AI có thể có sai sót, hãy liên hệ với Thúy <a href="tel:0767648862">0767.648.862</a> để được tư vấn cụ thể.
         </div>`}
       `;
+      if (showSendToThuy) {
+        const sendThuyBtn = div.querySelector(".ai-send-thuy-btn");
+        if (sendThuyBtn) {
+          sendThuyBtn.addEventListener("click", () => {
+            prefillAndOpenConsultForm(resolvedQuery);
+          });
+        }
+      }
     }
     box.appendChild(div);
     box.scrollTop = box.scrollHeight;
@@ -3538,13 +3577,15 @@
     const deliverSuccessAnswer = (answerText) => {
       stopThinkingUi();
       const citationSource = `Kho Tri Thức Pháp Lý ThuysTalk · ${route.title.vi}`;
-      appendChatMessage("ai", answerText, citationSource);
-      saveUserAiCacheEntry({
-        query: q,
-        notebookId: route.notebookId,
-        answer: answerText,
-        source: citationSource
-      });
+      appendChatMessage("ai", answerText, citationSource, null, { query: q });
+      if (!isAiNoInfoAnswer(answerText)) {
+        saveUserAiCacheEntry({
+          query: q,
+          notebookId: route.notebookId,
+          answer: answerText,
+          source: citationSource
+        });
+      }
     };
 
     try {
