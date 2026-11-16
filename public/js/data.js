@@ -239,7 +239,7 @@ window.THUYSTALK_I18N = {
       home: "Trang chủ",
       expertise: "Chuyên môn",
       about: "Về tôi",
-      elearning: "E-Learning",
+      elearning: "Tài liệu & Mini Test",
       video: "Video",
       articles: "Bài viết",
       notebook: "Tra cứu Pháp lý & Mã HS",
@@ -333,7 +333,7 @@ window.THUYSTALK_I18N = {
     video: {
       eyebrow: "KÊNH YOUTUBE @THUYSTALK",
       title: "Video Phân Tích & Chia Sẻ Kinh Nghiệm Thực Tế",
-      desc: "Hệ thống 4 chuyên mục video từ phân tích văn bản hải quan mới nhất, giải thích luật dễ hiểu đến các câu chuyện thực tế trên thương trường quốc tế. Có thể nhúng thêm video YouTube mới bất kỳ lúc nào từ Quản trị.",
+      desc: "Hệ thống 4 chuyên mục video từ phân tích văn bản hải quan mới nhất, giải thích luật dễ hiểu đến các câu chuyện thực tế trên thương trường quốc tế.",
       tabs: [
         { id: "all", label: "Tất cả video" },
         { id: "CM1", label: "CM1 · Văn bản nóng" },
@@ -368,7 +368,7 @@ window.THUYSTALK_I18N = {
     consult: {
       eyebrow: "ĐỒNG HÀNH & TƯ VẤN CHUYÊN SÂU 1-1",
       title: "Bạn Cần Tư Vấn Kỹ Hơn Cho Lô Hàng Hoặc Doanh Nghiệp Của Mình?",
-      desc: "Sau khi học E-Learning hoặc tra cứu trên hệ thống, nếu bạn đang gặp vướng mắc thực tế về mã HS, thủ tục thông quan, kiểm tra sau thông quan hay muốn ứng dụng AI vào quy trình làm việc, hãy để lại thông tin để Thúy hỗ trợ trực tiếp.",
+      desc: "Sau khi đọc tài liệu hoặc tra cứu trên hệ thống, nếu bạn đang gặp vướng mắc thực tế về mã HS, thủ tục thông quan, kiểm tra sau thông quan hay muốn ứng dụng AI vào quy trình làm việc, hãy để lại thông tin để Thúy hỗ trợ trực tiếp.",
       hostName: "Nguyễn Thị Ngọc Thúy",
       hostRole: "9+ Năm Kinh Nghiệm Thực Tế XNK, Hải Quan & Tự Động Hóa AI",
       securityNote: "Bảo mật thông tin doanh nghiệp theo tiêu chuẩn Nghị định 13/2023/NĐ-CP",
@@ -397,7 +397,7 @@ window.THUYSTALK_I18N = {
       home: "Home",
       expertise: "Expertise",
       about: "About Me",
-      elearning: "E-Learning",
+      elearning: "Materials & Mini Test",
       video: "Videos",
       articles: "Articles",
       notebook: "Legal & HS Lookup",
@@ -410,8 +410,8 @@ window.THUYSTALK_I18N = {
       firstName: "Nguyen Thi Ngoc",
       highlightName: "Thuy",
       role: "Practical International Trade, Customs Compliance & AI Automation Specialist",
-      bio: "With over 9 years of hands-on experience across the international supply chain—from foreign trade contracts, HS classification, and customs declaration to AI workflow automation—I built ThuysTalk to share free e-learning courses, authentic templates, and practical advisory for sustainable global trade.",
-      btnPrimary: "Start Free E-Learning",
+      bio: "With over 9 years of hands-on experience across the international supply chain—from foreign trade contracts, HS classification, and customs declaration to AI workflow automation—I built ThuysTalk to share free practical materials, authentic templates, and advisory for sustainable global trade.",
+      btnPrimary: "Open Materials & Mini Test",
       btnSecondary: "Legal & HS Lookup",
       scriptNote: "Practical – Transparent – Sustainable",
       floatingTitle: "9+ Years Hands-On",
@@ -462,21 +462,21 @@ window.THUYSTALK_I18N = {
       title: "I'm Nguyen Thi Ngoc Thuy",
       subtitle: "International Trade & Customs Specialist · AI Automation Pioneer",
       p1: "A graduate of the Banking Academy majoring in International Trade, I have spent over 9 years executing every single link in the import-export chain: supplier negotiation, foreign trade contract drafting, shipping documentation, direct customs declaration, physical inspection, and post-clearance compliance.",
-      p2: "Working alongside thousands of business owners and practitioners, I realized the biggest risk isn't a lack of information—it's fragmented advice and hidden compliance traps that stall containers at ports. I created ThuysTalk as an independent knowledge & e-learning hub guided by one principle: Do it right, do it thoroughly, do it clearly.",
+      p2: "Working alongside thousands of business owners and practitioners, I realized the biggest risk isn't a lack of information—it's fragmented advice and hidden compliance traps that stall containers at ports. I created ThuysTalk as an independent trade knowledge hub guided by one principle: Do it right, do it thoroughly, do it clearly.",
       milestones: [
         "End-to-End Execution: International Negotiation – Customs Clearance – Tariff & Legal Risk Control.",
         "Tech-Driven Operations: Designing AI Agents & automation pipelines that cut document review time by 70%.",
-        "Value-First Sharing: Free learner registration to track course progress and receive templates straight to your inbox."
+        "Value-First Sharing: Free account registration to track Mini-Test progress and download attached templates directly."
       ],
       stats: [
         { val: "9<span>+</span>", lbl: "Years of Hands-On Trade & Customs Experience" },
         { val: "100<span>%</span>", lbl: "Compliant, Transparent & Template-Backed" },
-        { val: "Free", lbl: "Progress-Tracked E-Learning & Attached Templates" }
+        { val: "Free", lbl: "Progress-Tracked Materials & Mini Test" }
       ],
       btnConnect: "Book a 1-on-1 Advisory Session"
     },
     elearning: {
-      eyebrow: "THUYTALK E-LEARNING ACADEMY",
+      eyebrow: "THUYTALK MATERIALS & MINI TEST",
       title: "Practical Materials · Mini Test & Direct Template Download",
       desc: "Learn through structured micro-lessons, complete multi-question Mini Tests & practical exercises, track your completion percentage, and download attached templates directly.",
       bannerTitleGuest: "Sign in with your Email (Free) to save course progress & download templates",
@@ -491,7 +491,7 @@ window.THUYSTALK_I18N = {
     video: {
       eyebrow: "YOUTUBE CHANNEL @THUYSTALK",
       title: "Practical Trade & Customs Video Library",
-      desc: "Explore 4 signature series covering breaking customs regulations, plain-language legal breakdowns, trade history, and real-world case studies. Embed new YouTube videos anytime via Admin.",
+      desc: "Explore 4 signature series covering breaking customs regulations, plain-language legal breakdowns, trade history, and real-world case studies.",
       tabs: [
         { id: "all", label: "All Videos" },
         { id: "CM1", label: "CM1 · Hot Regulations" },
