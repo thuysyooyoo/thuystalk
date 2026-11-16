@@ -358,10 +358,14 @@ def _fetch_nlm_reset_timestamp(now: float) -> float:
     """Chạy `nlm usage --json` để lấy giờ hồi hạn mức; fallback sau 60 phút nếu không đọc được."""
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+    env["NO_COLOR"] = "1"
+    env["TERM"] = "dumb"
     env["NOTEBOOKLM_RATE_LIMIT_MAX_RETRIES"] = "0"
     try:
         proc = subprocess.run(
             ["nlm", "usage", "--json"],
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -378,6 +382,9 @@ def _invoke_nlm_query(notebook_id: str, query: str) -> tuple:
     """Gọi `nlm query notebook --json --new-conversation --timeout 300` với retry=0."""
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+    env["NO_COLOR"] = "1"
+    env["TERM"] = "dumb"
     env["NOTEBOOKLM_RATE_LIMIT_MAX_RETRIES"] = "0"
     proc = subprocess.run(
         [
@@ -391,6 +398,7 @@ def _invoke_nlm_query(notebook_id: str, query: str) -> tuple:
             notebook_id,
             query,
         ],
+        stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -615,6 +623,10 @@ def _execute_notebook_job_worker(
 
             if returncode != 0 or not raw_answer:
                 _release_ai_quota_slot(actor_type, actor_key, reserved_ts)
+                print(
+                    f"[AI JOB ERROR] job={job_id[:8]} rc={returncode} stderr={stderr_str[:240]!r} stdout={stdout_str[:240]!r}",
+                    flush=True,
+                )
                 with _AI_LOCK:
                     job = _AI_JOBS.get(job_id)
                     if job:
