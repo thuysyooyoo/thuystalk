@@ -1497,6 +1497,110 @@
 
     // 9. Consultation Section
     renderConsultSection(t);
+    syncMobileDrawerLanguage();
+  }
+
+  function initMobileNavigation() {
+    const header = document.querySelector(".site-header");
+    const mainNav = header ? header.querySelector(".main-nav") : null;
+    const headerActions = header ? header.querySelector(".header-actions") : null;
+    if (!header || !mainNav || !headerActions) return;
+    if (document.getElementById("mobileNavToggleBtn")) return;
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.id = "mobileNavToggleBtn";
+    toggleBtn.className = "mobile-nav-toggle";
+    toggleBtn.setAttribute("aria-label", state.lang === "en" ? "Open navigation menu" : "Mở menu điều hướng");
+    toggleBtn.setAttribute("aria-expanded", "false");
+    toggleBtn.setAttribute("aria-controls", "mobileNavDrawer");
+    toggleBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>`;
+    headerActions.appendChild(toggleBtn);
+
+    const backdrop = document.createElement("div");
+    backdrop.id = "mobileNavBackdrop";
+    backdrop.className = "mobile-nav-backdrop";
+
+    const drawer = document.createElement("aside");
+    drawer.id = "mobileNavDrawer";
+    drawer.className = "mobile-nav-drawer";
+    drawer.setAttribute("aria-hidden", "true");
+
+    const ctaEl = document.getElementById("headerCtaBtn");
+    const ctaHref = (ctaEl && ctaEl.getAttribute("href")) || "index.html#tu-van";
+    const ctaText = (ctaEl && ctaEl.textContent.trim()) || "Nhận tài liệu & Tư vấn";
+
+    drawer.innerHTML = `
+      <div class="mobile-nav-drawer-head">
+        <strong style="color:var(--jade-900); font-size:0.98rem;">ThuysTalk Menu</strong>
+        <button type="button" id="mobileNavCloseBtn" class="mobile-nav-close" aria-label="Đóng menu">&times;</button>
+      </div>
+      <nav class="mobile-nav-links" id="mobileNavLinksWrap" aria-label="Mobile Navigation"></nav>
+      <a href="${escapeHtml(ctaHref)}" class="btn btn-primary btn-sm mobile-nav-cta" id="mobileDrawerCtaBtn" style="width:100%; justify-content:center;">${escapeHtml(ctaText)}</a>
+    `;
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(drawer);
+
+    function openDrawer() {
+      syncMobileDrawerLanguage();
+      drawer.classList.add("open");
+      backdrop.classList.add("open");
+      drawer.setAttribute("aria-hidden", "false");
+      toggleBtn.setAttribute("aria-expanded", "true");
+    }
+
+    function closeDrawer() {
+      drawer.classList.remove("open");
+      backdrop.classList.remove("open");
+      drawer.setAttribute("aria-hidden", "true");
+      toggleBtn.setAttribute("aria-expanded", "false");
+    }
+
+    toggleBtn.addEventListener("click", () => {
+      if (drawer.classList.contains("open")) closeDrawer();
+      else openDrawer();
+    });
+
+    const closeBtn = drawer.querySelector("#mobileNavCloseBtn");
+    if (closeBtn) closeBtn.addEventListener("click", closeDrawer);
+    backdrop.addEventListener("click", closeDrawer);
+    document.getElementById("mobileDrawerCtaBtn").addEventListener("click", closeDrawer);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && drawer.classList.contains("open")) closeDrawer();
+    });
+
+    drawer.__closeDrawer = closeDrawer;
+    syncMobileDrawerLanguage();
+  }
+
+  function syncMobileDrawerLanguage() {
+    const mainNav = document.querySelector(".site-header .main-nav");
+    const linksWrap = document.getElementById("mobileNavLinksWrap");
+    const drawer = document.getElementById("mobileNavDrawer");
+    if (!mainNav || !linksWrap || !drawer) return;
+
+    const links = Array.from(mainNav.querySelectorAll("a.nav-link"));
+    linksWrap.innerHTML = links
+      .map((a) => {
+        const href = a.getAttribute("href") || "#";
+        const isActive = a.classList.contains("active");
+        return `<a href="${escapeHtml(href)}" class="mobile-nav-link ${isActive ? "active" : ""}">${escapeHtml(a.textContent.trim())}</a>`;
+      })
+      .join("");
+
+    linksWrap.querySelectorAll("a.mobile-nav-link").forEach((a) => {
+      a.addEventListener("click", () => {
+        if (typeof drawer.__closeDrawer === "function") drawer.__closeDrawer();
+      });
+    });
+
+    const ctaEl = document.getElementById("headerCtaBtn");
+    const drawerCta = document.getElementById("mobileDrawerCtaBtn");
+    if (ctaEl && drawerCta) {
+      drawerCta.textContent = ctaEl.textContent.trim();
+      drawerCta.setAttribute("href", ctaEl.getAttribute("href") || "index.html#tu-van");
+    }
   }
 
   function setText(id, val) {
@@ -9012,6 +9116,7 @@
     }
 
     ensureGlobalModals();
+    initMobileNavigation();
     updateHeaderLearnerStatus();
     renderAll();
     initConsultForm();
