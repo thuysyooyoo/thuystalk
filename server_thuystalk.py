@@ -71,6 +71,7 @@ _DEVICE_GLOBAL_SENDS = []
 AI_JOB_TTL_SECONDS = 1800
 AI_MAX_JOBS = 100
 AI_CACHE_TTL_SECONDS = 86400
+AI_SOURCE_CACHE_TTL_SECONDS = 86400
 AI_MAX_CACHE_ENTRIES = 200
 AI_QUERY_TIMEOUT_SECONDS = 300
 VN_TZ = datetime.timezone(datetime.timedelta(hours=7))
@@ -97,6 +98,7 @@ _AI_LOCK = threading.Lock()
 _AI_SEMAPHORE = threading.Semaphore(2)
 _AI_JOBS = {}
 _AI_RESPONSE_CACHE = {}
+_NOTEBOOK_SOURCES_CACHE = {}
 _AI_USER_SENDS = {}
 _AI_IP_SENDS = {}
 _AI_GLOBAL_HOURLY_SENDS = []
@@ -304,6 +306,100 @@ def _extract_nlm_output(stdout_str: str):
         ans = val.get("answer") or val.get("response") or val.get("text") or ""
         return str(ans or "").strip(), parsed
     return text, None
+
+
+def _get_notebook_source_map(notebook_id: str) -> dict:
+    """Lấy ánh xạ source_id -> tiêu đề nguồn của kho từ `nlm source list <id> --json`, cache theo ngày."""
+    if not notebook_id or notebook_id not in ALLOWED_NOTEBOOK_IDS:
+        return {}
+    now = time.time()
+    with _AI_LOCK:
+        cached_entry = _NOTEBOOK_SOURCES_CACHE.get(notebook_id)
+        if cached_entry and (now - float(cached_entry.get("fetched_at", 0))) <= AI_SOURCE_CACHE_TTL_SECONDS:
+            return dict(cached_entry.get("sources") or {})
+    try:
+        proc = subprocess.run(
+            ["nlm", "source", "list", notebook_id, "--json"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            timeout=25,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        if proc.returncode != 0:
+            return {}
+        parsed = json.loads((proc.stdout or "").strip() or "[]")
+        items = parsed if isinstance(parsed, list) else (parsed.get("sources") or parsed.get("value") or []) if isinstance(parsed, dict) else []
+        source_map = {}
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            sid = str(item.get("id") or "").strip()
+            title = str(item.get("title") or "").strip()
+            if sid and title:
+                source_map[sid] = title
+        with _AI_LOCK:
+            _NOTEBOOK_SOURCES_CACHE[notebook_id] = {
+                "fetched_at": time.time(),
+                "sources": dict(source_map),
+            }
+        return source_map
+    except Exception:
+        return {}
+
+
+def _normalize_citation_sources(parsed_json, source_map: dict) -> list:
+    """Ánh xạ references[{source_id, citation_number}] với tiêu đề tài liệu, giữ đúng số trích dẫn [n]."""
+    if not isinstance(parsed_json, dict) or not source_map:
+        return []
+    val = parsed_json.get("value") if isinstance(parsed_json.get("value"), dict) else parsed_json
+    refs = val.get("references")
+    if not isinstance(refs, list) or not refs:
+        return []
+    out = []
+    seen = set()
+    for ref in refs:
+        if not isinstance(ref, dict):
+            continue
+        sid = str(ref.get("source_id") or "").strip()
+        raw_num = ref.get("citation_number")
+        try:
+            cit_num = int(raw_num)
+        except (TypeError, ValueError):
+            continue
+        if cit_num < 1 or not sid:
+            continue
+        title = str(source_map.get(sid) or "").strip()
+        if not title:
+            continue
+        key = (cit_num, sid)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({
+            "number": cit_num,
+            "source_id": sid,
+            "title": title,
+        })
+    out.sort(key=lambda item: item["number"])
+    return out
+
+
+def _extract_nlm_sources_for_answer(parsed_json, notebook_id: str) -> list:
+    """Tra cứu tên tài liệu cho các trích dẫn của câu trả lời; nếu lỗi trả [] để không làm hỏng câu trả lời."""
+    try:
+        if not isinstance(parsed_json, dict):
+            return []
+        val = parsed_json.get("value") if isinstance(parsed_json.get("value"), dict) else parsed_json
+        refs = val.get("references")
+        if not isinstance(refs, list) or not refs:
+            return []
+        source_map = _get_notebook_source_map(notebook_id)
+        return _normalize_citation_sources(parsed_json, source_map)
+    except Exception:
+        return []
 
 
 def _is_nlm_quota_error(stdout_str: str, stderr_str: str, parsed_json, returncode: int, answer_text: str) -> bool:
@@ -664,11 +760,13 @@ def _execute_notebook_job_worker(
                         )
                 return
 
+            sources_list = _extract_nlm_sources_for_answer(parsed_json, notebook_id)
             done_ts = time.time()
             with _AI_LOCK:
                 _AI_RESPONSE_CACHE[(notebook_id, norm_query)] = {
                     "answer": final_answer,
                     "branch_name": branch_name,
+                    "sources": sources_list,
                     "cached_at": done_ts,
                 }
                 _prune_ai_state(done_ts)
@@ -680,6 +778,7 @@ def _execute_notebook_job_worker(
                             "finished_at": done_ts,
                             "branch_name": branch_name,
                             "answer": final_answer,
+                            "sources": sources_list,
                             "cached": False,
                         }
                     )
@@ -1188,6 +1287,7 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             }
             if job.get("status") == "done":
                 snapshot["answer"] = job.get("answer", "")
+                snapshot["sources"] = list(job.get("sources") or [])
             elif job.get("status") == "error":
                 snapshot["error"] = job.get("error", "Đã xảy ra lỗi khi tra cứu.")
                 snapshot["error_code"] = job.get("error_code", "ai_error")
@@ -1219,6 +1319,7 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
                 cached = _AI_RESPONSE_CACHE.get((notebook_id, norm_query))
                 if cached and (now - float(cached.get("cached_at", 0))) <= AI_CACHE_TTL_SECONDS:
                     job_id = uuid.uuid4().hex
+                    cached_sources = list(cached.get("sources") or [])
                     _AI_JOBS[job_id] = {
                         "job_id": job_id,
                         "status": "done",
@@ -1227,6 +1328,7 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
                         "branch_name": cached.get("branch_name", branch_name),
                         "query": query,
                         "answer": cached.get("answer", ""),
+                        "sources": cached_sources,
                         "cached": True,
                     }
                     _prune_ai_state(now)
@@ -1240,6 +1342,7 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
                             "branch_name": cached.get("branch_name", branch_name),
                             "query": query,
                             "answer": cached.get("answer", ""),
+                            "sources": cached_sources,
                         },
                     )
                     return

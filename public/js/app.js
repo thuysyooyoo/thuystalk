@@ -3087,7 +3087,7 @@
     // Italic: *text*
     s = s.replace(/(^|[^*])\*([^*]+)\*([^*]|$)/g, "$1<em>$2</em>$3");
     // Citation tags [1, 2] or [24–26]
-    s = s.replace(/\[(\d+(?:[–\-, \s]+\d+)*)\]/g, '<span class="ai-cite-tag">[$1]</span>');
+    s = s.replace(/\[(\d+(?:[–\-, \s]+\d+)*)\]/g, '<button type="button" class="ai-cite-tag" data-cite-nums="$1" title="Xem tài liệu tham chiếu">[$1]</button>');
     return s;
   }
 
@@ -3191,6 +3191,25 @@
     );
   }
 
+  function renderAiSourcesListHtml(sources) {
+    if (!Array.isArray(sources) || !sources.length) return "";
+    const valid = sources.filter((s) => s && s.title && Number(s.number) >= 1);
+    if (!valid.length) return "";
+    const itemsHtml = valid
+      .map((s) => {
+        const num = Math.max(1, parseInt(s.number, 10) || 1);
+        return `<li class="ai-source-item" data-source-num="${num}"><span class="ai-source-num">[${num}]</span> <span class="ai-source-name">${escapeHtml(String(s.title))}</span></li>`;
+      })
+      .join("");
+    const titleLabel = state.lang === "en" ? `Cited Documents (${valid.length})` : `Tài liệu tham chiếu (${valid.length})`;
+    return `
+      <div class="ai-sources-list-box">
+        <div class="ai-sources-title">${escapeHtml(titleLabel)}</div>
+        <ol class="ai-sources-list">${itemsHtml}</ol>
+      </div>
+    `;
+  }
+
   function appendChatMessage(role, text, citation, legalMetaItem = null, options = {}) {
     const box = document.getElementById("notebookChatMessages");
     if (!box) return null;
@@ -3202,6 +3221,7 @@
     } else {
       const formatted = formatAiResponseHtml(text);
       const legalHtml = legalMetaItem ? renderLegalMetadataBlockHtml(legalMetaItem) : "";
+      const sourcesHtml = renderAiSourcesListHtml(options.sources);
       const hasPersistentBar = !!document.querySelector(".chat-disclaimer-bar");
       const showSendToThuy = !!options.showSendToThuy || isAiNoInfoAnswer(text);
       let resolvedQuery = String(options.query || "").trim();
@@ -3213,6 +3233,7 @@
       }
       div.innerHTML = `
         <div class="chat-msg-text">${formatted}</div>
+        ${sourcesHtml}
         ${legalHtml}
         ${citation ? `<div class="chat-source-citation">Nguồn trích xuất: ${escapeHtml(citation)}</div>` : ""}
         ${showSendToThuy ? `
@@ -3224,6 +3245,19 @@
           AI có thể có sai sót, hãy liên hệ với Thúy <a href="tel:0767648862">0767.648.862</a> để được tư vấn cụ thể.
         </div>`}
       `;
+      div.querySelectorAll(".ai-cite-tag[data-cite-nums]").forEach((tagBtn) => {
+        tagBtn.addEventListener("click", () => {
+          const m = String(tagBtn.dataset.citeNums || "").match(/\d+/);
+          if (!m) return;
+          const targetEl = div.querySelector(`.ai-source-item[data-source-num="${m[0]}"]`);
+          if (!targetEl) return;
+          targetEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          targetEl.classList.remove("highlight-flash");
+          void targetEl.offsetWidth;
+          targetEl.classList.add("highlight-flash");
+          window.setTimeout(() => targetEl.classList.remove("highlight-flash"), 1800);
+        });
+      });
       if (showSendToThuy) {
         const sendThuyBtn = div.querySelector(".ai-send-thuy-btn");
         if (sendThuyBtn) {
@@ -3296,14 +3330,15 @@
       if (entry.qKey === qKey && (!notebookId || !entry.notebookId || entry.notebookId === notebookId)) {
         return {
           answer: entry.answer,
-          source: entry.source || "Kho Tri Thức Pháp Lý ThuysTalk"
+          source: entry.source || "Kho Tri Thức Pháp Lý ThuysTalk",
+          sources: Array.isArray(entry.sources) ? entry.sources : []
         };
       }
     }
     return null;
   }
 
-  function saveUserAiCacheEntry({ query, notebookId, answer, source }) {
+  function saveUserAiCacheEntry({ query, notebookId, answer, source, sources }) {
     const qKey = normalizeAiQueryKey(query);
     const cleanAnswer = String(answer || "").trim();
     if (!qKey || !cleanAnswer) return;
@@ -3315,6 +3350,7 @@
       query: String(query || "").trim(),
       notebookId: notebookId || "",
       source: source || "Kho Tri Thức Pháp Lý ThuysTalk",
+      sources: Array.isArray(sources) ? sources : [],
       answer: cleanAnswer,
       cachedAt: Date.now()
     });
@@ -3384,7 +3420,9 @@
 
   function renderLocalKbHit(matched) {
     if (!matched) return;
-    appendChatMessage("ai", matched.answer, matched.source, matched);
+    appendChatMessage("ai", matched.answer, matched.source, matched, {
+      sources: Array.isArray(matched.sources) ? matched.sources : []
+    });
   }
 
   function appendTopicPickerPrompt(pendingQuery, forceDeepLookup) {
@@ -3600,16 +3638,18 @@
       );
     };
 
-    const deliverSuccessAnswer = (answerText) => {
+    const deliverSuccessAnswer = (answerText, sourcesList = []) => {
       stopThinkingUi();
       const citationSource = `Kho Tri Thức Pháp Lý ThuysTalk · ${route.title.vi}`;
-      appendChatMessage("ai", answerText, citationSource, null, { query: q });
+      const cleanSources = Array.isArray(sourcesList) ? sourcesList : [];
+      appendChatMessage("ai", answerText, citationSource, null, { query: q, sources: cleanSources });
       if (!isAiNoInfoAnswer(answerText)) {
         saveUserAiCacheEntry({
           query: q,
           notebookId: route.notebookId,
           answer: answerText,
-          source: citationSource
+          source: citationSource,
+          sources: cleanSources
         });
       }
     };
@@ -3636,13 +3676,13 @@
       }
 
       if (data && data.status === "done" && data.answer) {
-        deliverSuccessAnswer(data.answer);
+        deliverSuccessAnswer(data.answer, data.sources);
         return;
       }
 
       if (!data || !data.job_id) {
         if (data && data.answer) {
-          deliverSuccessAnswer(data.answer);
+          deliverSuccessAnswer(data.answer, data.sources);
           return;
         }
         handleAiPauseOrQuotaError(data, resp.status);
@@ -3685,7 +3725,7 @@
         } else if (jobData.status === "queued") {
           updateThinkingTitle(state.lang === "en" ? "Queuing request..." : "Đang xếp hàng chờ xử lý...");
         } else if (jobData.status === "done" && jobData.answer) {
-          deliverSuccessAnswer(jobData.answer);
+          deliverSuccessAnswer(jobData.answer, jobData.sources);
           return;
         } else if (jobData.status === "error") {
           handleAiPauseOrQuotaError(jobData, 200);
