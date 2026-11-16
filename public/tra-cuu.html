@@ -51,107 +51,77 @@
   </header>
 
   <!-- Subpage Hero -->
-  <section class="subpage-hero">
+  <section class="subpage-hero subpage-hero-compact">
     <div class="container">
       <div class="subpage-breadcrumb">
         <a href="index.html">Trang chủ ThuysTalk</a>
         <span>/</span>
-        <span>Hệ Thống AI Tra Cứu Pháp Lý Hải Quan &amp; Mã HS</span>
+        <span>Tra Cứu AI Hải Quan &amp; Mã HS</span>
       </div>
-      <h1>Trợ Lý AI Tra Cứu Pháp Lý Hải Quan, Mã HS &amp; Kiểm Soát XNK</h1>
-      <p>
-        Hệ thống định tuyến thông minh trên 4 Kho Cẩm Nang Pháp Lý chuyên sâu của Nguyễn Thị Ngọc Thúy (hơn 186 văn bản, công văn hải quan và nghị định biểu thuế).
-      </p>
+      <h1>Trợ Lý AI Tra Cứu Pháp Lý Hải Quan &amp; Mã HS</h1>
+      <p>Chọn 1 trong 4 chuyên đề hoặc nhập câu hỏi bên dưới để tra cứu trực tiếp từ 186+ văn bản pháp lý.</p>
     </div>
   </section>
 
-  <!-- Full Lookup Console Section -->
-  <section class="notebook-section" id="notebook">
+  <!-- Compact Streamlined Lookup Console Section -->
+  <section class="notebook-section notebook-section-compact" id="notebook">
     <div class="container">
-      <div class="section-header-bar">
-        <div>
-          <span class="eyebrow eyebrow-jade" id="nbEyebrow">TRỢ LÝ AI PHÁP LÝ &amp; KHO TRI THỨC HẢI QUAN THUYTALK</span>
-          <h2 class="section-title" id="nbTitle">Tra Cứu Nhanh Mã HS, Chính Sách Hải Quan &amp; Kiểm Soát Xuất Nhập Khẩu</h2>
-          <p class="section-desc" id="nbDesc"></p>
-        </div>
-      </div>
+      <div class="notebook-console notebook-console-streamlined">
+        <!-- Search Input Row (Top-First above the fold) -->
+        <form class="notebook-input-bar notebook-input-bar-top" id="notebookSearchForm">
+          <input
+            type="text"
+            id="notebookQueryInput"
+            class="notebook-query-input"
+            placeholder="Nhập câu hỏi tra cứu (VD: HS code máy giặt? Quyết định 31/2026 cấm chuyển cửa khẩu hàng nào?)"
+            autocomplete="off"
+          />
+          <button type="submit" class="btn btn-primary btn-sm" id="nbLiveQueryBtn">
+            Phân tích chuyên sâu AI
+          </button>
+        </form>
 
-      <div class="notebook-console">
-        <div class="notebook-console-header">
-          <div>
-            <h3 style="font-size:1.05rem; font-weight:800; margin-bottom:2px;">Hệ Thống Điều Hướng 4 Chuyên Đề Pháp Lý Hải Quan &amp; Kho Tri Thức AI ThuysTalk</h3>
-            <p style="font-size:0.82rem; color:var(--jade-200);">
-              Chọn chuyên đề bên dưới hoặc nhập trực tiếp tên hàng hóa / số hiệu công văn để hệ thống trích xuất câu trả lời chuẩn xác.
-            </p>
-          </div>
-          <div style="background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.24); padding:6px 14px; border-radius:999px; font-size:0.76rem; font-weight:700; color:#FFFFFF;">
-            Hệ thống AI Pháp lý ThuysTalk · Sẵn sàng
-          </div>
-        </div>
+        <!-- 4 Compact 1-Tap Topic Chips -->
+        <div class="notebook-routing-pills notebook-routing-chips" id="notebookRoutingPills"></div>
 
-        <!-- 4 Legal Branch Selector Cards -->
-        <div class="notebook-routing-pills" id="notebookRoutingPills"></div>
+        <!-- Quick Prompt Chips -->
+        <div class="quick-prompt-chips">
+          <button type="button" class="prompt-chip" data-quick-prompt="HS code máy giặt gia đình và công nghiệp áp mã thế nào?">
+            HS Code máy giặt (84.50)
+          </button>
+          <button type="button" class="prompt-chip" data-quick-prompt="Quyết định 31/2026 cấm chuyển cửa khẩu hàng nào về ICD?">
+            QĐ 31/2026 cấm chuyển ICD
+          </button>
+          <button type="button" class="prompt-chip" data-quick-prompt="Hướng dẫn 6 quy tắc tổng quát GRI áp mã HS Code">
+            6 quy tắc GRI áp mã HS
+          </button>
+          <button type="button" class="prompt-chip" data-quick-prompt="Hàng hóa kiểm soát xuất khẩu lưỡng dụng Trung Quốc 2026">
+            Kiểm soát XK Trung Quốc 2026
+          </button>
+          <button type="button" class="prompt-chip" data-quick-prompt="Công văn 23913/CHQ-GSQL hóa chất DNCX và Luật Hóa chất 69/2025">
+            CV 23913 hóa chất DNCX
+          </button>
+          <button type="button" class="prompt-chip" data-quick-prompt="Quy trình đối soát Báo cáo quyết toán DNCX Mẫu 15/BCQT-NVL">
+            BCQT DNCX Mẫu 15
+          </button>
+        </div>
 
         <!-- Chat & Citation Console -->
         <div class="notebook-chat-body">
           <div class="notebook-chat-messages" id="notebookChatMessages" style="max-height:460px;">
             <div class="chat-bubble chat-bubble-ai">
               <div>
-                Xin chào! Mình là Trợ lý AI Tra cứu Pháp lý &amp; Hải quan ThuysTalk, được huấn luyện trực tiếp từ 4 Kho Cẩm Nang Pháp Lý chuyên sâu của Nguyễn Thị Ngọc Thúy:
-                <br />1. <strong>Chuyên đề A:</strong> Hướng Dẫn Tra Mã HS Code Theo Sáu Quy Tắc (87 tài liệu pháp lý nguồn)
-                <br />2. <strong>Chuyên đề B:</strong> Hàng hóa kiểm soát chặt khi xuất khẩu ở Trung Quốc 2026 (26 tài liệu pháp lý nguồn)
-                <br />3. <strong>Chuyên đề C:</strong> Thủ tục hồ sơ kiểm soát hàng hóa theo chuyên ngành (52 tài liệu pháp lý nguồn)
-                <br />4. <strong>Chuyên đề D:</strong> Cẩm nang hỏi đáp hàng rủi ro từ 1/7/2026 &amp; Quyết định 31/2026/QĐ-TTg (21 tài liệu pháp lý nguồn)
-                <br /><br />Bạn hãy chọn câu hỏi gợi ý bên dưới hoặc nhập mặt hàng / quy định bất kỳ để tra cứu ngay!
+                Xin chào! Hãy chọn 1 trong 4 chuyên đề phía trên hoặc nhập mặt hàng, mã HS, số hiệu công văn để mình trích xuất quy định và nguồn văn bản ngay.
               </div>
               <div class="chat-source-citation">
                 Nguồn trích xuất: Hệ Thống Tri Thức Pháp Lý &amp; Hải Quan ThuysTalk
               </div>
-              <div class="chat-bubble-disclaimer">
-                AI có thể có sai sót, hãy liên hệ với Thúy <a href="tel:0767648862">0767.648.862</a> để được tư vấn cụ thể.
-              </div>
             </div>
           </div>
 
-          <!-- Persistent Disclaimer Bar (Rule: Note at bottom of chat) -->
+          <!-- Single Persistent Disclaimer Bar -->
           <div class="chat-disclaimer-bar">
             <span>AI có thể có sai sót, hãy liên hệ với Thúy <a href="tel:0767648862" class="disclaimer-phone">0767.648.862</a> để được tư vấn cụ thể</span>
-          </div>
-
-          <!-- Search Input Row -->
-          <form class="notebook-input-bar" id="notebookSearchForm">
-            <input
-              type="text"
-              id="notebookQueryInput"
-              class="notebook-query-input"
-              placeholder="Nhập câu hỏi tra cứu (VD: HS code máy giặt? Quyết định 31/2026 cấm chuyển cửa khẩu hàng nào?)"
-              autocomplete="off"
-            />
-            <button type="submit" class="btn btn-primary btn-sm" id="nbLiveQueryBtn">
-              Phân tích chuyên sâu AI
-            </button>
-          </form>
-
-          <!-- Quick Prompt Chips -->
-          <div class="quick-prompt-chips">
-            <button type="button" class="prompt-chip" data-quick-prompt="HS code máy giặt gia đình và công nghiệp áp mã thế nào?">
-              HS Code máy giặt (Nhóm 84.50)
-            </button>
-            <button type="button" class="prompt-chip" data-quick-prompt="Quyết định 31/2026 cấm chuyển cửa khẩu hàng nào về ICD?">
-              Quyết định 31/2026 cấm chuyển cửa khẩu hàng nào về ICD?
-            </button>
-            <button type="button" class="prompt-chip" data-quick-prompt="Hướng dẫn 6 quy tắc tổng quát GRI áp mã HS Code">
-              6 quy tắc GRI áp mã HS Code
-            </button>
-            <button type="button" class="prompt-chip" data-quick-prompt="Hàng hóa kiểm soát xuất khẩu lưỡng dụng Trung Quốc 2026">
-              Kiểm soát xuất khẩu Trung Quốc 2026
-            </button>
-            <button type="button" class="prompt-chip" data-quick-prompt="Công văn 23913/CHQ-GSQL hóa chất DNCX và Luật Hóa chất 69/2025">
-              Công văn 23913/CHQ-GSQL hóa chất DNCX
-            </button>
-            <button type="button" class="prompt-chip" data-quick-prompt="Quy trình đối soát Báo cáo quyết toán DNCX Mẫu 15/BCQT-NVL">
-              Báo cáo quyết toán DNCX Mẫu 15
-            </button>
           </div>
         </div>
       </div>

@@ -3070,13 +3070,15 @@
     } else {
       const formatted = formatAiResponseHtml(text);
       const legalHtml = legalMetaItem ? renderLegalMetadataBlockHtml(legalMetaItem) : "";
+      const hasPersistentBar = !!document.querySelector(".chat-disclaimer-bar");
       div.innerHTML = `
         <div class="chat-msg-text">${formatted}</div>
         ${legalHtml}
         ${citation ? `<div class="chat-source-citation">Nguồn trích xuất: ${escapeHtml(citation)}</div>` : ""}
+        ${hasPersistentBar ? "" : `
         <div class="chat-bubble-disclaimer">
           AI có thể có sai sót, hãy liên hệ với Thúy <a href="tel:0767648862">0767.648.862</a> để được tư vấn cụ thể.
-        </div>
+        </div>`}
       `;
     }
     box.appendChild(div);
@@ -3197,15 +3199,17 @@
     div.className = "chat-bubble chat-bubble-ai";
     const showRetry = !!options.showRetry && typeof options.onRetry === "function";
     const showSendToThuy = options.showSendToThuy !== false;
+    const hasPersistentBar = !!document.querySelector(".chat-disclaimer-bar");
     div.innerHTML = `
       <div class="chat-msg-text"><p class="ai-chat-p">${escapeHtml(messageText)}</p></div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
         ${showRetry ? `<button type="button" class="btn btn-primary btn-sm ai-retry-btn">Thử lại</button>` : ""}
         ${showSendToThuy ? `<button type="button" class="btn btn-outline btn-sm ai-send-thuy-btn">Gửi câu hỏi này cho Thúy</button>` : ""}
       </div>
+      ${hasPersistentBar ? "" : `
       <div class="chat-bubble-disclaimer">
         AI có thể có sai sót, hãy liên hệ với Thúy <a href="tel:0767648862">0767.648.862</a> để được tư vấn cụ thể.
-      </div>
+      </div>`}
     `;
     box.appendChild(div);
     box.scrollTop = box.scrollHeight;
