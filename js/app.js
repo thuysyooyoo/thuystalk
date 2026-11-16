@@ -1586,11 +1586,15 @@
       toggleBtn.setAttribute("aria-expanded", "true");
     }
 
-    function closeDrawer() {
+    function closeDrawer(restoreFocus = true) {
+      const wasOpen = drawer.classList.contains("open");
       drawer.classList.remove("open");
       backdrop.classList.remove("open");
       drawer.setAttribute("aria-hidden", "true");
       toggleBtn.setAttribute("aria-expanded", "false");
+      if (restoreFocus && wasOpen && typeof toggleBtn.focus === "function") {
+        toggleBtn.focus();
+      }
     }
 
     toggleBtn.addEventListener("click", () => {
@@ -1599,11 +1603,11 @@
     });
 
     const closeBtn = drawer.querySelector("#mobileNavCloseBtn");
-    if (closeBtn) closeBtn.addEventListener("click", closeDrawer);
-    backdrop.addEventListener("click", closeDrawer);
-    document.getElementById("mobileDrawerCtaBtn").addEventListener("click", closeDrawer);
+    if (closeBtn) closeBtn.addEventListener("click", () => closeDrawer(true));
+    backdrop.addEventListener("click", () => closeDrawer(true));
+    document.getElementById("mobileDrawerCtaBtn").addEventListener("click", () => closeDrawer(false));
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && drawer.classList.contains("open")) closeDrawer();
+      if (e.key === "Escape" && drawer.classList.contains("open")) closeDrawer(true);
     });
 
     drawer.__closeDrawer = closeDrawer;
@@ -1627,7 +1631,7 @@
 
     linksWrap.querySelectorAll("a.mobile-nav-link").forEach((a) => {
       a.addEventListener("click", () => {
-        if (typeof drawer.__closeDrawer === "function") drawer.__closeDrawer();
+        if (typeof drawer.__closeDrawer === "function") drawer.__closeDrawer(false);
       });
     });
 
