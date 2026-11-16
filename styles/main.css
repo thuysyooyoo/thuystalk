@@ -2001,6 +2001,36 @@ body.admin-mode .editable-photo-wrap:hover .photo-change-trigger {
   color: var(--jade-700);
 }
 
+.guest-quota-warning {
+  padding: 8px 20px;
+  background: var(--orange-50);
+  border-top: 1px solid var(--orange-200);
+  color: var(--orange-700);
+  font-size: 0.8rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.guest-quota-login-link {
+  background: none;
+  border: 1px solid var(--orange-500);
+  color: var(--orange-700);
+  border-radius: var(--radius-pill);
+  padding: 3px 12px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.guest-quota-login-link:hover {
+  background: var(--orange-500);
+  color: #FFFFFF;
+}
+
 /* Chat Disclaimer Bar (Notice requested by user: AI có thể có sai sót, hãy liên hệ Thúy 0767648862) */
 .chat-disclaimer-bar {
   padding: 10px 24px;
