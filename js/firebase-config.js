@@ -54,12 +54,39 @@
     localStorage.setItem(STORAGE_KEY_FIREBASE, JSON.stringify(cfg));
   }
 
-  function safeFirestoreWrite(promise, timeoutMs = 2000) {
-    if (!promise || typeof promise.then !== "function") return Promise.resolve(null);
-    return Promise.race([
-      promise,
-      new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs))
-    ]);
+  let lastWriteError = "";
+
+  function setLastWriteError(err) {
+    if (!err) {
+      lastWriteError = "";
+      return;
+    }
+    lastWriteError = err.message || String(err);
+  }
+
+  function safeFirestoreWrite(promise, timeoutMs = 8000) {
+    if (!promise || typeof promise.then !== "function") {
+      return Promise.reject(new Error("Invalid Firestore write promise"));
+    }
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const timeoutErr = new Error(`Firestore write timed out after ${timeoutMs}ms`);
+        setLastWriteError(timeoutErr);
+        reject(timeoutErr);
+      }, timeoutMs);
+      promise.then(
+        (res) => {
+          clearTimeout(timer);
+          setLastWriteError("");
+          resolve(res);
+        },
+        (err) => {
+          clearTimeout(timer);
+          setLastWriteError(err);
+          reject(err);
+        }
+      );
+    });
   }
 
   function initFirebase() {
@@ -632,25 +659,6 @@
       }
     },
 
-    // Sync Collection (Articles, Videos, Mini-Test Courses) to Firestore
-    syncCollection: async function (collName, items) {
-      initFirebase();
-      if (!db || !Array.isArray(items)) return false;
-      try {
-        const batch = db.batch();
-        items.forEach((item) => {
-          const id = item.id ? String(item.id) : "item_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
-          const docRef = db.collection(collName).doc(id);
-          batch.set(docRef, { ...item, syncedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
-        });
-        await batch.commit();
-        return true;
-      } catch (err) {
-        console.warn("Firestore syncCollection error:", err);
-        return false;
-      }
-    },
-
     // 7. FETCH ALL LEARNERS FROM FIRESTORE
     fetchLearners: async function () {
       initFirebase();
@@ -685,20 +693,30 @@
       }
     },
 
+    getLastError: function () {
+      return lastWriteError;
+    },
+
     // 9. GENERIC CRUD OPERATIONS FOR SINGLE SOURCE OF TRUTH (SSoT)
     saveDoc: async function (collName, docId, data) {
       initFirebase();
-      if (!db || !collName || !docId) return false;
+      if (!db || !collName || !docId) {
+        setLastWriteError("Firestore chưa sẵn sàng hoặc thiếu mã tài liệu.");
+        return false;
+      }
       try {
+        const payload = { ...(data || {}) };
+        delete payload.id;
         await safeFirestoreWrite(
           db.collection(collName).doc(String(docId)).set({
-            ...data,
+            ...payload,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true }),
-          2500
+          8000
         );
         return true;
       } catch (err) {
+        setLastWriteError(err);
         console.warn(`saveDoc error (${collName}/${docId}):`, err);
         return false;
       }
@@ -706,14 +724,18 @@
 
     deleteDoc: async function (collName, docId) {
       initFirebase();
-      if (!db || !collName || !docId) return false;
+      if (!db || !collName || !docId) {
+        setLastWriteError("Firestore chưa sẵn sàng hoặc thiếu mã tài liệu.");
+        return false;
+      }
       try {
         await safeFirestoreWrite(
           db.collection(collName).doc(String(docId)).delete(),
-          2500
+          8000
         );
         return true;
       } catch (err) {
+        setLastWriteError(err);
         console.warn(`deleteDoc error (${collName}/${docId}):`, err);
         return false;
       }
@@ -721,7 +743,7 @@
 
     fetchCollection: async function (collName) {
       initFirebase();
-      if (!db || !collName) return [];
+      if (!db || !collName) return null;
       try {
         const snap = await db.collection(collName).get();
         const list = [];
@@ -731,23 +753,27 @@
         return list;
       } catch (err) {
         console.warn(`fetchCollection error (${collName}):`, err);
-        return [];
+        return null;
       }
     },
 
     saveSiteSettings: async function (settingKey, data) {
       initFirebase();
-      if (!db || !settingKey) return false;
+      if (!db || !settingKey) {
+        setLastWriteError("Firestore chưa sẵn sàng hoặc thiếu khóa cấu hình.");
+        return false;
+      }
       try {
         await safeFirestoreWrite(
           db.collection("site_settings").doc(String(settingKey)).set({
             data: data,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
           }, { merge: true }),
-          2500
+          8000
         );
         return true;
       } catch (err) {
+        setLastWriteError(err);
         console.warn(`saveSiteSettings error (${settingKey}):`, err);
         return false;
       }
