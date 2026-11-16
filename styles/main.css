@@ -2179,6 +2179,19 @@ body.admin-mode .editable-photo-wrap:hover .photo-change-trigger {
   color: #FFFFFF;
 }
 
+.topic-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.topic-picker-chip {
+  text-align: left;
+  border-color: var(--jade-300);
+  padding: 7px 14px;
+}
+
 /* ==========================================================================
    9. DARK JADE CTA BANNER & 1-ON-1 CONSULTATION FORM
    ========================================================================== */
