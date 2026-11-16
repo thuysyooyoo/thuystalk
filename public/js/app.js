@@ -2889,8 +2889,8 @@
       if (manual) return manual;
     }
     const qLower = question.toLowerCase();
-    let bestRoute = window.THUYSTALK_NOTEBOOK_ROUTES[0];
-    let bestScore = -1;
+    let bestRoute = null;
+    let bestScore = 0;
     window.THUYSTALK_NOTEBOOK_ROUTES.forEach((r) => {
       let score = 0;
       r.keywords.forEach((kw) => {
@@ -2901,7 +2901,7 @@
         bestRoute = r;
       }
     });
-    return bestRoute;
+    return bestScore > 0 ? bestRoute : null;
   }
 
   function searchLocalKnowledgeBase(question) {
@@ -3273,6 +3273,53 @@
     appendChatMessage("ai", matched.answer, matched.source, matched);
   }
 
+  function appendTopicPickerPrompt(pendingQuery, forceDeepLookup) {
+    const box = document.getElementById("notebookChatMessages");
+    if (!box) return;
+    const isEn = state.lang === "en";
+    const div = document.createElement("div");
+    div.className = "chat-bubble chat-bubble-ai topic-picker-card";
+    const chipsHtml = (window.THUYSTALK_NOTEBOOK_ROUTES || []).map((r) => `
+      <button type="button" class="prompt-chip topic-picker-chip" data-pick-route="${r.id}">
+        <strong>${escapeHtml(r.branch)}</strong> · ${escapeHtml((r.title && (r.title[state.lang] || r.title.vi)) || r.id)}
+      </button>
+    `).join("");
+
+    div.innerHTML = `
+      <div class="chat-msg-text">
+        <p class="ai-chat-p"><strong>${isEn ? "Which topic does this question belong to?" : "Câu hỏi của bạn thuộc chủ đề nào?"}</strong></p>
+        <p class="ai-chat-p" style="font-size:0.84rem; color:var(--ink-600);">
+          ${isEn ? "Tap 1 of the 4 knowledge topics below so AI searches the exact legal documents:" : "Chọn nhanh 1 trong 4 chuyên đề dưới đây để hệ thống tra đúng kho văn bản:"}
+        </p>
+      </div>
+      <div class="topic-picker-chips">${chipsHtml}</div>
+    `;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+
+    div.querySelectorAll("[data-pick-route]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const chosen = (window.THUYSTALK_NOTEBOOK_ROUTES || []).find((r) => r.id === btn.dataset.pickRoute);
+        if (!chosen) return;
+        if (div.parentNode) div.remove();
+        runWithGuestQuotaAndExecute(pendingQuery, forceDeepLookup, chosen);
+      });
+    });
+  }
+
+  async function runWithGuestQuotaAndExecute(q, forceDeepLookup, route) {
+    // SILENT 5-QUERY FREE QUOTA FOR GUESTS (No upfront notice shown; gate appears on the 6th lookup if not logged in)
+    if (!state.learnerEmail || !state.learnerUid) {
+      const usedCount = parseInt(localStorage.getItem(STORAGE_KEYS.GUEST_QUERY_COUNT) || "0", 10);
+      if (usedCount >= 5) {
+        appendLearnerLoginGate(q, forceDeepLookup);
+        return;
+      }
+      localStorage.setItem(STORAGE_KEYS.GUEST_QUERY_COUNT, String(usedCount + 1));
+    }
+    await executeAiQuery(q, forceDeepLookup, route);
+  }
+
   async function handleNotebookSearch(forceDeepLookup = false) {
     const inp = document.getElementById("notebookQueryInput");
     if (!inp) return;
@@ -3286,7 +3333,7 @@
     inp.value = "";
 
     const route = detectNotebookRoute(q);
-    const userCached = findUserAiCacheMatch(q, route.notebookId);
+    const userCached = findUserAiCacheMatch(q, route ? route.notebookId : "");
     if (userCached) {
       renderLocalKbHit(userCached);
       return;
@@ -3298,21 +3345,20 @@
       return;
     }
 
-    // SILENT 5-QUERY FREE QUOTA FOR GUESTS (No upfront notice shown; gate appears on the 6th lookup if not logged in)
-    if (!state.learnerEmail || !state.learnerUid) {
-      const usedCount = parseInt(localStorage.getItem(STORAGE_KEYS.GUEST_QUERY_COUNT) || "0", 10);
-      if (usedCount >= 5) {
-        appendLearnerLoginGate(q, forceDeepLookup);
-        return;
-      }
-      localStorage.setItem(STORAGE_KEYS.GUEST_QUERY_COUNT, String(usedCount + 1));
+    if (!route) {
+      appendTopicPickerPrompt(q, forceDeepLookup);
+      return;
     }
 
-    await executeAiQuery(q, forceDeepLookup, route);
+    await runWithGuestQuotaAndExecute(q, forceDeepLookup, route);
   }
 
   async function executeAiQuery(q, forceDeepLookup = false, precomputedRoute = null) {
     const route = precomputedRoute || detectNotebookRoute(q);
+    if (!route) {
+      appendTopicPickerPrompt(q, forceDeepLookup);
+      return;
+    }
 
     // 1. Check visitor FIFO cache & high-confidence local KB match first
     const userCached = findUserAiCacheMatch(q, route.notebookId);
