@@ -428,7 +428,7 @@ def postprocess_ai_answer(answer_text: str) -> str:
         r"(?:(?:nếu\s+(?:bạn|quý\s+vị)\s+muốn[^.\n!?]*[,:]\s*)?"
         r"(?:bạn\s+có\s+muốn|quý\s+vị\s+có\s+muốn|tôi\s+có\s+thể|mình\s+có\s+thể|nếu\s+cần|hãy\s+cho\s+tôi\s+biết|"
         r"would\s+you\s+like|do\s+you\s+want|i\s+can)[^.\n!?]*)?"
-        r"(?:tìm(?:\s+kiếm)?(?:\s+thêm)?(?:\s+thông\s+tin)?\s+trên\s+(?:web|internet)|search\s+(?:the\s+)?web)[^.\n!?]*[.?]*",
+        r"(?:tìm(?:\s+kiếm)?(?:\s+thêm)?(?:\s+thông\s+tin)?\s+trên\s+(?:web|internet)\b|search\s+(?:the\s+)?web\b)[^.\n!?]*[.?]*",
         flags=re.IGNORECASE,
     )
     for line in text.splitlines():
