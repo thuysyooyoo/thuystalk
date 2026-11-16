@@ -9487,7 +9487,7 @@
       });
     });
 
-    // Execute ?q=... query ONCE on tra-cuu.html, then clear URL search param
+    // Execute ?q=... query ONCE on tra-cuu.html (cache -> local KB -> quota AI), then clear URL search param
     const initialLookupQuery = (params.get("q") || "").trim();
     const nbInput = document.getElementById("notebookQueryInput");
     if (initialLookupQuery && nbInput && document.getElementById("notebookChatMessages")) {
@@ -9495,7 +9495,7 @@
       if (window.history && typeof window.history.replaceState === "function") {
         window.history.replaceState(null, "", window.location.pathname + window.location.hash);
       }
-      handleNotebookSearch(true);
+      handleNotebookSearch(false);
     }
 
     // Close Modals
