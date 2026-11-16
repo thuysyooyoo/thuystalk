@@ -34,7 +34,8 @@
     SOCIALS: "thuystalk_cms_social_links_v1",
     VIDEO_CATS: "thuystalk_cms_video_categories_v1",
     LAST_LESSON_MAP: "thuystalk_last_lesson_by_course_v1",
-    BRIDGE_URL: "thuystalk_notebook_bridge_url_v3"
+    BRIDGE_URL: "thuystalk_notebook_bridge_url_v3",
+    PENDING_CONSULT_QUERY: "thuystalk_pending_consult_q_v1"
   };
 
   function readStorageJson(storageObj, key, fallback = {}) {
@@ -2429,6 +2430,67 @@
     }
   }
 
+  function prefillAndOpenConsultForm(questionText) {
+    const cleanQ = String(questionText || "").trim();
+    const msgInp = document.getElementById("consultMsgInput");
+    if (msgInp) {
+      if (cleanQ) msgInp.value = cleanQ;
+      const sec = document.getElementById("tu-van") || msgInp;
+      if (sec && typeof sec.scrollIntoView === "function") {
+        sec.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      window.setTimeout(() => {
+        try {
+          msgInp.focus();
+        } catch (e) {}
+      }, 250);
+      return;
+    }
+    setSessionFlag(STORAGE_KEYS.PENDING_CONSULT_QUERY, cleanQ);
+    window.location.href = "index.html#tu-van";
+  }
+
+  function appendAiActionNotice(messageText, options = {}) {
+    const box = document.getElementById("notebookChatMessages");
+    if (!box) return null;
+    const div = document.createElement("div");
+    div.className = "chat-bubble chat-bubble-ai";
+    const showRetry = !!options.showRetry && typeof options.onRetry === "function";
+    const showSendToThuy = options.showSendToThuy !== false;
+    div.innerHTML = `
+      <div class="chat-msg-text"><p class="ai-chat-p">${escapeHtml(messageText)}</p></div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+        ${showRetry ? `<button type="button" class="btn btn-primary btn-sm ai-retry-btn">Thử lại</button>` : ""}
+        ${showSendToThuy ? `<button type="button" class="btn btn-outline btn-sm ai-send-thuy-btn">Gửi câu hỏi này cho Thúy</button>` : ""}
+      </div>
+      <div class="chat-bubble-disclaimer">
+        AI có thể có sai sót, hãy liên hệ với Thúy <a href="tel:0767648862">0767.648.862</a> để được tư vấn cụ thể.
+      </div>
+    `;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+
+    const retryBtn = div.querySelector(".ai-retry-btn");
+    if (retryBtn && typeof options.onRetry === "function") {
+      retryBtn.addEventListener("click", () => {
+        retryBtn.disabled = true;
+        options.onRetry();
+      });
+    }
+    const sendThuyBtn = div.querySelector(".ai-send-thuy-btn");
+    if (sendThuyBtn) {
+      sendThuyBtn.addEventListener("click", () => {
+        prefillAndOpenConsultForm(options.query || "");
+      });
+    }
+    return div;
+  }
+
+  function renderLocalKbHit(matched) {
+    if (!matched) return;
+    appendChatMessage("ai", matched.answer, matched.source);
+  }
+
   async function handleNotebookSearch(forceDeepLookup = false) {
     const inp = document.getElementById("notebookQueryInput");
     if (!inp) return;
@@ -2441,6 +2503,13 @@
     appendChatMessage("user", q);
     inp.value = "";
 
+    const route = detectNotebookRoute(q);
+    const localMatched = !forceDeepLookup ? searchLocalKnowledgeBase(q) : null;
+    if (localMatched) {
+      renderLocalKbHit(localMatched);
+      return;
+    }
+
     // SILENT 5-QUERY FREE QUOTA FOR GUESTS (No upfront notice shown; gate appears on the 6th lookup if not logged in)
     if (!state.learnerEmail || !state.learnerUid) {
       const usedCount = parseInt(localStorage.getItem(STORAGE_KEYS.GUEST_QUERY_COUNT) || "0", 10);
@@ -2451,21 +2520,21 @@
       localStorage.setItem(STORAGE_KEYS.GUEST_QUERY_COUNT, String(usedCount + 1));
     }
 
-    await executeAiQuery(q, forceDeepLookup);
+    await executeAiQuery(q, forceDeepLookup, route);
   }
 
-  async function executeAiQuery(q, forceDeepLookup = false) {
-    const route = detectNotebookRoute(q);
+  async function executeAiQuery(q, forceDeepLookup = false, precomputedRoute = null) {
+    const route = precomputedRoute || detectNotebookRoute(q);
 
-    // 1. Check high-confidence local KB match first
+    // 1. Check high-confidence local KB match first when not forcing deep lookup
     const matched = !forceDeepLookup ? searchLocalKnowledgeBase(q) : null;
     if (matched) {
-      appendChatMessage("ai", matched.answer, matched.source);
+      renderLocalKbHit(matched);
       return;
     }
 
-    // 2. Otherwise call the backend AI Knowledge Bridge silently (Zero mention of NotebookLM!)
-    const bridgeEndpoint = (state.notebookBridgeUrl || "http://localhost:8099/api/notebook-query").trim();
+    // 2. Call the async backend AI Knowledge Bridge
+    const queryEndpoint = getThuystalkApiUrl("/api/notebook-query");
     const chatBox = document.getElementById("notebookChatMessages");
     let loadingBubble = null;
     let thinkingTimerId = null;
@@ -2479,7 +2548,7 @@
           <div class="ai-thinking-spinner" aria-hidden="true"></div>
           <div>
             <div class="ai-thinking-meta">
-              <span class="ai-thinking-title">${state.lang === "en" ? "Thinking & checking legal database..." : "Đang phân tích & đối chiếu dữ liệu pháp lý..."}</span>
+              <span class="ai-thinking-title">${state.lang === "en" ? "Queuing request..." : "Đang xếp hàng chờ xử lý..."}</span>
               <span class="ai-thinking-timer" data-thinking-seconds>0 giây</span>
             </div>
             <div class="ai-thinking-sub">${escapeHtml(route.title.vi)} · "${escapeHtml(q)}"</div>
@@ -2498,6 +2567,12 @@
       }, 1000);
     }
 
+    const updateThinkingTitle = (text) => {
+      if (!loadingBubble) return;
+      const titleEl = loadingBubble.querySelector(".ai-thinking-title");
+      if (titleEl) titleEl.textContent = text;
+    };
+
     const stopThinkingUi = () => {
       if (thinkingTimerId !== null) {
         window.clearInterval(thinkingTimerId);
@@ -2509,45 +2584,167 @@
       }
     };
 
+    const handleAiPauseOrQuotaError = (payload, statusCode) => {
+      stopThinkingUi();
+      const errCode = (payload && payload.error_code) || "";
+      if (errCode === "ai_quota") {
+        const hhMm = (payload && payload.reset_time_str) || "";
+        const pauseMsg =
+          (payload && payload.error) ||
+          (hhMm
+            ? `Tra cứu AI đang tạm nghỉ đến ${hhMm}. Câu hỏi phổ biến vẫn trả lời ngay`
+            : "Tra cứu AI đang tạm nghỉ. Câu hỏi phổ biến vẫn trả lời ngay");
+        const fallbackKb = searchLocalKnowledgeBase(q);
+        if (fallbackKb) {
+          renderLocalKbHit(fallbackKb);
+        }
+        appendAiActionNotice(pauseMsg, {
+          showRetry: false,
+          showSendToThuy: true,
+          query: q
+        });
+        return;
+      }
+      if (statusCode === 429 || errCode === "rate_limit") {
+        appendAiActionNotice(
+          (payload && payload.error) || "Bạn đã dùng hết lượt tra cứu AI trong khung giờ này. Vui lòng thử lại sau ít phút.",
+          {
+            showRetry: false,
+            showSendToThuy: true,
+            query: q
+          }
+        );
+        return;
+      }
+      appendAiActionNotice(
+        (payload && payload.error) || "Hệ thống tra cứu chuyên sâu hiện chưa thể xử lý câu hỏi này. Vui lòng bấm Thử lại hoặc gửi câu hỏi cho Thúy.",
+        {
+          showRetry: true,
+          showSendToThuy: true,
+          query: q,
+          onRetry: () => executeAiQuery(q, forceDeepLookup, route)
+        }
+      );
+    };
+
+    const deliverSuccessAnswer = (answerText) => {
+      stopThinkingUi();
+      appendChatMessage(
+        "ai",
+        answerText,
+        `Kho Tri Thức Pháp Lý ThuysTalk · ${route.title.vi}`
+      );
+      state.aiKb.unshift({
+        id: "kb-live-" + Date.now(),
+        notebookBranch: `Kho Tri Thức Pháp Lý ThuysTalk · ${route.title.vi}`,
+        topic: q,
+        keywords: q.toLowerCase(),
+        answer: answerText
+      });
+      saveCollection(STORAGE_KEYS.AI_KB, state.aiKb);
+    };
+
     try {
-      const resp = await fetch(bridgeEndpoint, {
+      const headers = { "Content-Type": "application/json" };
+      if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.getIdToken === "function") {
+        const token = await window.ThuysTalkFirebase.getIdToken(false).catch(() => null);
+        if (token) headers.Authorization = "Bearer " + token;
+      }
+
+      const resp = await fetch(queryEndpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           notebook_id: route.notebookId,
           query: q
         })
       });
-      if (resp.ok) {
-        const data = await resp.json();
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        handleAiPauseOrQuotaError(data, resp.status);
+        return;
+      }
+
+      if (data && data.status === "done" && data.answer) {
+        deliverSuccessAnswer(data.answer);
+        return;
+      }
+
+      if (!data || !data.job_id) {
         if (data && data.answer) {
+          deliverSuccessAnswer(data.answer);
+          return;
+        }
+        handleAiPauseOrQuotaError(data, resp.status);
+        return;
+      }
+
+      const pollUrl = getThuystalkApiUrl(`/api/notebook-job?id=${encodeURIComponent(data.job_id)}`);
+      const pollStartedAt = Date.now();
+      const MAX_POLL_MS = 6 * 60 * 1000;
+
+      while (Date.now() - pollStartedAt < MAX_POLL_MS) {
+        await new Promise((resolve) => window.setTimeout(resolve, 3000));
+        let jobResp;
+        try {
+          jobResp = await fetch(pollUrl, { method: "GET" });
+        } catch (pollNetErr) {
           stopThinkingUi();
-          appendChatMessage(
-            "ai",
-            data.answer,
-            `Kho Tri Thức Pháp Lý ThuysTalk · ${route.title.vi}`
+          appendAiActionNotice(
+            "Mất kết nối tới máy chủ tra cứu trong lúc đang xử lý. Vui lòng kiểm tra kết nối rồi bấm Thử lại hoặc gửi câu hỏi cho Thúy.",
+            {
+              showRetry: true,
+              showSendToThuy: true,
+              query: q,
+              onRetry: () => executeAiQuery(q, forceDeepLookup, route)
+            }
           );
-          state.aiKb.unshift({
-            id: "kb-live-" + Date.now(),
-            notebookBranch: `Kho Tri Thức Pháp Lý ThuysTalk · ${route.title.vi}`,
-            topic: q,
-            keywords: q.toLowerCase(),
-            answer: data.answer
-          });
-          saveCollection(STORAGE_KEYS.AI_KB, state.aiKb);
+          return;
+        }
+
+        const jobData = await jobResp.json().catch(() => ({}));
+        if (!jobResp.ok) {
+          handleAiPauseOrQuotaError(jobData, jobResp.status);
+          return;
+        }
+
+        if (jobData.status === "running") {
+          updateThinkingTitle(
+            state.lang === "en" ? "Analyzing legal database..." : "Đang phân tích & đối chiếu dữ liệu pháp lý..."
+          );
+        } else if (jobData.status === "queued") {
+          updateThinkingTitle(state.lang === "en" ? "Queuing request..." : "Đang xếp hàng chờ xử lý...");
+        } else if (jobData.status === "done" && jobData.answer) {
+          deliverSuccessAnswer(jobData.answer);
+          return;
+        } else if (jobData.status === "error") {
+          handleAiPauseOrQuotaError(jobData, 200);
           return;
         }
       }
-    } catch (err) {
-      // Bridge offline or blocked
-    }
 
-    stopThinkingUi();
-    appendChatMessage(
-      "ai",
-      `Hệ thống đã ghi nhận câu hỏi "${q}" thuộc nhóm [${route.title.vi}]. Để tra cứu chuyên sâu theo thời gian thực hoặc nhận văn bản gốc cho tình huống này, bạn hãy mở qua cổng máy chủ nội bộ hoặc để lại thông tin tại mục Tư vấn 1-1.`,
-      route.title.vi
-    );
+      stopThinkingUi();
+      appendAiActionNotice(
+        "Quá trình tra cứu vượt quá 6 phút nên đã tạm dừng. Vui lòng bấm Thử lại hoặc gửi câu hỏi cho Thúy để được hỗ trợ trực tiếp.",
+        {
+          showRetry: true,
+          showSendToThuy: true,
+          query: q,
+          onRetry: () => executeAiQuery(q, forceDeepLookup, route)
+        }
+      );
+    } catch (err) {
+      stopThinkingUi();
+      appendAiActionNotice(
+        "Hiện không kết nối được tới máy chủ tra cứu chuyên sâu. Vui lòng bấm Thử lại sau giây lát hoặc gửi câu hỏi cho Thúy.",
+        {
+          showRetry: true,
+          showSendToThuy: true,
+          query: q,
+          onRetry: () => executeAiQuery(q, forceDeepLookup, route)
+        }
+      );
+    }
   }
 
   // ==========================================================================
@@ -2788,6 +2985,15 @@
     if (!form) return;
 
     updateConsultFormStatus();
+
+    const pendingConsultQ = getSessionFlag(STORAGE_KEYS.PENDING_CONSULT_QUERY);
+    if (pendingConsultQ) {
+      setSessionFlag(STORAGE_KEYS.PENDING_CONSULT_QUERY, "");
+      const msgInp = document.getElementById("consultMsgInput");
+      if (msgInp && !msgInp.value.trim()) {
+        msgInp.value = pendingConsultQ;
+      }
+    }
 
     const openProfileBtn = document.getElementById("consultOpenProfileBtn");
     if (openProfileBtn) {
