@@ -649,7 +649,7 @@
             itemType: String(downloadInfo.itemType || "resource").slice(0, 40) || "resource",
             itemId: String(downloadInfo.itemId || "item").slice(0, 120) || "item",
             itemTitle: String(downloadInfo.itemTitle || "Tai lieu ThuysTalk").slice(0, 300) || "Tai lieu ThuysTalk",
-            fileName: String(downloadInfo.fileName || "ThuysTalk_Tai_Lieu.txt").slice(0, 260) || "ThuysTalk_Tai_Lieu.txt",
+            fileName: String(downloadInfo.fileName || "Tai_Lieu_Dinh_Kem").slice(0, 260) || "Tai_Lieu_Dinh_Kem",
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
           }),
           2500
@@ -873,6 +873,77 @@
       })();
       mediaImagePending.set(id, req);
       return req;
+    },
+
+    saveDocLinks: async function (itemType, itemId, items) {
+      initFirebase();
+      const docKey = `${String(itemType || "").trim()}_${String(itemId || "").trim()}`;
+      if (!itemType || !itemId || !/^(course|video|article)_[A-Za-z0-9_-]+$/.test(docKey)) {
+        setLastWriteError("Mã định danh tài liệu doc_links không hợp lệ.");
+        return false;
+      }
+      if (!db) {
+        setLastWriteError("Firestore chưa sẵn sàng để lưu danh sách link tài liệu.");
+        return false;
+      }
+      const cleanItems = Array.isArray(items)
+        ? items
+            .filter((it) => it && it.name && /^[A-Za-z0-9_-]{20,}$/.test(String(it.fileId || "")))
+            .slice(0, 5)
+            .map((it) => ({
+              name: String(it.name).trim().slice(0, 180),
+              fileId: String(it.fileId).trim(),
+              kind: ["drive", "gdoc", "gsheet", "gslide"].includes(it.kind) ? it.kind : "drive"
+            }))
+        : [];
+      try {
+        if (cleanItems.length === 0) {
+          await safeFirestoreWrite(db.collection("doc_links").doc(docKey).delete(), 8000);
+        } else {
+          await safeFirestoreWrite(
+            db.collection("doc_links").doc(docKey).set({
+              items: cleanItems,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }),
+            8000
+          );
+        }
+        return true;
+      } catch (err) {
+        setLastWriteError(err);
+        console.warn(`saveDocLinks error (${docKey}):`, err);
+        return false;
+      }
+    },
+
+    fetchDocLinks: async function (itemType, itemId) {
+      initFirebase();
+      const docKey = `${String(itemType || "").trim()}_${String(itemId || "").trim()}`;
+      if (!db || !itemType || !itemId) return null;
+      try {
+        const snap = await db.collection("doc_links").doc(docKey).get();
+        if (!snap.exists) return [];
+        const data = snap.data() || {};
+        return Array.isArray(data.items) ? data.items : [];
+      } catch (err) {
+        setLastWriteError(err);
+        console.warn(`fetchDocLinks error (${docKey}):`, err);
+        return null;
+      }
+    },
+
+    deleteDocLinks: async function (itemType, itemId) {
+      initFirebase();
+      const docKey = `${String(itemType || "").trim()}_${String(itemId || "").trim()}`;
+      if (!db || !itemType || !itemId) return false;
+      try {
+        await safeFirestoreWrite(db.collection("doc_links").doc(docKey).delete(), 8000);
+        return true;
+      } catch (err) {
+        setLastWriteError(err);
+        console.warn(`deleteDocLinks error (${docKey}):`, err);
+        return false;
+      }
     },
 
     // 10. REAL-TIME LISTENER FOR INSTANT CROSS-BROWSER SYNCHRONIZATION
