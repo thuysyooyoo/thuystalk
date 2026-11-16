@@ -308,7 +308,7 @@ window.THUYSTALK_I18N = {
       milestones: [
         "Đồng hành toàn trình: Đàm phán quốc tế – Thủ tục Hải quan – Kiểm soát rủi ro pháp lý & thuế quan.",
         "Tiên phong công nghệ: Thiết kế hệ thống AI Agent & Tự động hóa giúp rút ngắn 70% thời gian xử lý chứng từ.",
-        "Trao giá trị thật: Đăng ký miễn phí được lưu tiến độ Mini Test và nhận trọn bộ biểu mẫu, checklist qua Email."
+        "Trao giá trị thật: Đăng ký miễn phí để lưu tiến độ Mini Test và tải trọn bộ biểu mẫu, checklist đính kèm."
       ],
       stats: [
         { val: "9<span>+</span>", lbl: "Năm kinh nghiệm thực tế XNK & Hải quan" },
@@ -371,11 +371,11 @@ window.THUYSTALK_I18N = {
       hostName: "Nguyễn Thị Ngọc Thúy",
       hostRole: "9+ Năm Kinh Nghiệm Thực Tế XNK, Hải Quan & Tự Động Hóa AI",
       securityNote: "Bảo mật thông tin doanh nghiệp theo tiêu chuẩn Nghị định 13/2023/NĐ-CP",
-      formTitle: "Đăng Ký Tư Vấn Kỹ Hơn & Nhận Tài Liệu",
+      formTitle: "Đăng Ký Tư Vấn Chuyên Sâu",
       formSub: "Thông tin của bạn được mã hóa bảo mật và phản hồi qua Email / Zalo (https://zalo.me/84767648862) trong 24h.",
       lblName: "Họ và tên của bạn *",
       lblPhone: "Số điện thoại / Zalo *",
-      lblEmail: "Địa chỉ Email nhận tài liệu *",
+      lblEmail: "Địa chỉ Email của bạn *",
       lblTopic: "Chủ đề bạn cần tư vấn chuyên sâu *",
       topics: [
         "Thủ tục Xuất nhập khẩu chính ngạch & Thông quan",
@@ -470,20 +470,20 @@ window.THUYSTALK_I18N = {
       stats: [
         { val: "9<span>+</span>", lbl: "Years of Hands-On Trade & Customs Experience" },
         { val: "100<span>%</span>", lbl: "Compliant, Transparent & Template-Backed" },
-        { val: "Free", lbl: "Progress-Tracked E-Learning & Email Templates" }
+        { val: "Free", lbl: "Progress-Tracked E-Learning & Attached Templates" }
       ],
       btnConnect: "Book a 1-on-1 Advisory Session"
     },
     elearning: {
       eyebrow: "THUYTALK E-LEARNING ACADEMY",
       title: "Practical Materials · Mini Test & Direct Template Download",
-      desc: "Learn through structured micro-lessons, complete multi-question Mini Tests & practical exercises, track your completion percentage, and receive downloadable templates via Email.",
-      bannerTitleGuest: "Sign in with your Email (Free) to save course progress & receive templates",
-      bannerDescGuest: "Enter your Email address to automatically save completed lessons and receive checklists & templates for each course.",
+      desc: "Learn through structured micro-lessons, complete multi-question Mini Tests & practical exercises, track your completion percentage, and download attached templates directly.",
+      bannerTitleGuest: "Sign in with your Email (Free) to save course progress & download templates",
+      bannerDescGuest: "Enter your Email address to automatically save completed lessons and download checklists & templates directly.",
       bannerPlaceholder: "Enter your email (e.g., alex@company.com)...",
       bannerBtn: "Activate & Save Progress",
       bannerTitleLogged: "Active Learner:",
-      bannerDescLogged: "Your learning progress is automatically saved. Click Download Materials on any course to receive its templates.",
+      bannerDescLogged: "Your learning progress is automatically saved. Click Download on any attached file to save it directly.",
       btnStartCourse: "Open Classroom & Mini Test",
       btnSendMaterial: "Download Materials"
     },
@@ -532,7 +532,7 @@ window.THUYSTALK_I18N = {
       formSub: "Your inquiry is protected by Row-Level Security and answered via Email / Zalo within 24 hours.",
       lblName: "Your Full Name *",
       lblPhone: "Phone / Zalo / WhatsApp *",
-      lblEmail: "Email Address (for receiving materials) *",
+      lblEmail: "Your Email Address *",
       lblTopic: "Advisory Topic *",
       topics: [
         "Official Import-Export Procedures & Customs Clearance",
@@ -567,8 +567,8 @@ window.THUYSTALK_COURSES = [
       en: "Master shipping document verification (Invoice, Packing List, B/L), ICD transfer rules under Decision 31/2026/QD-TTg, and electronic Delivery Order (eDO) workflows."
     },
     deliverable: {
-      vi: "Tài liệu gửi qua Email: Checklist 6 bước rà soát bộ chứng từ + Bảng tra mặt hàng bắt buộc thông quan tại cửa khẩu (QĐ 31/2026).",
-      en: "Emailed Resource Kit: 6-Step Document Verification Checklist + Port-Mandatory HS Lookup Table (Decision 31/2026)."
+      vi: "Tài liệu đính kèm: Checklist 6 bước rà soát bộ chứng từ + Bảng tra mặt hàng bắt buộc thông quan tại cửa khẩu (QĐ 31/2026).",
+      en: "Attached Resource Kit: 6-Step Document Verification Checklist + Port-Mandatory HS Lookup Table (Decision 31/2026)."
     },
     lessons: [
       {
@@ -745,8 +745,8 @@ window.THUYSTALK_COURSES = [
       en: "Eliminate inventory discrepancies across Warehouse, Accounting, and Customs when filing Form 15/BCQT-NVL and apply Official Letter 23913/CHQ-GSQL."
     },
     deliverable: {
-      vi: "Tài liệu gửi qua Email: File Excel đối soát Tam Giác Vàng Kho - Kế toán - XNK + Mẫu Bản cam kết sử dụng hóa chất nội bộ DNCX.",
-      en: "Emailed Resource Kit: Golden Triangle Reconciliation Excel Template + Internal Chemical Usage Commitment Template for EPEs."
+      vi: "Tài liệu đính kèm: File Excel đối soát Tam Giác Vàng Kho - Kế toán - XNK + Mẫu Bản cam kết sử dụng hóa chất nội bộ DNCX.",
+      en: "Attached Resource Kit: Golden Triangle Reconciliation Excel Template + Internal Chemical Usage Commitment Template for EPEs."
     },
     lessons: [
       {
@@ -843,8 +843,8 @@ window.THUYSTALK_COURSES = [
       en: "Build an AI QC Assistant to cross-verify Invoice, Packing List, and B/L fields and query customs regulations in seconds."
     },
     deliverable: {
-      vi: "Tài liệu gửi qua Email: Bộ Prompt chuẩn rà soát bộ chứng từ XNK + Sơ đồ kiến trúc AI Document QC Agent.",
-      en: "Emailed Resource Kit: Trade Document QC Prompt Library + AI Document Verification Architecture Blueprint."
+      vi: "Tài liệu đính kèm: Bộ Prompt chuẩn rà soát bộ chứng từ XNK + Sơ đồ kiến trúc AI Document QC Agent.",
+      en: "Attached Resource Kit: Trade Document QC Prompt Library + AI Document Verification Architecture Blueprint."
     },
     lessons: [
       {

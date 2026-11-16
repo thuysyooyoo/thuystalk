@@ -1450,6 +1450,7 @@
         const metaText = typeof c.meta === "object" ? c.meta[state.lang] || c.meta.vi : c.meta;
         const badgeText = typeof c.badge === "object" ? c.badge[state.lang] || c.badge.vi : c.badge;
         const delivText = typeof c.deliverable === "object" ? c.deliverable[state.lang] || c.deliverable.vi : c.deliverable;
+        const cAtts = getPublicAttachments(c);
 
         return `
         <article class="course-card">
@@ -1478,14 +1479,22 @@
                 <div class="course-progress-fill" style="width: ${pct}%"></div>
               </div>
             </div>
-            <div class="course-actions">
-              <button type="button" class="btn btn-primary btn-sm open-course-btn" data-course="${escapeHtml(c.id)}">
-                ${t.elearning.btnStartCourse}
-              </button>
-              <button type="button" class="btn btn-outline-orange btn-sm send-kit-btn" data-course="${escapeHtml(c.id)}">
-                ${t.elearning.btnSendMaterial}
-              </button>
-            </div>
+            ${
+              cAtts.length > 0
+                ? `<div class="course-actions">
+                    <button type="button" class="btn btn-primary btn-sm open-course-btn" data-course="${escapeHtml(c.id)}">
+                      ${t.elearning.btnStartCourse}
+                    </button>
+                    <button type="button" class="btn btn-outline-orange btn-sm send-kit-btn" data-course="${escapeHtml(c.id)}">
+                      ${state.lang === "en" ? "Download: " : "Tải: "}${escapeHtml(cAtts[0].name)}${cAtts.length > 1 ? ` (+${cAtts.length - 1})` : ""}
+                    </button>
+                  </div>`
+                : `<div class="course-actions">
+                    <button type="button" class="btn btn-primary btn-sm open-course-btn" data-course="${escapeHtml(c.id)}">
+                      ${t.elearning.btnStartCourse}
+                    </button>
+                  </div>`
+            }
           </div>
         </article>`;
       })
@@ -1629,6 +1638,16 @@
       </div>`
       : "";
 
+    const cAtts = getPublicAttachments(course);
+    const courseAttButtonsHtml = cAtts
+      .map(
+        (att, idx) => `
+          <button type="button" class="btn btn-primary btn-sm course-att-download-btn" data-course-att-idx="${idx}">
+            ${state.lang === "en" ? "Download: " : "Tải: "}${escapeHtml(att.name)}
+          </button>`
+      )
+      .join("");
+
     const bodyEl = document.getElementById("classroomModalBody");
     bodyEl.innerHTML = `
       <div class="filter-tabs" style="margin-bottom:20px;">${lessonTabs}</div>
@@ -1650,8 +1669,8 @@
                   ? `Đang lưu tiến độ cho: ${escapeHtml(state.learnerEmail)}`
                   : `Saving progress for: ${escapeHtml(state.learnerEmail)}`
                 : state.lang === "vi"
-                ? "Bấm hoàn thành hoặc nhập Email để nhận trọn bộ biểu mẫu."
-                : "Mark complete or enter your Email to receive the templates."
+                ? "Đăng nhập để lưu tiến độ học tập" + (cAtts.length ? " và tải các tài liệu đính kèm." : ".")
+                : "Sign in to save learning progress" + (cAtts.length ? " and download attached files." : ".")
             }
           </span>
         </div>
@@ -1667,9 +1686,7 @@
                 : "Mark Complete & Save Progress"
             }
           </button>
-          <button type="button" class="btn btn-primary btn-sm" id="modalSendKitBtn">
-            ${state.lang === "vi" ? "Tải bộ tài liệu & Checklist" : "Download Kit & Checklist"}
-          </button>
+          ${courseAttButtonsHtml}
         </div>
       </div>`;
 
@@ -1726,8 +1743,11 @@
       );
     });
 
-    document.getElementById("modalSendKitBtn").addEventListener("click", () => {
-      handleSendCourseKit(course.id);
+    bodyEl.querySelectorAll(".course-att-download-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.courseAttIdx, 10) || 0;
+        handleSendCourseKit(course.id, idx);
+      });
     });
   }
 
@@ -1761,20 +1781,110 @@
     writeStorageJson(localStorage, STORAGE_KEYS.DOWNLOAD_DEDUP, map);
   }
 
-  function showManualDownloadBanner(fileName, performDownload) {
+  function parseGoogleDriveUrl(rawUrl) {
+    const raw = normalizeUrlForCheck(rawUrl);
+    if (!raw) return { ok: false, error: "Chưa nhập link Google Drive." };
+    let parsed;
+    try {
+      parsed = new URL(raw);
+    } catch (e) {
+      return { ok: false, error: "Định dạng đường dẫn URL không hợp lệ." };
+    }
+    if (parsed.protocol !== "https:") {
+      return { ok: false, error: "Link tài liệu bắt buộc phải sử dụng giao thức https://." };
+    }
+    const host = String(parsed.hostname || "").toLowerCase();
+    const path = parsed.pathname || "";
+    let fileId = "";
+    let kind = "drive";
+
+    if (host === "drive.google.com") {
+      const mFile = path.match(/^\/file\/d\/([A-Za-z0-9_-]{20,})(?:\/|$)/);
+      if (mFile) {
+        fileId = mFile[1];
+        kind = "drive";
+      } else if (path === "/open" || path === "/uc") {
+        const idParam = parsed.searchParams.get("id") || "";
+        if (/^[A-Za-z0-9_-]{20,}$/.test(idParam)) {
+          fileId = idParam;
+          kind = "drive";
+        }
+      }
+    } else if (host === "docs.google.com") {
+      const mDoc = path.match(/^\/document\/d\/([A-Za-z0-9_-]{20,})(?:\/|$)/);
+      const mSheet = path.match(/^\/spreadsheets\/d\/([A-Za-z0-9_-]{20,})(?:\/|$)/);
+      const mSlide = path.match(/^\/presentation\/d\/([A-Za-z0-9_-]{20,})(?:\/|$)/);
+      if (mDoc) {
+        fileId = mDoc[1];
+        kind = "gdoc";
+      } else if (mSheet) {
+        fileId = mSheet[1];
+        kind = "gsheet";
+      } else if (mSlide) {
+        fileId = mSlide[1];
+        kind = "gslide";
+      }
+    }
+
+    if (!/^[A-Za-z0-9_-]{20,}$/.test(fileId)) {
+      return {
+        ok: false,
+        error: "Link không thuộc định dạng Google Drive/Docs/Sheets/Slides hợp lệ (cần ID >= 20 ký tự)."
+      };
+    }
+    return {
+      ok: true,
+      fileId,
+      kind,
+      canonicalUrl: buildGoogleDriveSharePreviewUrl(fileId, kind)
+    };
+  }
+
+  function buildGoogleDriveSharePreviewUrl(fileId, kind = "drive") {
+    const cleanId = String(fileId || "").trim();
+    if (!/^[A-Za-z0-9_-]{20,}$/.test(cleanId)) return "";
+    if (kind === "gdoc") return `https://docs.google.com/document/d/${cleanId}/edit`;
+    if (kind === "gsheet") return `https://docs.google.com/spreadsheets/d/${cleanId}/edit`;
+    if (kind === "gslide") return `https://docs.google.com/presentation/d/${cleanId}/edit`;
+    return `https://drive.google.com/file/d/${cleanId}/view`;
+  }
+
+  function buildGoogleDriveDownloadUrl(fileId, kind = "drive") {
+    const cleanId = String(fileId || "").trim();
+    if (!/^[A-Za-z0-9_-]{20,}$/.test(cleanId)) return "";
+    if (kind === "gdoc") return `https://docs.google.com/document/d/${cleanId}/export?format=docx`;
+    if (kind === "gsheet") return `https://docs.google.com/spreadsheets/d/${cleanId}/export?format=xlsx`;
+    if (kind === "gslide") return `https://docs.google.com/presentation/d/${cleanId}/export?format=pptx`;
+    return `https://drive.google.com/uc?export=download&id=${cleanId}`;
+  }
+
+  function getPublicAttachments(item) {
+    if (!item || !Array.isArray(item.attachments)) return [];
+    return item.attachments
+      .filter((a) => a && typeof a.name === "string" && a.name.trim().length > 0)
+      .slice(0, 5)
+      .map((a) => ({
+        name: a.name.trim(),
+        kind: ["drive", "gdoc", "gsheet", "gslide"].includes(a.kind) ? a.kind : "drive"
+      }));
+  }
+
+  function showManualDownloadBanner(fileName, downloadUrl) {
     const prev = document.getElementById("manualDownloadFallbackBar");
     if (prev) prev.remove();
+    const safeHref = sanitizeSafeHref(downloadUrl, false);
+    if (!safeHref) return;
     const bar = document.createElement("div");
     bar.id = "manualDownloadFallbackBar";
     bar.style.cssText =
-      "position:fixed;right:20px;bottom:76px;z-index:9998;max-width:360px;background:#064E3B;color:#FFFFFF;border:1.5px solid #34D399;border-radius:12px;padding:12px 14px;box-shadow:0 16px 36px rgba(0,0,0,0.28);display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:0.83rem;";
+      "position:fixed;right:20px;bottom:76px;z-index:9998;max-width:380px;background:#064E3B;color:#FFFFFF;border:1.5px solid #34D399;border-radius:12px;padding:12px 14px;box-shadow:0 16px 36px rgba(0,0,0,0.28);display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:0.83rem;";
     bar.innerHTML = `
       <div style="min-width:0;">
         <div style="font-weight:800;color:#ECFDF5;">Sẵn sàng tải tài liệu</div>
-        <div style="font-size:0.78rem;color:#D1FAE5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(fileName || "Tai lieu ThuysTalk")}</div>
+        <div style="font-size:0.78rem;color:#D1FAE5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(fileName || "Tài liệu đính kèm")}</div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-        <button type="button" id="manualDownloadNowBtn" class="btn btn-primary btn-xs" style="background:#F59E0B;border-color:#F59E0B;color:#0F172A;font-weight:800;">Tải ngay</button>
+        <a href="${escapeHtml(safeHref)}" target="_blank" rel="noopener noreferrer" id="manualDownloadNowBtn" class="btn btn-primary btn-xs" style="background:#F59E0B;border-color:#F59E0B;color:#0F172A;font-weight:800;text-decoration:none;">Mở link tải</a>
         <button type="button" id="manualDownloadCloseBtn" aria-label="Đóng" style="border:none;background:transparent;color:#D1FAE5;font-size:1.1rem;cursor:pointer;padding:2px 4px;">&times;</button>
       </div>
     `;
@@ -1783,11 +1893,9 @@
     const closeBtn = bar.querySelector("#manualDownloadCloseBtn");
     if (nowBtn) {
       nowBtn.addEventListener("click", () => {
-        try {
-          if (typeof performDownload === "function") performDownload();
-        } finally {
-          bar.remove();
-        }
+        setTimeout(() => {
+          if (bar.parentNode) bar.remove();
+        }, 300);
       });
     }
     if (closeBtn) closeBtn.addEventListener("click", () => bar.remove());
@@ -1796,16 +1904,38 @@
     }, 15000);
   }
 
-  function executeVerifiedMaterialDownload(user, meta, performDownload, fromAsyncFlow) {
+  async function executeVerifiedMaterialDownload(user, meta, fromAsyncFlow) {
     const activeUser =
       user ||
       (window.ThuysTalkFirebase && window.ThuysTalkFirebase.getCurrentUser
         ? window.ThuysTalkFirebase.getCurrentUser()
         : null);
     const uid = (activeUser && activeUser.uid) || state.learnerUid || "";
-    const dedupKey = buildDownloadDedupKey(uid, meta.itemType, meta.itemId, meta.fileName);
 
-    if (shouldRecordDownloadLeadNow(uid, meta.itemType, meta.itemId, meta.fileName)) {
+    let links = null;
+    if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchDocLinks === "function") {
+      links = await window.ThuysTalkFirebase.fetchDocLinks(meta.itemType, meta.itemId);
+    }
+
+    const attIdx = Number.isInteger(meta.attachmentIndex) ? meta.attachmentIndex : 0;
+    const chosen =
+      Array.isArray(links) && links.length > 0
+        ? links[attIdx] || links.find((x) => x && x.name === meta.fileName) || links[0]
+        : null;
+
+    const downloadUrl =
+      chosen && chosen.fileId
+        ? buildGoogleDriveDownloadUrl(chosen.fileId, chosen.kind || "drive")
+        : "";
+    if (!downloadUrl) {
+      showToast("Không tìm thấy đường link tải tài liệu hợp lệ (hoặc tài liệu chưa được chia sẻ công khai trên Drive).");
+      return;
+    }
+
+    const finalFileName = (chosen && chosen.name) || meta.fileName || "Tai_Lieu_Dinh_Kem";
+    const dedupKey = buildDownloadDedupKey(uid, meta.itemType, meta.itemId, finalFileName);
+
+    if (shouldRecordDownloadLeadNow(uid, meta.itemType, meta.itemId, finalFileName)) {
       inFlightDownloadKeys.add(dedupKey);
       if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.recordDownloadLead === "function") {
         window.ThuysTalkFirebase
@@ -1814,10 +1944,10 @@
             itemType: meta.itemType,
             itemId: meta.itemId,
             itemTitle: meta.itemTitle,
-            fileName: meta.fileName
+            fileName: finalFileName
           })
           .then((saved) => {
-            if (saved) markDownloadLeadRecorded(uid, meta.itemType, meta.itemId, meta.fileName);
+            if (saved) markDownloadLeadRecorded(uid, meta.itemType, meta.itemId, finalFileName);
           })
           .catch(() => {})
           .finally(() => {
@@ -1828,16 +1958,11 @@
       }
     }
 
-    let downloadSucceeded = false;
-    try {
-      if (typeof performDownload === "function") performDownload();
-      downloadSucceeded = true;
-    } catch (e) {
-      downloadSucceeded = false;
+    const opened = window.open(downloadUrl, "_blank", "noopener,noreferrer");
+    if (fromAsyncFlow || !opened) {
+      showManualDownloadBanner(finalFileName, downloadUrl);
     }
-    if (fromAsyncFlow || !downloadSucceeded) {
-      showManualDownloadBanner(meta.fileName, performDownload);
-    }
+    showToast(`Đang mở tải xuống: ${finalFileName}`);
   }
 
   function triggerGatedMaterialDownload(meta) {
@@ -1848,7 +1973,7 @@
     const isVerifiedLoggedIn = !!(fbUser && fbUser.emailVerified === true && state.learnerUid && state.learnerEmail);
 
     if (isVerifiedLoggedIn) {
-      executeVerifiedMaterialDownload(fbUser, meta, meta.performDownload, false);
+      executeVerifiedMaterialDownload(fbUser, meta, false);
       return;
     }
 
@@ -1857,20 +1982,23 @@
       pendingAction: {
         type: "download",
         itemType: meta.itemType,
-        itemId: meta.itemId
+        itemId: meta.itemId,
+        attachmentIndex: Number.isInteger(meta.attachmentIndex) ? meta.attachmentIndex : 0
       },
       onSuccess: (loggedUser) => {
         setSessionFlag(STORAGE_KEYS.PENDING_ACTION, "");
-        executeVerifiedMaterialDownload(loggedUser, meta, meta.performDownload, true);
+        executeVerifiedMaterialDownload(loggedUser, meta, true);
       }
     });
   }
 
   window.__thuystalkResumePendingAction = function (pendingAct, user) {
     if (!pendingAct || pendingAct.type !== "download") return;
+    const attIdx = Number.isInteger(pendingAct.attachmentIndex) ? pendingAct.attachmentIndex : 0;
     if (pendingAct.itemType === "course") {
       const course = state.courses.find((c) => c.id === pendingAct.itemId);
       if (course) {
+        const atts = getPublicAttachments(course);
         const cTitleVi = typeof course.title === "object" ? course.title.vi : course.title;
         executeVerifiedMaterialDownload(
           user,
@@ -1878,15 +2006,16 @@
             itemType: "course",
             itemId: course.id,
             itemTitle: cTitleVi,
-            fileName: `ThuysTalk_Tai_Lieu_${course.id}.txt`
+            attachmentIndex: attIdx,
+            fileName: (atts[attIdx] && atts[attIdx].name) || cTitleVi
           },
-          () => triggerChecklistDownload(course),
           true
         );
       }
     } else if (pendingAct.itemType === "video") {
       const video = state.videos.find((v) => v.id === pendingAct.itemId);
       if (video) {
+        const atts = getPublicAttachments(video);
         const vTitleVi = typeof video.title === "object" ? video.title.vi : video.title;
         executeVerifiedMaterialDownload(
           user,
@@ -1894,15 +2023,16 @@
             itemType: "video",
             itemId: video.id,
             itemTitle: vTitleVi,
-            fileName: `ThuysTalk_Checklist_${video.id || "video"}.txt`
+            attachmentIndex: attIdx,
+            fileName: (atts[attIdx] && atts[attIdx].name) || vTitleVi
           },
-          () => downloadVideoChecklist(video),
           true
         );
       }
     } else if (pendingAct.itemType === "article") {
       const art = state.articles.find((a) => a.id === pendingAct.itemId);
       if (art) {
+        const atts = getPublicAttachments(art);
         const aTitleVi = typeof art.title === "object" ? art.title.vi : art.title;
         executeVerifiedMaterialDownload(
           user,
@@ -1910,68 +2040,29 @@
             itemType: "article",
             itemId: art.id,
             itemTitle: aTitleVi,
-            fileName: `ThuysTalk_Tai_Lieu_${art.id || "article"}.txt`
+            attachmentIndex: attIdx,
+            fileName: (atts[attIdx] && atts[attIdx].name) || aTitleVi
           },
-          () => downloadArticleTemplate(art),
           true
         );
       }
     }
   };
 
-  function handleSendCourseKit(courseId) {
-    const course = state.courses.find((c) => c.id === courseId) || state.courses[0];
+  function handleSendCourseKit(courseId, attachmentIndex = 0) {
+    const course = state.courses.find((c) => c.id === courseId);
     if (!course) return;
+    const atts = getPublicAttachments(course);
+    if (!atts.length) return;
+    const idx = Math.max(0, Math.min(atts.length - 1, Number(attachmentIndex) || 0));
     const cTitleVi = typeof course.title === "object" ? course.title.vi : course.title;
     triggerGatedMaterialDownload({
       itemType: "course",
       itemId: course.id,
       itemTitle: cTitleVi,
-      fileName: `ThuysTalk_Tai_Lieu_${course.id}.txt`,
-      performDownload: () => {
-        triggerChecklistDownload(course);
-        showToast(
-          state.lang === "vi"
-            ? "Đang tải bộ tài liệu & Checklist chuyên đề về máy..."
-            : "Downloading course resource kit & checklist..."
-        );
-      }
+      attachmentIndex: idx,
+      fileName: atts[idx].name
     });
-  }
-
-  function triggerChecklistDownload(course) {
-    const cTitleVi = typeof course.title === "object" ? course.title.vi : course.title;
-    const cDelivVi = typeof course.deliverable === "object" ? course.deliverable.vi : course.deliverable;
-    const content = [
-      "====================================================================",
-      "THUYSTALK E-LEARNING RESOURCE KIT & MINI-TEST WORKBOOK",
-      "Chuyên gia: Nguyễn Thị Ngọc Thúy (9+ Năm Kinh Nghiệm Thực Tế XNK, Hải Quan & AI)",
-      "====================================================================",
-      "",
-      "CHUYÊN ĐỀ & TÀI LIỆU: " + cTitleVi,
-      cDelivVi,
-      "",
-      "--- TÓM TẮT NỘI DUNG & BỘ MINI TEST ---",
-      ...(course.lessons || []).map((l, idx) => {
-        const lt = typeof l.title === "object" ? l.title.vi : l.title;
-        const ls = typeof l.summary === "object" ? l.summary.vi : l.summary;
-        return `\n[${idx + 1}] ${lt}\n- Tóm tắt: ${ls}`;
-      }),
-      "",
-      "--------------------------------------------------------------------",
-      "Liên hệ tư vấn chuyên sâu 1-1: https://thuystalk.netlify.app/#tu-van",
-      "Email: tthuyn@erktransport.com | Zalo: 0767.648.862"
-    ].join("\r\n");
-
-    const blob = new Blob(["\uFEFF" + content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `ThuysTalk_Tai_Lieu_${course.id}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   }
 
   // ==========================================================================
@@ -2191,6 +2282,24 @@
     const vTitle = typeof video.title === "object" ? video.title[state.lang] || video.title.vi : video.title;
     const vCmLabel = getVideoCategoryLabel(video.cm, video.cmLabel, state.lang);
     const vScript = typeof video.script === "object" ? video.script[state.lang] || video.script.vi : video.script;
+    const vAtts = getPublicAttachments(video);
+    const vidAttBoxHtml = vAtts.length
+      ? `<div class="material-lead-box" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+          <div>
+            <strong>${state.lang === "vi" ? "Tài liệu đính kèm từ video:" : "Attached materials from this video:"}</strong>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            ${vAtts
+              .map(
+                (att, idx) => `
+              <button type="button" class="btn btn-primary btn-sm video-att-download-btn" data-vid-att-idx="${idx}">
+                ${state.lang === "en" ? "Download: " : "Tải: "}${escapeHtml(att.name)}
+              </button>`
+              )
+              .join("")}
+          </div>
+        </div>`
+      : "";
 
     document.getElementById("articleModalTitle").textContent = vCmLabel + " · @thuystalk";
     document.getElementById("articleModalBody").innerHTML = `
@@ -2200,100 +2309,24 @@
         <hr style="border:none; border-top:1px solid var(--ink-200); margin:16px 0;" />
         ${sanitizeRichHtml(vScript)}
       </div>
-      <div class="material-lead-box" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
-        <div>
-          <strong>${state.lang === "vi" ? "Bạn muốn tải bộ Checklist hành động từ video này về máy?" : "Want the actionable checklist from this video downloaded to your device?"}</strong>
-        </div>
-        <button type="button" class="btn btn-primary btn-sm" id="videoRequestChecklistBtn">
-          ${state.lang === "vi" ? "Tải Checklist video (.txt)" : "Download Video Checklist (.txt)"}
-        </button>
-      </div>`;
+      ${vidAttBoxHtml}`;
 
-    document.getElementById("videoRequestChecklistBtn").addEventListener("click", () => {
-      const vTitleVi = typeof video.title === "object" ? video.title.vi : video.title;
-      triggerGatedMaterialDownload({
-        itemType: "video",
-        itemId: video.id || "video",
-        itemTitle: vTitleVi,
-        fileName: `ThuysTalk_Checklist_${video.id || "video"}.txt`,
-        performDownload: () => downloadVideoChecklist(video)
+    document.getElementById("articleModalBody").querySelectorAll(".video-att-download-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.vidAttIdx, 10) || 0;
+        const vTitleVi = typeof video.title === "object" ? video.title.vi : video.title;
+        triggerGatedMaterialDownload({
+          itemType: "video",
+          itemId: video.id || "video",
+          itemTitle: vTitleVi,
+          attachmentIndex: idx,
+          fileName: (vAtts[idx] && vAtts[idx].name) || vTitleVi
+        });
       });
     });
 
     hydrateMediaImages(document.getElementById("articleModalBody"));
     document.getElementById("articleModal").classList.add("open");
-  }
-
-  function downloadVideoChecklist(video) {
-    const vTitle = typeof video.title === "object" ? video.title[state.lang] || video.title.vi : video.title;
-    const vCmLabel = getVideoCategoryLabel(video.cm, video.cmLabel, state.lang);
-    const vScript = typeof video.script === "object" ? video.script[state.lang] || video.script.vi : video.script;
-
-    const content = [
-      "====================================================================",
-      "THUYSTALK - CHECKLIST HÀNH ĐỘNG TỪ VIDEO",
-      "Chuyên mục: " + vCmLabel,
-      "Tiêu đề: " + vTitle,
-      "Thời lượng: " + (video.duration || "08:00") + " | Ngày đăng: " + (video.date || "11/2026"),
-      "Chia sẻ bởi: Nguyễn Thị Ngọc Thúy · Sáng lập ThuysTalk & Giám đốc Eureka Logistics",
-      "====================================================================",
-      "",
-      "NỘI DUNG KỊCH BẢN & CHECKLIST CHI TIẾT:",
-      String(vScript || "").replace(/<[^>]*>/g, "\n").replace(/\n{3,}/g, "\n\n").trim(),
-      "",
-      "--------------------------------------------------------------------",
-      "Hotline tư vấn chuyên sâu / Zalo: 0767.648.862 | Website: ThuysTalk",
-      "Email: tthuyn@erktransport.com | Zalo: 0767.648.862"
-    ].join("\r\n");
-
-    const blob = new Blob(["\uFEFF" + content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `ThuysTalk_Checklist_${video.id || "video"}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast("Đang tải Checklist video về máy...");
-  }
-
-  function downloadArticleTemplate(art) {
-    const aTitle = typeof art.title === "object" ? art.title[state.lang] || art.title.vi : art.title;
-    const aPillar = typeof art.pillarLabel === "object" ? art.pillarLabel[state.lang] || art.pillarLabel.vi : art.pillar;
-    const aBody = typeof art.body === "object" ? art.body[state.lang] || art.body.vi : art.body;
-    const aExcerpt = typeof art.excerpt === "object" ? art.excerpt[state.lang] || art.excerpt.vi : art.excerpt;
-
-    const content = [
-      "====================================================================",
-      "THUYSTALK - BIỂU MẪU & CÔNG VĂN TRÍCH DẪN BÀI VIẾT",
-      "Chuyên mục: " + aPillar,
-      "Tiêu đề: " + aTitle,
-      "Tác giả: Nguyễn Thị Ngọc Thúy · Sáng lập ThuysTalk & Giám đốc Eureka Logistics",
-      "Ngày đăng: " + (art.date || "11/2026"),
-      "====================================================================",
-      "",
-      "TÓM TẮT NỘI DUNG:",
-      String(aExcerpt || "").trim(),
-      "",
-      "TOÀN VĂN NỘI DUNG BÀI VIẾT & HƯỚNG DẪN ÁP DỤNG:",
-      String(aBody || "").replace(/<[^>]*>/g, "\n").replace(/\n{3,}/g, "\n\n").trim(),
-      "",
-      "--------------------------------------------------------------------",
-      "Hotline tư vấn chuyên sâu / Zalo: 0767.648.862 | Website: ThuysTalk",
-      "Email: tthuyn@erktransport.com | Zalo: 0767.648.862"
-    ].join("\r\n");
-
-    const blob = new Blob(["\uFEFF" + content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `ThuysTalk_Tai_Lieu_${art.id || "article"}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast("Đang tải biểu mẫu & công văn về máy...");
   }
 
   // ==========================================================================
@@ -2401,6 +2434,15 @@
     const aPillar = typeof art.pillarLabel === "object" ? art.pillarLabel[state.lang] || art.pillarLabel.vi : art.pillar;
     const aRead = typeof art.readTime === "object" ? art.readTime[state.lang] || art.readTime.vi : art.readTime || "5 phút đọc";
     const aBody = typeof art.body === "object" ? art.body[state.lang] || art.body.vi : art.body;
+    const aAtts = getPublicAttachments(art);
+    const artAttButtonsHtml = aAtts
+      .map(
+        (att, idx) => `
+          <button type="button" class="btn btn-primary btn-sm article-att-download-btn" data-art-att-idx="${idx}">
+            ${state.lang === "en" ? "Download: " : "Tải: "}${escapeHtml(att.name)}
+          </button>`
+      )
+      .join("");
 
     document.getElementById("articleModalTitle").textContent = aPillar + " · " + (art.date || "");
     document.getElementById("articleModalBody").innerHTML = `
@@ -2415,30 +2457,39 @@
       <div class="material-lead-box" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;">
         <div>
           <strong style="color:var(--jade-900); display:block;">
-            ${state.lang === "vi" ? "Tải biểu mẫu & công văn trích dẫn trong bài viết về máy" : "Download official templates & regulatory files cited in this article"}
+            ${
+              aAtts.length
+                ? state.lang === "vi"
+                  ? "Tải biểu mẫu & công văn đính kèm"
+                  : "Download attached templates & official documents"
+                : state.lang === "vi"
+                ? "Cần tư vấn tình huống thực tế của doanh nghiệp bạn?"
+                : "Need 1-on-1 advisory for your company's specific case?"
+            }
           </strong>
           <span style="font-size:0.82rem; color:var(--ink-600);">
-            ${state.lang === "vi" ? "Hoặc đặt câu hỏi tư vấn trực tiếp cho tình huống của doanh nghiệp bạn." : "Or book a 1-on-1 consultation for your company's specific case."}
+            ${state.lang === "vi" ? "Đặt câu hỏi tư vấn trực tiếp cho tình huống của doanh nghiệp bạn." : "Book a 1-on-1 consultation for your company's specific case."}
           </span>
         </div>
-        <div style="display:flex; gap:10px;">
-          <button type="button" class="btn btn-primary btn-sm" id="artSendTemplateBtn">
-            ${state.lang === "vi" ? "Tải Biểu mẫu & Công văn (.txt)" : "Download Template (.txt)"}
-          </button>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          ${artAttButtonsHtml}
           <a href="#tu-van" class="btn btn-outline btn-sm" id="artGoConsultBtn">
             ${state.lang === "vi" ? "Đăng ký tư vấn" : "Book Advisory"}
           </a>
         </div>
       </div>`;
 
-    document.getElementById("artSendTemplateBtn").addEventListener("click", () => {
-      const aTitleVi = typeof art.title === "object" ? art.title.vi : art.title;
-      triggerGatedMaterialDownload({
-        itemType: "article",
-        itemId: art.id || "article",
-        itemTitle: aTitleVi,
-        fileName: `ThuysTalk_Tai_Lieu_${art.id || "article"}.txt`,
-        performDownload: () => downloadArticleTemplate(art)
+    document.getElementById("articleModalBody").querySelectorAll(".article-att-download-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = parseInt(btn.dataset.artAttIdx, 10) || 0;
+        const aTitleVi = typeof art.title === "object" ? art.title.vi : art.title;
+        triggerGatedMaterialDownload({
+          itemType: "article",
+          itemId: art.id || "article",
+          itemTitle: aTitleVi,
+          attachmentIndex: idx,
+          fileName: (aAtts[idx] && aAtts[idx].name) || aTitleVi
+        });
       });
     });
     document.getElementById("artGoConsultBtn").addEventListener("click", () => {
@@ -6082,6 +6133,141 @@
 
 
   // --- TAB 2: WRITE & MANAGE ARTICLES ---
+  function renderAttachmentsEditorMarkup(containerId, title = "Tài liệu tải về (Google Drive / Docs / Sheets / Slides · Tối đa 5 file)") {
+    return `
+      <div class="cms-attachments-box" id="${escapeHtml(containerId)}" style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:12px; padding:12px 14px; margin:12px 0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:6px;">
+          <strong style="font-size:0.86rem; color:var(--jade-900);">${escapeHtml(title)}</strong>
+          <button type="button" class="btn btn-outline btn-xs cms-att-add-btn" style="padding:4px 10px; font-size:0.76rem;">+ Thêm dòng tài liệu (tối đa 5)</button>
+        </div>
+        <p style="font-size:0.76rem; color:var(--ink-600); margin:0 0 10px; line-height:1.45;">
+          Hướng dẫn Google Drive: Bấm <strong>Chia sẻ (Share)</strong> -&gt; Quyền truy cập chung: <strong>Bất kỳ ai có đường liên kết (Anyone with the link)</strong> · <strong>Người xem (Viewer)</strong>, rồi dán link <code>drive.google.com/file/d/...</code> hoặc <code>docs.google.com/...</code> vào ô Link. Để trống hết nếu mục này không có file tải về (nút tải sẽ tự ẩn trên web).
+        </p>
+        <div class="cms-att-rows" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
+    `;
+  }
+
+  function initAttachmentsEditor(containerEl) {
+    if (!containerEl) return null;
+    const rowsWrap = containerEl.querySelector(".cms-att-rows");
+    const addBtn = containerEl.querySelector(".cms-att-add-btn");
+    let rowsData = [];
+
+    function renderRows() {
+      if (!rowsWrap) return;
+      if (!rowsData.length) {
+        rowsWrap.innerHTML = `<div style="font-size:0.78rem; color:var(--ink-500); padding:4px 0;">Chưa gắn tài liệu tải về. Bấm "+ Thêm dòng tài liệu" nếu muốn đính kèm file Google Drive.</div>`;
+        if (addBtn) addBtn.disabled = false;
+        return;
+      }
+      rowsWrap.innerHTML = rowsData
+        .map(
+          (row, idx) => `
+          <div class="cms-att-row" data-att-idx="${idx}" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <input type="text" class="form-control cms-att-name" value="${escapeHtml(row.name || "")}" placeholder="Tên hiển thị (VD: Checklist C/O Form E.pdf)" style="flex:1; min-width:190px; background:#fff;" />
+            <input type="url" class="form-control cms-att-url" value="${escapeHtml(row.url || "")}" placeholder="https://drive.google.com/file/d/..." style="flex:1.5; min-width:240px; background:#fff;" />
+            <button type="button" class="btn btn-danger btn-xs cms-att-del-btn" data-att-del="${idx}" style="padding:6px 10px; font-size:0.75rem;">Xóa</button>
+          </div>`
+        )
+        .join("");
+
+      rowsWrap.querySelectorAll(".cms-att-del-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          syncDomToMemory();
+          const idx = parseInt(btn.dataset.attDel, 10);
+          if (!isNaN(idx)) {
+            rowsData.splice(idx, 1);
+            renderRows();
+          }
+        });
+      });
+
+      if (addBtn) addBtn.disabled = rowsData.length >= 5;
+    }
+
+    function syncDomToMemory() {
+      if (!rowsWrap) return;
+      const domRows = rowsWrap.querySelectorAll(".cms-att-row");
+      if (!domRows.length) return;
+      rowsData = Array.from(domRows).map((r) => ({
+        name: r.querySelector(".cms-att-name").value,
+        url: r.querySelector(".cms-att-url").value
+      }));
+    }
+
+    if (addBtn) {
+      addBtn.addEventListener("click", () => {
+        syncDomToMemory();
+        if (rowsData.length >= 5) {
+          showToast("Mỗi mục chỉ hỗ trợ tối đa 5 tài liệu đính kèm.");
+          return;
+        }
+        rowsData.push({ name: "", url: "" });
+        renderRows();
+      });
+    }
+
+    renderRows();
+
+    return {
+      setItems: (items = []) => {
+        rowsData = Array.isArray(items)
+          ? items.slice(0, 5).map((it) => ({
+              name: (it && it.name) || "",
+              url:
+                (it && it.url) ||
+                (it && it.fileId ? buildGoogleDriveSharePreviewUrl(it.fileId, it.kind || "drive") : "")
+            }))
+          : [];
+        renderRows();
+      },
+      clear: () => {
+        rowsData = [];
+        renderRows();
+      },
+      validateAndCollect: () => {
+        syncDomToMemory();
+        const publicAttachments = [];
+        const secureLinks = [];
+        for (let i = 0; i < rowsData.length; i++) {
+          const name = String(rowsData[i].name || "").trim();
+          const url = String(rowsData[i].url || "").trim();
+          if (!name && !url) continue;
+          if (!name) {
+            return { ok: false, error: `Dòng tài liệu số ${i + 1}: Vui lòng nhập Tên hiển thị.` };
+          }
+          const parsed = parseGoogleDriveUrl(url);
+          if (!parsed.ok) {
+            return { ok: false, error: `Dòng tài liệu "${name}": ${parsed.error}` };
+          }
+          publicAttachments.push({ name, kind: parsed.kind });
+          secureLinks.push({ name, fileId: parsed.fileId, kind: parsed.kind });
+        }
+        return { ok: true, publicAttachments, secureLinks };
+      }
+    };
+  }
+
+  async function persistCmsDocLinks(itemType, itemId, attResult, hadExisting = false) {
+    if (!window.ThuysTalkFirebase || !window.ThuysTalkFirebase.isReady()) {
+      return true;
+    }
+    if (!attResult.secureLinks.length && !hadExisting) {
+      return true;
+    }
+    const ok = await window.ThuysTalkFirebase.saveDocLinks(itemType, itemId, attResult.secureLinks);
+    if (!ok) {
+      const errDetail =
+        typeof window.ThuysTalkFirebase.getLastError === "function"
+          ? window.ThuysTalkFirebase.getLastError()
+          : "";
+      showToast("Lỗi lưu danh sách link tải lên Cloud Firestore (doc_links): " + (errDetail || "Vui lòng kiểm tra quyền Quản trị viên."));
+      return false;
+    }
+    return true;
+  }
+
   function renderAdminArticlesTab(body) {
     let editingArtId = null;
 
@@ -6151,6 +6337,7 @@
             <label>Nội dung toàn văn bài viết (Gõ trực tiếp kiểu Word, căn lề, chèn bảng, ảnh nén hoặc link YouTube) *</label>
             ${renderWordEditorMarkup("cmsArtEditor", "Nhập nội dung bài viết trực tiếp tại đây như trong Word, căn lề, bôi màu và chèn ảnh dễ dàng...")}
           </div>
+          ${renderAttachmentsEditorMarkup("cmsArtAttachmentsEditor")}
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <button type="submit" class="btn btn-primary btn-sm" id="cmsArtSubmitBtn">
               Xuất bản bài viết ngay lên Web
@@ -6184,10 +6371,11 @@
     `;
 
     const artEditor = initWordEditor(body.querySelector(".word-editor-container"), "cmsArtEditor");
+    const artAttEditor = initAttachmentsEditor(document.getElementById("cmsArtAttachmentsEditor"));
 
     // Bind Edit Button
     body.querySelectorAll("[data-edit-art]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const id = btn.dataset.editArt;
         const target = state.articles.find((a) => a.id === id);
         if (!target) return;
@@ -6201,6 +6389,16 @@
 
         const bodyContent = typeof target.body === "object" ? (target.body.vi || target.body) : target.body;
         artEditor.setHtml(bodyContent);
+        if (artAttEditor) {
+          const publicAtts = getPublicAttachments(target);
+          artAttEditor.setItems(publicAtts);
+          if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady() && typeof window.ThuysTalkFirebase.fetchDocLinks === "function") {
+            const fetchedLinks = await window.ThuysTalkFirebase.fetchDocLinks("article", target.id);
+            if (Array.isArray(fetchedLinks) && fetchedLinks.length && editingArtId === target.id) {
+              artAttEditor.setItems(fetchedLinks);
+            }
+          }
+        }
 
         document.getElementById("cmsArtFormHeading").textContent = "Chỉnh Sửa Bài Viết: " + (typeof target.title === "object" ? target.title.vi : target.title);
         document.getElementById("cmsArtEditModeBadge").style.display = "inline-block";
@@ -6234,6 +6432,7 @@
       editingArtId = null;
       document.getElementById("cmsNewArticleForm").reset();
       artEditor.clear();
+      if (artAttEditor) artAttEditor.clear();
       document.getElementById("cmsArtFormHeading").textContent = "Soạn Bài Viết Chuyên Sâu Mới (Trình Soạn Thảo Kiểu Word Trực Quan)";
       document.getElementById("cmsArtEditModeBadge").style.display = "none";
       const submitBtn = document.getElementById("cmsArtSubmitBtn");
@@ -6244,7 +6443,7 @@
     });
 
     // Bind Form Submit (Create or Update)
-    document.getElementById("cmsNewArticleForm").addEventListener("submit", (e) => {
+    document.getElementById("cmsNewArticleForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const titleVi = document.getElementById("cmsArtTitleVi").value.trim();
       const titleEn = document.getElementById("cmsArtTitleEn").value.trim() || titleVi;
@@ -6258,6 +6457,12 @@
         return;
       }
 
+      const attRes = artAttEditor ? artAttEditor.validateAndCollect() : { ok: true, publicAttachments: [], secureLinks: [] };
+      if (!attRes.ok) {
+        showToast(attRes.error);
+        return;
+      }
+
       const pillarMap = {
         CS: { vi: "Case Study · Tình Huống Thực Tế", en: "Case Study · Practical" },
         TN: { vi: "Tin Ngành · Chính Sách", en: "Regulatory News" },
@@ -6267,6 +6472,10 @@
       if (editingArtId) {
         const art = state.articles.find((a) => a.id === editingArtId);
         if (art) {
+          const hadAtts = Array.isArray(art.attachments) && art.attachments.length > 0;
+          const linksOk = await persistCmsDocLinks("article", art.id, attRes, hadAtts);
+          if (!linksOk) return;
+
           const prevArtSnapshot = JSON.parse(JSON.stringify(art));
           art.title = { vi: titleVi, en: titleEn };
           art.pillar = pillar;
@@ -6274,18 +6483,18 @@
           art.photoSlot = photoSlot;
           art.excerpt = { vi: excerpt, en: excerpt };
           art.body = { vi: formattedBody, en: formattedBody };
+          art.attachments = attRes.publicAttachments;
           art.isDemo = false;
           art.updatedAt = new Date().toLocaleDateString("vi-VN");
-          persistCmsDoc("articles", art.id, art).then((savedOk) => {
-            if (!savedOk) {
-              Object.assign(art, prevArtSnapshot);
-              return;
-            }
-            saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
-            renderAll();
-            renderAdminStudioModal();
-            showToast("Đã cập nhật bài viết thành công!");
-          });
+          const savedOk = await persistCmsDoc("articles", art.id, art);
+          if (!savedOk) {
+            Object.assign(art, prevArtSnapshot);
+            return;
+          }
+          saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
+          renderAll();
+          renderAdminStudioModal();
+          showToast("Đã cập nhật bài viết thành công!");
         }
       } else {
         const newArt = {
@@ -6298,16 +6507,18 @@
           title: { vi: titleVi, en: titleEn },
           excerpt: { vi: excerpt, en: excerpt },
           body: { vi: formattedBody, en: formattedBody },
+          attachments: attRes.publicAttachments,
           isDemo: false
         };
-        persistCmsDoc("articles", newArt.id, newArt).then((savedOk) => {
-          if (!savedOk) return;
-          state.articles.unshift(newArt);
-          saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
-          renderAll();
-          renderAdminStudioModal();
-          showToast("Đã xuất bản bài viết mới lên trang chủ!");
-        });
+        const linksOk = await persistCmsDocLinks("article", newArt.id, attRes, false);
+        if (!linksOk) return;
+        const savedOk = await persistCmsDoc("articles", newArt.id, newArt);
+        if (!savedOk) return;
+        state.articles.unshift(newArt);
+        saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
+        renderAll();
+        renderAdminStudioModal();
+        showToast("Đã xuất bản bài viết mới lên trang chủ!");
       }
     });
 
@@ -6316,6 +6527,9 @@
         const id = btn.dataset.delArt;
         const ok = await removeCmsDoc("articles", id);
         if (!ok) return;
+        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady() && typeof window.ThuysTalkFirebase.deleteDocLinks === "function") {
+          window.ThuysTalkFirebase.deleteDocLinks("article", id);
+        }
         state.articles = state.articles.filter((a) => a.id !== id);
         saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
         renderAll();
@@ -6554,6 +6768,7 @@
               <label>Toàn văn kịch bản thuyết minh / Ghi chú tài liệu đi kèm video</label>
               <textarea id="cmsVidScript" class="form-control" rows="3" placeholder="Dán lời thoại thuyết minh hoặc tóm tắt các ý chính để độc giả đọc trực tiếp trên web..."></textarea>
             </div>
+            ${renderAttachmentsEditorMarkup("cmsVidAttachmentsEditor")}
             <div style="display:flex; gap:10px; align-items:center;">
               <button type="submit" class="btn btn-primary btn-sm" id="cmsVidSubmitBtn">
                 Lưu &amp; Nhúng Video Lên Trang Chủ Ngay
@@ -6688,6 +6903,7 @@
     const urlInp = document.getElementById("cmsVidUrl");
     const previewBox = document.getElementById("cmsVideoLivePreviewBox");
     const parseHint = document.getElementById("cmsVideoParseHint");
+    const vidAttEditor = initAttachmentsEditor(document.getElementById("cmsVidAttachmentsEditor"));
 
     urlInp.addEventListener("input", () => {
       const val = urlInp.value.trim();
@@ -6703,7 +6919,7 @@
 
     // Bind Edit Video Button
     body.querySelectorAll("[data-edit-vid]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const id = btn.dataset.editVid;
         const target = state.videos.find((v) => v.id === id);
         if (!target) return;
@@ -6722,6 +6938,16 @@
         const scriptVal = target.script && (typeof target.script === "object" ? target.script.vi : target.script);
         document.getElementById("cmsVidScript").value = scriptVal ? scriptVal.replace(/<[^>]+>/g, "\n").trim() : "";
 
+        if (vidAttEditor) {
+          vidAttEditor.setItems(getPublicAttachments(target));
+          if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady() && typeof window.ThuysTalkFirebase.fetchDocLinks === "function") {
+            const fetchedLinks = await window.ThuysTalkFirebase.fetchDocLinks("video", target.id);
+            if (Array.isArray(fetchedLinks) && fetchedLinks.length && editingVidId === target.id) {
+              vidAttEditor.setItems(fetchedLinks);
+            }
+          }
+        }
+
         document.getElementById("cmsVidUrl").dispatchEvent(new Event("input"));
 
         document.getElementById("cmsVidFormHeading").textContent = "Chỉnh Sửa Video: " + (typeof target.title === "object" ? target.title.vi : target.title);
@@ -6739,6 +6965,7 @@
     document.getElementById("cmsVidCancelBtn").addEventListener("click", () => {
       editingVidId = null;
       document.getElementById("cmsNewVideoForm").reset();
+      if (vidAttEditor) vidAttEditor.clear();
       document.getElementById("cmsVidFormHeading").textContent = "Nhúng Video YouTube Mới Lên Website (Hỗ Trợ Dán Nguyên Thẻ <iframe> Hoặc Link)";
       document.getElementById("cmsVidEditModeBadge").style.display = "none";
       const submitBtn = document.getElementById("cmsVidSubmitBtn");
@@ -6748,7 +6975,7 @@
     });
 
     // Form Submit (Create or Update)
-    document.getElementById("cmsNewVideoForm").addEventListener("submit", (e) => {
+    document.getElementById("cmsNewVideoForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const rawInput = document.getElementById("cmsVidUrl").value.trim();
       const ytId = extractYoutubeId(rawInput);
@@ -6758,6 +6985,12 @@
       const duration = document.getElementById("cmsVidDuration").value.trim() || "08:00";
       const desc = document.getElementById("cmsVidDesc").value.trim();
       const rawScript = document.getElementById("cmsVidScript").value.trim() || desc;
+
+      const attRes = vidAttEditor ? vidAttEditor.validateAndCollect() : { ok: true, publicAttachments: [], secureLinks: [] };
+      if (!attRes.ok) {
+        showToast(attRes.error);
+        return;
+      }
 
       const activeCatObj = getVideoCategoryList().find((c) => c.id === cm);
       const resolvedCmLabel = activeCatObj
@@ -6772,6 +7005,10 @@
       if (editingVidId) {
         const vid = state.videos.find((v) => v.id === editingVidId);
         if (vid) {
+          const hadAtts = Array.isArray(vid.attachments) && vid.attachments.length > 0;
+          const linksOk = await persistCmsDocLinks("video", vid.id, attRes, hadAtts);
+          if (!linksOk) return;
+
           const prevVidSnapshot = JSON.parse(JSON.stringify(vid));
           vid.cm = cm;
           vid.cmLabel = resolvedCmLabel;
@@ -6784,18 +7021,18 @@
           vid.title = { vi: title, en: title };
           vid.desc = { vi: desc, en: desc };
           vid.script = { vi: formattedScript, en: formattedScript };
+          vid.attachments = attRes.publicAttachments;
           vid.isDemo = false;
           vid.updatedAt = new Date().toLocaleDateString("vi-VN");
-          persistCmsDoc("videos", vid.id, vid).then((savedOk) => {
-            if (!savedOk) {
-              Object.assign(vid, prevVidSnapshot);
-              return;
-            }
-            saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
-            renderAll();
-            renderAdminStudioModal();
-            showToast("Đã cập nhật video thành công!");
-          });
+          const savedOk = await persistCmsDoc("videos", vid.id, vid);
+          if (!savedOk) {
+            Object.assign(vid, prevVidSnapshot);
+            return;
+          }
+          saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
+          renderAll();
+          renderAdminStudioModal();
+          showToast("Đã cập nhật video thành công!");
         }
       } else {
         const newVid = {
@@ -6813,22 +7050,24 @@
           title: { vi: title, en: title },
           desc: { vi: desc, en: desc },
           script: { vi: formattedScript, en: formattedScript },
+          attachments: attRes.publicAttachments,
           isDemo: false
         };
 
-        persistCmsDoc("videos", newVid.id, newVid).then((savedOk) => {
-          if (!savedOk) return;
-          state.videos.unshift(newVid);
-          state.activeVideoId = newVid.id;
-          saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
-          renderAll();
-          renderAdminStudioModal();
-          showToast(
-            ytId
-              ? `Đã nhúng thành công Video YouTube (ID: ${ytId}) lên trang chủ!`
-              : "Đã thêm Video mới vào thư viện!"
-          );
-        });
+        const linksOk = await persistCmsDocLinks("video", newVid.id, attRes, false);
+        if (!linksOk) return;
+        const savedOk = await persistCmsDoc("videos", newVid.id, newVid);
+        if (!savedOk) return;
+        state.videos.unshift(newVid);
+        state.activeVideoId = newVid.id;
+        saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
+        renderAll();
+        renderAdminStudioModal();
+        showToast(
+          ytId
+            ? `Đã nhúng thành công Video YouTube (ID: ${ytId}) lên trang chủ!`
+            : "Đã thêm Video mới vào thư viện!"
+        );
       }
     });
 
@@ -6837,6 +7076,9 @@
         const id = btn.dataset.delVid;
         const ok = await removeCmsDoc("videos", id);
         if (!ok) return;
+        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady() && typeof window.ThuysTalkFirebase.deleteDocLinks === "function") {
+          window.ThuysTalkFirebase.deleteDocLinks("video", id);
+        }
         state.videos = state.videos.filter((v) => v.id !== id);
         if (state.videos.length && !state.videos.some((v) => v.id === state.activeVideoId)) {
           state.activeVideoId = state.videos[0].id;
@@ -6996,6 +7238,18 @@
           coursesManageRows
             ? `<table class="cms-list-table" style="margin:0;"><thead><tr><th>Tên chuyên đề</th><th>Số bài</th><th>Thao tác</th></tr></thead><tbody>${coursesManageRows}</tbody></table>`
             : '<p style="font-size:0.84rem; color:var(--ink-600); margin:0;">Chưa có chuyên đề nào. Hãy tạo 1 chuyên đề ở trên trước khi thêm bài giảng.</p>'
+        }
+        ${
+          state.courses.length
+            ? `<div style="margin-top:14px; padding-top:12px; border-top:1px dashed var(--jade-300);">
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">
+                  <label style="font-size:0.84rem; font-weight:800; color:var(--jade-900); margin:0;">Gắn tài liệu tải về (Google Drive) cho chuyên đề:</label>
+                  <select id="cmsCourseAttSelect" class="form-control" style="max-width:340px; background:#fff;">${courseOptions}</select>
+                  <button type="button" id="cmsSaveCourseAttsBtn" class="btn btn-jade btn-sm">Lưu Tài Liệu Đính Kèm Cho Chuyên Đề</button>
+                </div>
+                ${renderAttachmentsEditorMarkup("cmsCourseAttachmentsEditor", "Danh sách file đính kèm của Chuyên đề đang chọn (tối đa 5 file)")}
+              </div>`
+            : ""
         }
       </div>
 
@@ -7375,11 +7629,59 @@
       });
     }
 
+    const courseAttEditor = initAttachmentsEditor(document.getElementById("cmsCourseAttachmentsEditor"));
+    const courseAttSel = document.getElementById("cmsCourseAttSelect");
+    async function loadCourseAttachmentsToEditor(courseId) {
+      if (!courseAttEditor || !courseId) return;
+      const targetCourse = state.courses.find((c) => c.id === courseId);
+      courseAttEditor.setItems(getPublicAttachments(targetCourse));
+      if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady() && typeof window.ThuysTalkFirebase.fetchDocLinks === "function") {
+        const fetched = await window.ThuysTalkFirebase.fetchDocLinks("course", courseId);
+        if (Array.isArray(fetched) && fetched.length && courseAttSel && courseAttSel.value === courseId) {
+          courseAttEditor.setItems(fetched);
+        }
+      }
+    }
+    if (courseAttSel && courseAttEditor) {
+      loadCourseAttachmentsToEditor(courseAttSel.value);
+      courseAttSel.addEventListener("change", () => loadCourseAttachmentsToEditor(courseAttSel.value));
+    }
+    const saveCourseAttsBtn = document.getElementById("cmsSaveCourseAttsBtn");
+    if (saveCourseAttsBtn && courseAttSel && courseAttEditor) {
+      saveCourseAttsBtn.addEventListener("click", async () => {
+        const cid = courseAttSel.value;
+        const course = state.courses.find((c) => c.id === cid);
+        if (!course) return;
+        const attRes = courseAttEditor.validateAndCollect();
+        if (!attRes.ok) {
+          showToast(attRes.error);
+          return;
+        }
+        const hadAtts = Array.isArray(course.attachments) && course.attachments.length > 0;
+        const linksOk = await persistCmsDocLinks("course", cid, attRes, hadAtts);
+        if (!linksOk) return;
+        const prevAtts = course.attachments ? course.attachments.slice() : [];
+        course.attachments = attRes.publicAttachments;
+        course.isDemo = false;
+        const savedOk = await persistCmsDoc("courses", course.id, course);
+        if (!savedOk) {
+          course.attachments = prevAtts;
+          return;
+        }
+        saveCollection(STORAGE_KEYS.COURSES, state.courses);
+        renderAll();
+        showToast(`Đã lưu ${attRes.publicAttachments.length} tài liệu tải về cho chuyên đề!`);
+      });
+    }
+
     body.querySelectorAll("[data-del-course]").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const cid = btn.dataset.delCourse;
         const ok = await removeCmsDoc("courses", cid);
         if (!ok) return;
+        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady() && typeof window.ThuysTalkFirebase.deleteDocLinks === "function") {
+          window.ThuysTalkFirebase.deleteDocLinks("course", cid);
+        }
         state.courses = state.courses.filter((c) => c.id !== cid);
         saveCollection(STORAGE_KEYS.COURSES, state.courses);
         renderAll();
