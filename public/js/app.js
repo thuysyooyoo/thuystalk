@@ -2324,6 +2324,10 @@
         </div>`;
     }
     if (stageEl && activeVid) {
+      const activeVidAtts = getPublicAttachments(activeVid);
+      const readScriptBtnLabel = activeVidAtts.length > 0
+        ? (t.video.btnReadScriptWithFiles || t.video.btnReadScript)
+        : t.video.btnReadScript;
       const rawYtId = extractYoutubeId(activeVid.youtubeEmbedId || activeVid.youtubeEmbedSrc || activeVid.youtubeUrl);
       const ytId =
         (!activeVid.youtubeEmbedId || isValidYoutubeId(activeVid.youtubeEmbedId)) && isValidYoutubeId(rawYtId)
@@ -2390,7 +2394,7 @@
           <p>${escapeHtml(vDesc)}</p>
           <div style="display:flex; gap:12px; flex-wrap:wrap;">
             <button type="button" class="btn btn-primary btn-sm" id="readFullScriptBtn">
-              ${t.video.btnReadScript}
+              ${escapeHtml(readScriptBtnLabel)}
             </button>
             <a href="${safeWatchHref}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="background:rgba(255,255,255,0.1); color:#FFF; border-color:rgba(255,255,255,0.25);">
               ${t.video.btnYoutubeChannel}

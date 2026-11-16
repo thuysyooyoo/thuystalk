@@ -341,7 +341,8 @@ window.THUYSTALK_I18N = {
         { id: "CM3", label: "CM3 · Ký sự thương mại" },
         { id: "CM4", label: "CM4 · Chuyện nghề & Thực tế" }
       ],
-      btnReadScript: "Đọc toàn văn kịch bản & Tải tài liệu",
+      btnReadScript: "Đọc toàn văn kịch bản",
+      btnReadScriptWithFiles: "Đọc toàn văn kịch bản & Tải tài liệu",
       btnYoutubeChannel: "Xem kênh YouTube @thuystalk"
     },
     articles: {
@@ -498,7 +499,8 @@ window.THUYSTALK_I18N = {
         { id: "CM3", label: "CM3 · Trade Chronicles" },
         { id: "CM4", label: "CM4 · Real-World Stories" }
       ],
-      btnReadScript: "Read Full Script & Download Checklist",
+      btnReadScript: "Read Full Video Script",
+      btnReadScriptWithFiles: "Read Full Script & Download Materials",
       btnYoutubeChannel: "Visit YouTube @thuystalk"
     },
     articles: {
