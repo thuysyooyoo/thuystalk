@@ -1865,9 +1865,10 @@
     const lessonTabs = course.lessons
       .map((l, idx) => {
         const doneTag = state.completedLessons[l.id] ? "[Đã học] " : "";
+        const durText = String(l.duration || "").trim();
         return `
         <button type="button" class="filter-tab ${idx === state.activeLessonIndex ? "active" : ""}" data-lidx="${idx}">
-          ${doneTag}${state.lang === "vi" ? "Bài" : "Lesson"} ${idx + 1} (${escapeHtml(l.duration || "10:00")})
+          ${doneTag}${state.lang === "vi" ? "Bài" : "Lesson"} ${idx + 1}${durText ? ` (${escapeHtml(durText)})` : ""}
         </button>`;
       })
       .join("");
@@ -2480,12 +2481,16 @@
           }
           <div class="video-play-overlay">
             <button type="button" class="play-btn-pill" id="openVideoScriptModalBtn">
-              ${state.lang === "vi" ? "Xem kịch bản & Nội dung video" : "Open Video Script & Notes"}
+              ${state.lang === "en" ? "Read Script" : "Đọc kịch bản"}
             </button>
-            <span style="font-size:0.78rem; font-weight:700; background:rgba(6,61,49,0.88); padding:5px 14px; border-radius:99px; border:1px solid var(--orange-400);">
-              ${escapeHtml(vCmLabel)} · ${escapeHtml(activeVid.duration || "08:00")}
+            <span class="video-coming-soon-badge" style="font-size:0.78rem; font-weight:800; background:rgba(6,61,49,0.92); color:#FEF08A; padding:5px 14px; border-radius:99px; border:1px solid var(--orange-400);">
+              ${escapeHtml(vCmLabel)} · ${state.lang === "en" ? "Coming Soon" : "Sắp ra mắt"}
             </span>
           </div>`;
+
+      const stageScriptLabel = !ytId && activeVidAtts.length === 0
+        ? (state.lang === "en" ? "Read Script" : "Đọc kịch bản")
+        : readScriptBtnLabel;
 
       stageEl.innerHTML = `
         <div class="video-player-stage editable-photo-wrap">
@@ -2499,7 +2504,7 @@
           <p>${escapeHtml(vDesc)}</p>
           <div style="display:flex; gap:12px; flex-wrap:wrap;">
             <button type="button" class="btn btn-primary btn-sm" id="readFullScriptBtn">
-              ${escapeHtml(readScriptBtnLabel)}
+              ${escapeHtml(stageScriptLabel)}
             </button>
             <a href="${safeWatchHref}" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="background:rgba(255,255,255,0.1); color:#FFF; border-color:rgba(255,255,255,0.25);">
               ${t.video.btnYoutubeChannel}
@@ -2539,11 +2544,17 @@
           const tStyle = ytId ? "" : getPhotoStyle(tSlotKey);
           const vTitle = typeof v.title === "object" ? v.title[state.lang] || v.title.vi : v.title;
           const vCmLabel = getVideoCategoryLabel(v.cm, v.cmLabel, state.lang);
+          const cleanDur = ytId ? String(v.duration || "").trim() : "";
+          const badgeHtml = !ytId
+            ? `<span class="dur coming-soon" style="background:rgba(244,122,32,0.92); color:#FFF;">${state.lang === "en" ? "Coming Soon" : "Sắp ra mắt"}</span>`
+            : cleanDur
+            ? `<span class="dur">${escapeHtml(cleanDur)}</span>`
+            : "";
           return `
           <div class="video-list-item ${activeVid && v.id === activeVid.id ? "active" : ""}" data-vid="${escapeHtml(v.id)}">
             <div class="video-list-thumb">
               <img src="${escapeHtml(tUrl)}" ${tMediaId ? `data-media-id="${escapeHtml(tMediaId)}"` : ""} alt="${escapeHtml(vTitle)}" style="${tStyle}" />
-              <span class="dur">${escapeHtml(v.duration || "08:00")}</span>
+              ${badgeHtml}
             </div>
             <div class="video-list-meta">
               <span class="cm-tag">${escapeHtml(vCmLabel)}</span>
@@ -2592,11 +2603,18 @@
         </div>`
       : "";
 
+    const rawModalYt = extractYoutubeId(video.youtubeEmbedId || video.youtubeEmbedSrc || video.youtubeUrl);
+    const hasModalYt = Boolean(rawModalYt && isValidYoutubeId(rawModalYt));
+    const cleanModalDur = hasModalYt ? String(video.duration || "").trim() : "";
+    const vidMetaLine = hasModalYt
+      ? `${cleanModalDur ? `Thời lượng: ${escapeHtml(cleanModalDur)} · ` : ""}Ngày đăng: ${escapeHtml(video.date || "11/2026")}`
+      : `Trạng thái: ${state.lang === "en" ? "Coming Soon" : "Sắp ra mắt"} · Ngày đăng: ${escapeHtml(video.date || "11/2026")}`;
+
     document.getElementById("articleModalTitle").textContent = vCmLabel + " · @thuystalk";
     document.getElementById("articleModalBody").innerHTML = `
       <div class="reader-content">
         <h2>${escapeHtml(vTitle)}</h2>
-        <p style="color:var(--jade-700); font-weight:700;">Thời lượng: ${escapeHtml(video.duration || "08:00")} · Ngày đăng: ${escapeHtml(video.date || "11/2026")}</p>
+        <p style="color:var(--jade-700); font-weight:700;">${vidMetaLine}</p>
         <hr style="border:none; border-top:1px solid var(--ink-200); margin:16px 0;" />
         ${sanitizeRichHtml(vScript)}
       </div>
@@ -7223,8 +7241,8 @@
                 <input type="text" id="cmsVidDesc" class="form-control" required placeholder="Tóm tắt 1-2 câu về nội dung chính của video..." />
               </div>
               <div class="form-group">
-                <label>Thời lượng (VD: 10:15)</label>
-                <input type="text" id="cmsVidDuration" class="form-control" value="10:15" />
+                <label>Thời lượng (VD: 10:15 · Để trống nếu chưa phát hành)</label>
+                <input type="text" id="cmsVidDuration" class="form-control" value="" placeholder="VD: 10:15" />
               </div>
             </div>
             <div class="form-group">
@@ -7396,7 +7414,7 @@
         document.getElementById("cmsVidTitle").value = typeof target.title === "object" ? target.title.vi : target.title;
         document.getElementById("cmsVidCm").value = target.cm || "CM3";
         document.getElementById("cmsVidDesc").value = typeof target.desc === "object" ? target.desc.vi : target.desc || "";
-        document.getElementById("cmsVidDuration").value = target.duration || "10:15";
+        document.getElementById("cmsVidDuration").value = target.duration || "";
 
         const scriptVal = target.script && (typeof target.script === "object" ? target.script.vi : target.script);
         document.getElementById("cmsVidScript").value = scriptVal ? scriptVal.replace(/<[^>]+>/g, "\n").trim() : "";
@@ -7445,7 +7463,7 @@
       const embedSrc = buildYoutubeEmbedSrc(rawInput);
       const cm = document.getElementById("cmsVidCm").value;
       const title = document.getElementById("cmsVidTitle").value.trim();
-      const duration = document.getElementById("cmsVidDuration").value.trim() || "08:00";
+      const duration = document.getElementById("cmsVidDuration").value.trim();
       const desc = document.getElementById("cmsVidDesc").value.trim();
       const rawScript = document.getElementById("cmsVidScript").value.trim() || desc;
 
@@ -8191,7 +8209,7 @@
       course.lessons.push({
         id: "lesson-" + Date.now(),
         title: { vi: title, en: title },
-        duration: "10:00",
+        duration: "",
         summary: { vi: plainSummary.slice(0, 140) + "...", en: plainSummary.slice(0, 140) + "..." },
         content: { vi: formattedBody, en: formattedBody },
         miniTest,
