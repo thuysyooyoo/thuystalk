@@ -423,26 +423,54 @@
     return base;
   }
 
+  function isLocalDemoEnvironment() {
+    const proto = String(window.location.protocol || "").toLowerCase();
+    const host = String(window.location.hostname || "").toLowerCase();
+    return proto === "file:" || host === "localhost" || host === "127.0.0.1";
+  }
+
+  const DEMO_ID_SETS = {
+    articles: new Set((window.THUYSTALK_ARTICLES || []).map((x) => x.id)),
+    videos: new Set((window.THUYSTALK_VIDEOS || []).map((x) => x.id)),
+    courses: new Set((window.THUYSTALK_COURSES || []).map((x) => x.id)),
+    ai_kb: new Set((window.THUYSTALK_DEFAULT_KB || []).map((x) => x.id))
+  };
+
+  function isDemoItem(type, item) {
+    if (!item || item.isDemo === false) return false;
+    return Boolean(item.isDemo === true || (DEMO_ID_SETS[type] && DEMO_ID_SETS[type].has(item.id)));
+  }
+
+  function countDemoItems(type, arr) {
+    return Array.isArray(arr) ? arr.filter((item) => isDemoItem(type, item)).length : 0;
+  }
+
+  function renderDemoCounterBadge(type, arr) {
+    const count = countDemoItems(type, arr);
+    if (!count) return "";
+    return `<span class="cms-demo-counter" style="display:inline-flex; align-items:center; gap:6px; background:#fef3c7; color:#92400e; border:1px solid #f59e0b; font-size:0.78rem; font-weight:800; padding:4px 10px; border-radius:999px;">Còn ${count} bài mẫu</span>`;
+  }
+
+  function getDemoItemTagHtml(type, item) {
+    if (!isDemoItem(type, item)) return "";
+    return ' <span class="badge-demo-item" style="display:inline-block; background:#fef3c7; color:#92400e; border:1px solid #f59e0b; font-size:0.7rem; font-weight:800; padding:2px 7px; border-radius:999px; vertical-align:middle; margin-left:4px;">Bài mẫu</span>';
+  }
+
   function loadCollection(key, defaultArr) {
     try {
       const raw = localStorage.getItem(key);
-      if (raw) {
+      if (raw !== null) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {
       console.warn("Collection reset:", key, e);
     }
-    return JSON.parse(JSON.stringify(defaultArr));
+    if (isLocalDemoEnvironment()) {
+      return JSON.parse(JSON.stringify(defaultArr || []));
+    }
+    return [];
   }
-
-  const STORAGE_KEY_TO_FIRESTORE = {
-    [STORAGE_KEYS.ARTICLES]: "articles",
-    [STORAGE_KEYS.VIDEOS]: "videos",
-    [STORAGE_KEYS.COURSES]: "courses",
-    [STORAGE_KEYS.AI_KB]: "ai_kb",
-    [STORAGE_KEYS.LEADS]: "leads"
-  };
 
   function saveCollection(key, arr) {
     try {
@@ -450,14 +478,44 @@
     } catch (e) {
       showToast("Lưu ý: Dung lượng bộ nhớ trình duyệt gần đầy, đã áp dụng trên phiên hiện tại.");
     }
+  }
 
-    // Auto-sync 1-1 to Cloud Firestore as Single Source of Truth
-    const collName = STORAGE_KEY_TO_FIRESTORE[key];
-    if (collName && window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
-      window.ThuysTalkFirebase.syncCollection(collName, arr).catch((err) => {
-        console.warn(`Cloud Firestore auto-sync error for ${collName}:`, err);
-      });
+  async function persistCmsDoc(collName, docId, data) {
+    if (!window.ThuysTalkFirebase || !window.ThuysTalkFirebase.isReady()) {
+      return true;
     }
+    const ok = await window.ThuysTalkFirebase.saveDoc(collName, docId, data);
+    if (!ok) {
+      const errDetail =
+        typeof window.ThuysTalkFirebase.getLastError === "function"
+          ? window.ThuysTalkFirebase.getLastError()
+          : "";
+      showToast(
+        "Lỗi lưu Cloud Firestore: " +
+          (errDetail || "Vui lòng kiểm tra kết nối và quyền Quản trị viên.")
+      );
+      return false;
+    }
+    return true;
+  }
+
+  async function removeCmsDoc(collName, docId) {
+    if (!window.ThuysTalkFirebase || !window.ThuysTalkFirebase.isReady()) {
+      return true;
+    }
+    const ok = await window.ThuysTalkFirebase.deleteDoc(collName, docId);
+    if (!ok) {
+      const errDetail =
+        typeof window.ThuysTalkFirebase.getLastError === "function"
+          ? window.ThuysTalkFirebase.getLastError()
+          : "";
+      showToast(
+        "Lỗi xóa trên Cloud Firestore: " +
+          (errDetail || "Vui lòng kiểm tra kết nối và quyền Quản trị viên.")
+      );
+      return false;
+    }
+    return true;
   }
 
   function saveCustomMedia() {
@@ -551,25 +609,28 @@
         }
       }
 
-      if (Array.isArray(articlesRes) && articlesRes.length > 0) {
+      if (Array.isArray(articlesRes)) {
         state.articles = articlesRes;
         localStorage.setItem(STORAGE_KEYS.ARTICLES, JSON.stringify(state.articles));
         hasUpdates = true;
       }
 
-      if (Array.isArray(videosRes) && videosRes.length > 0) {
+      if (Array.isArray(videosRes)) {
         state.videos = videosRes;
+        if (!state.videos.some((v) => v.id === state.activeVideoId)) {
+          state.activeVideoId = state.videos[0] ? state.videos[0].id : "";
+        }
         localStorage.setItem(STORAGE_KEYS.VIDEOS, JSON.stringify(state.videos));
         hasUpdates = true;
       }
 
-      if (Array.isArray(coursesRes) && coursesRes.length > 0) {
+      if (Array.isArray(coursesRes)) {
         state.courses = coursesRes;
         localStorage.setItem(STORAGE_KEYS.COURSES, JSON.stringify(state.courses));
         hasUpdates = true;
       }
 
-      if (Array.isArray(aiKbRes) && aiKbRes.length > 0) {
+      if (Array.isArray(aiKbRes)) {
         state.aiKb = aiKbRes;
         localStorage.setItem(STORAGE_KEYS.AI_KB, JSON.stringify(state.aiKb));
         hasUpdates = true;
@@ -609,7 +670,7 @@
 
     // 1. Articles Real-time Sync
     window.ThuysTalkFirebase.listenCollection("articles", (articles) => {
-      if (Array.isArray(articles) && articles.length > 0) {
+      if (Array.isArray(articles)) {
         const currentJson = JSON.stringify(state.articles);
         const newJson = JSON.stringify(articles);
         if (currentJson !== newJson) {
@@ -627,11 +688,14 @@
 
     // 2. Videos Real-time Sync
     window.ThuysTalkFirebase.listenCollection("videos", (videos) => {
-      if (Array.isArray(videos) && videos.length > 0) {
+      if (Array.isArray(videos)) {
         const currentJson = JSON.stringify(state.videos);
         const newJson = JSON.stringify(videos);
         if (currentJson !== newJson) {
           state.videos = videos;
+          if (!state.videos.some((v) => v.id === state.activeVideoId)) {
+            state.activeVideoId = state.videos[0] ? state.videos[0].id : "";
+          }
           localStorage.setItem(STORAGE_KEYS.VIDEOS, newJson);
           if (document.getElementById("adminSidebarNav")) {
             if (state.activeCmsTab === "videos") renderAdminVideosTab(document.getElementById("adminStudioBody"));
@@ -645,7 +709,7 @@
 
     // 3. Courses Real-time Sync
     window.ThuysTalkFirebase.listenCollection("courses", (courses) => {
-      if (Array.isArray(courses) && courses.length > 0) {
+      if (Array.isArray(courses)) {
         const currentJson = JSON.stringify(state.courses);
         const newJson = JSON.stringify(courses);
         if (currentJson !== newJson) {
@@ -657,6 +721,21 @@
             renderElearningSection(window.THUYSTALK_I18N[state.lang]);
           }
           console.log("[REALTIME SYNC] Courses updated across browsers via Firestore onSnapshot");
+        }
+      }
+    });
+
+    // 3b. AI KB Real-time Sync
+    window.ThuysTalkFirebase.listenCollection("ai_kb", (kbList) => {
+      if (Array.isArray(kbList)) {
+        const currentJson = JSON.stringify(state.aiKb);
+        const newJson = JSON.stringify(kbList);
+        if (currentJson !== newJson) {
+          state.aiKb = kbList;
+          localStorage.setItem(STORAGE_KEYS.AI_KB, newJson);
+          if (document.getElementById("adminSidebarNav") && state.activeCmsTab === "ai_kb") {
+            renderAdminAiKbTab(document.getElementById("adminStudioBody"));
+          }
         }
       }
     });
@@ -730,11 +809,12 @@
     // 5. Cross-tab synchronization via local StorageEvent fallback
     // (Protected learners & leads listeners are registered ONLY in initAdminProtectedListeners after Google Admin verification)
     window.addEventListener("storage", (e) => {
-      if ([STORAGE_KEYS.ARTICLES, STORAGE_KEYS.VIDEOS, STORAGE_KEYS.COURSES, STORAGE_KEYS.MEDIA].includes(e.key)) {
+      if ([STORAGE_KEYS.ARTICLES, STORAGE_KEYS.VIDEOS, STORAGE_KEYS.COURSES, STORAGE_KEYS.MEDIA, STORAGE_KEYS.AI_KB].includes(e.key)) {
         console.log("[STORAGE EVENT] Cross-tab update detected:", e.key);
-        state.articles = loadArticlesState();
-        state.videos = loadVideosState();
-        state.courses = loadCoursesState();
+        state.articles = loadCollection(STORAGE_KEYS.ARTICLES, window.THUYSTALK_ARTICLES);
+        state.videos = loadCollection(STORAGE_KEYS.VIDEOS, window.THUYSTALK_VIDEOS);
+        state.courses = loadCollection(STORAGE_KEYS.COURSES, window.THUYSTALK_COURSES);
+        state.aiKb = loadCollection(STORAGE_KEYS.AI_KB, window.THUYSTALK_DEFAULT_KB);
         state.media = loadMediaState();
         if (document.getElementById("adminSidebarNav")) {
           renderAdminStudioModal();
@@ -1207,6 +1287,19 @@
     if (!grid) return;
 
     const displayedCourses = isHomePage() ? state.courses.slice(0, 2) : state.courses;
+
+    if (!displayedCourses.length) {
+      grid.innerHTML = `
+        <div class="empty-state-card" style="grid-column:1 / -1; background:#fff; border:1px dashed var(--border-subtle); border-radius:16px; padding:32px 20px; text-align:center; color:var(--ink-600);">
+          <strong style="display:block; color:var(--jade-900); font-size:1rem; margin-bottom:6px;">
+            ${state.lang === "en" ? "No courses available yet" : "Chưa có tài liệu nào"}
+          </strong>
+          <span style="font-size:0.88rem;">
+            ${state.lang === "en" ? "New e-learning modules and templates will be published here soon." : "Các chuyên đề E-Learning và bộ câu hỏi thực hành mới sẽ được cập nhật sớm."}
+          </span>
+        </div>`;
+      return;
+    }
 
     grid.innerHTML = displayedCourses
       .map((c) => {
@@ -1804,6 +1897,17 @@
     const activeVid = filtered.find((v) => v.id === state.activeVideoId) || filtered[0];
 
     const stageEl = document.getElementById("featuredVideoStage");
+    if (stageEl && !activeVid) {
+      stageEl.innerHTML = `
+        <div class="empty-state-card" style="background:rgba(255,255,255,0.06); border:1px dashed rgba(255,255,255,0.25); border-radius:16px; padding:42px 24px; text-align:center; color:#e2e8f0; grid-column:1 / -1;">
+          <strong style="display:block; font-size:1.05rem; color:#fff; margin-bottom:6px;">
+            ${state.lang === "en" ? "No videos available yet" : "Chưa có video nào"}
+          </strong>
+          <span style="font-size:0.88rem; color:#cbd5e1;">
+            ${state.lang === "en" ? "New video lessons will appear here once published." : "Video chia sẻ kiến thức và kịch bản chuyên đề sẽ được cập nhật sớm."}
+          </span>
+        </div>`;
+    }
     if (stageEl && activeVid) {
       const rawYtId = extractYoutubeId(activeVid.youtubeEmbedId || activeVid.youtubeEmbedSrc || activeVid.youtubeUrl);
       const ytId =
@@ -1886,6 +1990,13 @@
     const listEl = document.getElementById("videoPlaylistCol");
     if (listEl) {
       const playlistItems = isHomePage() ? filtered.slice(0, 3) : filtered;
+      if (!playlistItems.length) {
+        listEl.innerHTML = `
+          <div class="empty-state-card" style="background:rgba(255,255,255,0.04); border:1px dashed rgba(255,255,255,0.18); border-radius:12px; padding:22px 16px; text-align:center; color:#cbd5e1; font-size:0.85rem;">
+            ${state.lang === "en" ? "Playlist is currently empty." : "Danh sách phát hiện chưa có video nào trong chuyên mục này."}
+          </div>`;
+        return;
+      }
       listEl.innerHTML = playlistItems
         .map((v) => {
           const rawItemYtId = extractYoutubeId(v.youtubeEmbedId || v.youtubeEmbedSrc || v.youtubeUrl);
@@ -2072,6 +2183,19 @@
     if (!grid) return;
 
     const displayedArticles = isHomePage() ? filtered.slice(0, 3) : filtered;
+
+    if (!displayedArticles.length) {
+      grid.innerHTML = `
+        <div class="empty-state-card" style="grid-column:1 / -1; background:#fff; border:1px dashed var(--border-subtle); border-radius:16px; padding:32px 20px; text-align:center; color:var(--ink-600);">
+          <strong style="display:block; color:var(--jade-900); font-size:1rem; margin-bottom:6px;">
+            ${state.lang === "en" ? "No articles published yet" : "Chưa có bài viết nào"}
+          </strong>
+          <span style="font-size:0.88rem;">
+            ${state.lang === "en" ? "New case studies and regulatory analyses will appear here soon." : "Các bài phân tích nghiệp vụ và văn bản pháp lý mới sẽ được cập nhật sớm."}
+          </span>
+        </div>`;
+      return;
+    }
 
     grid.innerHTML = displayedArticles
       .map((a) => {
@@ -5858,7 +5982,7 @@
         <tr>
           <td>${idx + 1}</td>
           <td><span class="exp-tag">${escapeHtml(a.pillar)}</span></td>
-          <td style="font-weight:700;">${escapeHtml(titleVi)}</td>
+          <td style="font-weight:700;">${escapeHtml(titleVi)}${getDemoItemTagHtml("articles", a)}</td>
           <td>${escapeHtml(a.date)}</td>
           <td style="white-space:nowrap;">
             <button type="button" class="btn btn-outline btn-xs" data-edit-art="${escapeHtml(a.id)}" style="margin-right:6px; padding:4px 8px; font-size:0.75rem;">Sửa</button>
@@ -5931,7 +6055,10 @@
         </form>
       </div>
 
-      <h4 style="margin-bottom:10px;">Danh sách Bài viết đang hiển thị (${state.articles.length})</h4>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+        <h4 style="margin:0;">Danh sách Bài viết đang hiển thị (${state.articles.length})</h4>
+        ${renderDemoCounterBadge("articles", state.articles)}
+      </div>
       <table class="cms-list-table">
         <thead>
           <tr>
@@ -6030,20 +6157,25 @@
       if (editingArtId) {
         const art = state.articles.find((a) => a.id === editingArtId);
         if (art) {
+          const prevArtSnapshot = JSON.parse(JSON.stringify(art));
           art.title = { vi: titleVi, en: titleEn };
           art.pillar = pillar;
           art.pillarLabel = pillarMap[pillar] || pillarMap.CS;
           art.photoSlot = photoSlot;
           art.excerpt = { vi: excerpt, en: excerpt };
           art.body = { vi: formattedBody, en: formattedBody };
+          art.isDemo = false;
           art.updatedAt = new Date().toLocaleDateString("vi-VN");
-          saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
-          if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
-            window.ThuysTalkFirebase.syncCollection("articles", state.articles);
-          }
-          renderAll();
-          renderAdminStudioModal();
-          showToast("Đã cập nhật bài viết thành công!");
+          persistCmsDoc("articles", art.id, art).then((savedOk) => {
+            if (!savedOk) {
+              Object.assign(art, prevArtSnapshot);
+              return;
+            }
+            saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
+            renderAll();
+            renderAdminStudioModal();
+            showToast("Đã cập nhật bài viết thành công!");
+          });
         }
       } else {
         const newArt = {
@@ -6055,28 +6187,27 @@
           photoSlot,
           title: { vi: titleVi, en: titleEn },
           excerpt: { vi: excerpt, en: excerpt },
-          body: { vi: formattedBody, en: formattedBody }
+          body: { vi: formattedBody, en: formattedBody },
+          isDemo: false
         };
-        state.articles.unshift(newArt);
-        saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
-        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
-          window.ThuysTalkFirebase.syncCollection("articles", state.articles);
-        }
-        renderAll();
-        renderAdminStudioModal();
-        showToast("Đã xuất bản bài viết mới lên trang chủ!");
+        persistCmsDoc("articles", newArt.id, newArt).then((savedOk) => {
+          if (!savedOk) return;
+          state.articles.unshift(newArt);
+          saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
+          renderAll();
+          renderAdminStudioModal();
+          showToast("Đã xuất bản bài viết mới lên trang chủ!");
+        });
       }
     });
 
     body.querySelectorAll("[data-del-art]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const id = btn.dataset.delArt;
+        const ok = await removeCmsDoc("articles", id);
+        if (!ok) return;
         state.articles = state.articles.filter((a) => a.id !== id);
         saveCollection(STORAGE_KEYS.ARTICLES, state.articles);
-        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
-          window.ThuysTalkFirebase.syncCollection("articles", state.articles);
-          window.ThuysTalkFirebase.deleteDoc("articles", id);
-        }
         renderAll();
         renderAdminStudioModal();
         showToast("Đã xóa bài viết.");
@@ -6226,7 +6357,7 @@
         <tr>
           <td>${idx + 1}</td>
           <td><span class="exp-tag">${escapeHtml(vCatDisplay || v.cm)}</span></td>
-          <td style="font-weight:700;">${escapeHtml(vTitle)}</td>
+          <td style="font-weight:700;">${escapeHtml(vTitle)}${getDemoItemTagHtml("videos", v)}</td>
           <td>${
             ytId
               ? `<span style="color:var(--jade-700);font-weight:800;">Đã nhúng YouTube (ID: ${escapeHtml(ytId)})</span>`
@@ -6348,7 +6479,10 @@
         </div>
       </div>
 
-      <h4 style="margin-bottom:10px;">Danh sách Video đang hiển thị trên Website (${state.videos.length})</h4>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+        <h4 style="margin:0;">Danh sách Video đang hiển thị trên Website (${state.videos.length})</h4>
+        ${renderDemoCounterBadge("videos", state.videos)}
+      </div>
       <table class="cms-list-table">
         <thead>
           <tr>
@@ -6377,19 +6511,20 @@
         }
         const catId = state.videoCategories[idx].id;
         state.videoCategories[idx] = { id: catId, labelVi, labelEn };
+        const affectedVideos = [];
         state.videos.forEach((v) => {
           if (v.cm === catId) {
             v.cmLabel = { vi: labelVi, en: labelEn };
+            affectedVideos.push(v);
           }
         });
         saveVideoCategories();
         saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
-        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
-          window.ThuysTalkFirebase.syncCollection("videos", state.videos);
-        }
-        renderVideoSection(window.THUYSTALK_I18N[state.lang]);
-        renderAdminVideosTab(body);
-        showToast(`Đã cập nhật chuyên mục ${labelVi}!`);
+        Promise.all(affectedVideos.map((v) => persistCmsDoc("videos", v.id, v))).then(() => {
+          renderVideoSection(window.THUYSTALK_I18N[state.lang]);
+          renderAdminVideosTab(body);
+          showToast(`Đã cập nhật chuyên mục ${labelVi}!`);
+        });
       });
     });
 
@@ -6527,6 +6662,7 @@
       if (editingVidId) {
         const vid = state.videos.find((v) => v.id === editingVidId);
         if (vid) {
+          const prevVidSnapshot = JSON.parse(JSON.stringify(vid));
           vid.cm = cm;
           vid.cmLabel = resolvedCmLabel;
           vid.duration = duration;
@@ -6538,14 +6674,18 @@
           vid.title = { vi: title, en: title };
           vid.desc = { vi: desc, en: desc };
           vid.script = { vi: formattedScript, en: formattedScript };
+          vid.isDemo = false;
           vid.updatedAt = new Date().toLocaleDateString("vi-VN");
-          saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
-          if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
-            window.ThuysTalkFirebase.syncCollection("videos", state.videos);
-          }
-          renderAll();
-          renderAdminStudioModal();
-          showToast("Đã cập nhật video thành công!");
+          persistCmsDoc("videos", vid.id, vid).then((savedOk) => {
+            if (!savedOk) {
+              Object.assign(vid, prevVidSnapshot);
+              return;
+            }
+            saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
+            renderAll();
+            renderAdminStudioModal();
+            showToast("Đã cập nhật video thành công!");
+          });
         }
       } else {
         const newVid = {
@@ -6562,35 +6702,38 @@
           youtubeEmbedSrc: embedSrc,
           title: { vi: title, en: title },
           desc: { vi: desc, en: desc },
-          script: { vi: formattedScript, en: formattedScript }
+          script: { vi: formattedScript, en: formattedScript },
+          isDemo: false
         };
 
-        state.videos.unshift(newVid);
-        state.activeVideoId = newVid.id;
-        saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
-        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
-          window.ThuysTalkFirebase.syncCollection("videos", state.videos);
-        }
-        renderAll();
-        renderAdminStudioModal();
-        showToast(
-          ytId
-            ? `Đã nhúng thành công Video YouTube (ID: ${ytId}) lên trang chủ!`
-            : "Đã thêm Video mới vào thư viện!"
-        );
+        persistCmsDoc("videos", newVid.id, newVid).then((savedOk) => {
+          if (!savedOk) return;
+          state.videos.unshift(newVid);
+          state.activeVideoId = newVid.id;
+          saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
+          renderAll();
+          renderAdminStudioModal();
+          showToast(
+            ytId
+              ? `Đã nhúng thành công Video YouTube (ID: ${ytId}) lên trang chủ!`
+              : "Đã thêm Video mới vào thư viện!"
+          );
+        });
       }
     });
 
     body.querySelectorAll("[data-del-vid]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const id = btn.dataset.delVid;
+        const ok = await removeCmsDoc("videos", id);
+        if (!ok) return;
         state.videos = state.videos.filter((v) => v.id !== id);
-        if (state.videos.length) state.activeVideoId = state.videos[0].id;
-        saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
-        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
-          window.ThuysTalkFirebase.syncCollection("videos", state.videos);
-          window.ThuysTalkFirebase.deleteDoc("videos", id);
+        if (state.videos.length && !state.videos.some((v) => v.id === state.activeVideoId)) {
+          state.activeVideoId = state.videos[0].id;
+        } else if (!state.videos.length) {
+          state.activeVideoId = "";
         }
+        saveCollection(STORAGE_KEYS.VIDEOS, state.videos);
         renderAll();
         renderAdminStudioModal();
         showToast("Đã xóa video.");
@@ -6695,13 +6838,14 @@
     const existingLessonsRows = [];
     state.courses.forEach((c) => {
       const cTitle = typeof c.title === "object" ? c.title.vi : c.title;
+      const demoCourseTag = getDemoItemTagHtml("courses", c);
       (c.lessons || []).forEach((l) => {
         const lTitle = typeof l.title === "object" ? l.title.vi : l.title;
         const qCount = Array.isArray(l.miniTest) ? l.miniTest.length : l.quiz ? 1 : 0;
         existingLessonsRows.push(`
           <tr>
-            <td><span class="exp-tag">${escapeHtml(cTitle.slice(0, 28))}...</span></td>
-            <td style="font-weight:700;">${escapeHtml(lTitle)}</td>
+            <td><span class="exp-tag">${escapeHtml(cTitle.slice(0, 28))}...</span>${demoCourseTag}</td>
+            <td style="font-weight:700;">${escapeHtml(lTitle)}${demoCourseTag}</td>
             <td style="color:var(--jade-700); font-weight:800;">${qCount} câu hỏi trắc nghiệm</td>
             <td>
               <button type="button" class="btn btn-danger btn-sm" data-del-lesson="${escapeHtml(l.id)}" data-parent-course="${escapeHtml(c.id)}">Xóa bài</button>
@@ -6711,7 +6855,40 @@
       });
     });
 
+    const coursesManageRows = state.courses
+      .map((c) => {
+        const cTitle = typeof c.title === "object" ? c.title.vi : c.title;
+        const lessonCount = Array.isArray(c.lessons) ? c.lessons.length : 0;
+        return `
+        <tr>
+          <td style="font-weight:700;">${escapeHtml(cTitle)}${getDemoItemTagHtml("courses", c)}</td>
+          <td>${lessonCount} bài giảng</td>
+          <td>
+            <button type="button" class="btn btn-danger btn-xs" data-del-course="${escapeHtml(c.id)}" style="padding:4px 8px; font-size:0.75rem;">Xóa chuyên đề</button>
+          </td>
+        </tr>`;
+      })
+      .join("");
+
     body.innerHTML = `
+      <div class="cms-panel-box" style="margin-bottom:18px; border-color:var(--jade-300); background:var(--jade-50);">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+          <h4 style="margin:0; color:var(--jade-900);">Quản lý Chuyên đề E-Learning (${state.courses.length} chuyên đề)</h4>
+          ${renderDemoCounterBadge("courses", state.courses)}
+        </div>
+        <form id="cmsNewCourseForm" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">
+          <input type="text" id="cmsNewCourseTitle" class="form-control" style="flex:1.5; min-width:220px; background:#fff;" required placeholder="Tên chuyên đề mới (VD: Kiểm tra sau thông quan thực chiến)..." />
+          <input type="text" id="cmsNewCourseBadge" class="form-control" style="flex:0.8; min-width:140px; background:#fff;" placeholder="Nhãn (VD: Chuyên đề Thực Chiến)" />
+          <input type="text" id="cmsNewCourseDesc" class="form-control" style="flex:1.5; min-width:220px; background:#fff;" placeholder="Mô tả ngắn chuyên đề..." />
+          <button type="submit" class="btn btn-jade btn-sm">+ Tạo Chuyên đề</button>
+        </form>
+        ${
+          coursesManageRows
+            ? `<table class="cms-list-table" style="margin:0;"><thead><tr><th>Tên chuyên đề</th><th>Số bài</th><th>Thao tác</th></tr></thead><tbody>${coursesManageRows}</tbody></table>`
+            : '<p style="font-size:0.84rem; color:var(--ink-600); margin:0;">Chưa có chuyên đề nào. Hãy tạo 1 chuyên đề ở trên trước khi thêm bài giảng.</p>'
+        }
+      </div>
+
       <div class="cms-panel-box">
         <form id="cmsNewLessonForm">
           <!-- BƯỚC 1: THÔNG TIN TÀI LIỆU & MEDIA UPLOADER -->
@@ -7059,7 +7236,49 @@
       });
     });
 
-    document.getElementById("cmsNewLessonForm").addEventListener("submit", (e) => {
+    const newCourseForm = document.getElementById("cmsNewCourseForm");
+    if (newCourseForm) {
+      newCourseForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const title = document.getElementById("cmsNewCourseTitle").value.trim();
+        const badge = document.getElementById("cmsNewCourseBadge").value.trim() || "Chuyên đề ThuysTalk";
+        const desc = document.getElementById("cmsNewCourseDesc").value.trim() || "Tài liệu chuyên sâu & bài tập tình huống thực tế.";
+        if (!title) return;
+        const newCourse = {
+          id: "course-custom-" + Date.now(),
+          badge: { vi: badge, en: badge },
+          meta: { vi: "0 Bài giảng · Đang cập nhật", en: "0 Lessons · Updating" },
+          title: { vi: title, en: title },
+          desc: { vi: desc, en: desc },
+          deliverable: { vi: "Tài liệu chuyên đề thực chiến", en: "Practical course module" },
+          photoSlot: "aboutSpeaker",
+          lessons: [],
+          isDemo: false
+        };
+        const ok = await persistCmsDoc("courses", newCourse.id, newCourse);
+        if (!ok) return;
+        state.courses.unshift(newCourse);
+        saveCollection(STORAGE_KEYS.COURSES, state.courses);
+        renderAll();
+        renderAdminStudioModal();
+        showToast(`Đã tạo chuyên đề "${title}" thành công!`);
+      });
+    }
+
+    body.querySelectorAll("[data-del-course]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const cid = btn.dataset.delCourse;
+        const ok = await removeCmsDoc("courses", cid);
+        if (!ok) return;
+        state.courses = state.courses.filter((c) => c.id !== cid);
+        saveCollection(STORAGE_KEYS.COURSES, state.courses);
+        renderAll();
+        renderAdminStudioModal();
+        showToast("Đã xóa chuyên đề.");
+      });
+    });
+
+    document.getElementById("cmsNewLessonForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       syncMiniTestDomToState(body);
       const courseId = document.getElementById("cmsLessonCourseId").value;
@@ -7068,12 +7287,16 @@
       const exercise = document.getElementById("cmsLessonExercise").value.trim();
 
       const course = state.courses.find((c) => c.id === courseId);
-      if (!course) return;
+      if (!course) {
+        showToast("Vui lòng tạo hoặc chọn một chuyên đề trước khi lưu tài liệu.");
+        return;
+      }
 
       const miniTest = JSON.parse(JSON.stringify(state.generatedMiniTestDraft));
       const formattedBody = sanitizeRichHtml(formatRawOrHtmlContent(rawBody));
       const plainSummary = rawBody.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 
+      if (!Array.isArray(course.lessons)) course.lessons = [];
       course.lessons.push({
         id: "lesson-" + Date.now(),
         title: { vi: title, en: title },
@@ -7084,10 +7307,17 @@
         exercise: { vi: exercise, en: exercise }
       });
 
+      course.isDemo = false;
       course.meta = {
         vi: `Tài liệu chuyên đề · Bộ Mini Test ${miniTest.length} câu · Thực hành`,
         en: `${course.lessons.length} Lessons · ${miniTest.length}-Question Mini Test · Practical`
       };
+
+      const ok = await persistCmsDoc("courses", course.id, course);
+      if (!ok) {
+        course.lessons.pop();
+        return;
+      }
 
       state.generatedMiniTestDraft = getDefaultMiniTestDraft();
       saveCollection(STORAGE_KEYS.COURSES, state.courses);
@@ -7097,12 +7327,18 @@
     });
 
     body.querySelectorAll("[data-del-lesson]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const lid = btn.dataset.delLesson;
         const cid = btn.dataset.parentCourse;
         const course = state.courses.find((c) => c.id === cid);
         if (!course) return;
-        course.lessons = (course.lessons || []).filter((l) => l.id !== lid);
+        const prevLessons = course.lessons ? course.lessons.slice() : [];
+        course.lessons = prevLessons.filter((l) => l.id !== lid);
+        const ok = await persistCmsDoc("courses", course.id, course);
+        if (!ok) {
+          course.lessons = prevLessons;
+          return;
+        }
         saveCollection(STORAGE_KEYS.COURSES, state.courses);
         renderAll();
         renderAdminStudioModal();
@@ -7118,7 +7354,7 @@
         (item, idx) => `
       <tr>
         <td>${idx + 1}</td>
-        <td style="font-weight:700; color:var(--jade-800);">${escapeHtml(item.topic)}</td>
+        <td style="font-weight:700; color:var(--jade-800);">${escapeHtml(item.topic)}${getDemoItemTagHtml("ai_kb", item)}</td>
         <td style="font-size:0.76rem; color:var(--ink-600);">${escapeHtml(item.keywords)}</td>
         <td style="font-size:0.78rem;">${escapeHtml((item.answer || "").slice(0, 110))}...</td>
         <td>
@@ -7193,7 +7429,10 @@
         </form>
       </div>
 
-      <h4 style="margin-bottom:10px;">Kho Nguồn Tri Thức AI Pháp Lý hiện tại (${state.aiKb.length} nguồn)</h4>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+        <h4 style="margin:0;">Kho Nguồn Tri Thức AI Pháp Lý hiện tại (${state.aiKb.length} nguồn)</h4>
+        ${renderDemoCounterBadge("ai_kb", state.aiKb)}
+      </div>
       <table class="cms-list-table">
         <thead>
           <tr>
@@ -7244,21 +7483,25 @@
       }
     });
 
-    document.getElementById("cmsNewKbForm").addEventListener("submit", (e) => {
+    document.getElementById("cmsNewKbForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const topic = document.getElementById("cmsKbTopic").value.trim();
       const notebookBranch = document.getElementById("cmsKbBranch").value;
       const keywords = document.getElementById("cmsKbKeywords").value.trim();
       const answer = document.getElementById("cmsKbAnswer").value.trim();
 
-      state.aiKb.unshift({
+      const newKb = {
         id: "kb-" + Date.now(),
         notebookBranch,
         topic,
         keywords,
-        answer
-      });
+        answer,
+        isDemo: false
+      };
+      const ok = await persistCmsDoc("ai_kb", newKb.id, newKb);
+      if (!ok) return;
 
+      state.aiKb.unshift(newKb);
       saveCollection(STORAGE_KEYS.AI_KB, state.aiKb);
       renderAdminStudioModal();
       showToast("Đã nạp nguồn tri thức mới vào Trợ lý AI ThuysTalk!");
@@ -7268,16 +7511,20 @@
       const file = ev.target.files && ev.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         const text = String(e.target.result || "").trim();
         if (!text) return;
-        state.aiKb.unshift({
+        const newKb = {
           id: "kb-file-" + Date.now(),
           notebookBranch: "Kho Tri Thức Pháp Lý ThuysTalk · " + file.name,
           topic: file.name.replace(/\.[^.]+$/, ""),
           keywords: file.name.toLowerCase() + ", " + text.slice(0, 120).toLowerCase(),
-          answer: text.slice(0, 2500)
-        });
+          answer: text.slice(0, 2500),
+          isDemo: false
+        };
+        const ok = await persistCmsDoc("ai_kb", newKb.id, newKb);
+        if (!ok) return;
+        state.aiKb.unshift(newKb);
         saveCollection(STORAGE_KEYS.AI_KB, state.aiKb);
         renderAdminStudioModal();
         showToast(`Đã nạp tệp "${file.name}" vào Nguồn dữ liệu AI!`);
@@ -7286,13 +7533,12 @@
     });
 
     body.querySelectorAll("[data-del-kb]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         const id = btn.dataset.delKb;
+        const ok = await removeCmsDoc("ai_kb", id);
+        if (!ok) return;
         state.aiKb = state.aiKb.filter((k) => k.id !== id);
         saveCollection(STORAGE_KEYS.AI_KB, state.aiKb);
-        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
-          window.ThuysTalkFirebase.deleteDoc("ai_kb", id);
-        }
         renderAdminStudioModal();
         showToast("Đã xóa mục dữ liệu AI.");
       });
@@ -7431,9 +7677,6 @@
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <button type="button" class="btn btn-jade btn-sm" id="reloadFirestoreLeadsBtn">
               Làm mới từ Cloud Firestore
-            </button>
-            <button type="button" class="btn btn-outline btn-sm" id="syncFirebaseBtn">
-              Đồng bộ dữ liệu mẫu lên Firestore
             </button>
             <a href="https://console.firebase.google.com/project/thuystalk/firestore/databases/-default-/data" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="color:var(--jade-800); border-color:var(--jade-600); font-weight:700;">
               Mở Cloud Firestore Console
@@ -7649,23 +7892,6 @@
       URL.revokeObjectURL(url);
       showToast("Đã tải xuống lịch sử học tập & tải tài liệu (.csv)!");
     });
-
-    const syncFbBtn = document.getElementById("syncFirebaseBtn");
-    if (syncFbBtn) {
-      syncFbBtn.addEventListener("click", async () => {
-        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady()) {
-          showToast("Đang đồng bộ dữ liệu lên Cloud Firestore (thuystalk)...");
-          await window.ThuysTalkFirebase.syncCollection("articles", state.articles);
-          await window.ThuysTalkFirebase.syncCollection("videos", state.videos);
-          await window.ThuysTalkFirebase.syncCollection("courses", state.courses);
-          await window.ThuysTalkFirebase.syncCollection("ai_kb", state.aiKb);
-          showToast("Đã đồng bộ toàn bộ Bài viết, Video, E-Learning lên Cloud Firestore (thuystalk) thành công!");
-          loadFirestoreData();
-        } else {
-          showToast("Cơ sở dữ liệu đám mây đã được kết nối & sẵn sàng lưu trữ!");
-        }
-      });
-    }
   }
 
   function compressAndLoadImage(file, callback) {
