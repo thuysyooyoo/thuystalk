@@ -1669,6 +1669,19 @@
   // ==========================================================================
   // 5. E-LEARNING SECTION & MULTI-QUESTION MINI TEST CLASSROOM
   // ==========================================================================
+  function persistLearnerProgressIfSignedIn() {
+    if (
+      state.learnerUid &&
+      state.learnerEmail &&
+      window.ThuysTalkFirebase &&
+      typeof window.ThuysTalkFirebase.saveLearnerProgress === "function"
+    ) {
+      window.ThuysTalkFirebase
+        .saveLearnerProgress(state.learnerEmail, state.completedLessons)
+        .catch(() => {});
+    }
+  }
+
   function getCourseProgress(course) {
     const total = course.lessons ? course.lessons.length : 0;
     if (!total) return 0;
@@ -2048,6 +2061,7 @@
           fb.textContent = expText;
           state.completedLessons[lesson.id] = true;
           localStorage.setItem(STORAGE_KEYS.PROGRESS, JSON.stringify(state.completedLessons));
+          persistLearnerProgressIfSignedIn();
           renderElearningSection(window.THUYSTALK_I18N[state.lang]);
         } else {
           fb.style.color = "#B91C1C";
@@ -2062,6 +2076,7 @@
     document.getElementById("toggleLessonDoneBtn").addEventListener("click", () => {
       state.completedLessons[lesson.id] = !state.completedLessons[lesson.id];
       localStorage.setItem(STORAGE_KEYS.PROGRESS, JSON.stringify(state.completedLessons));
+      persistLearnerProgressIfSignedIn();
       renderClassroomModal();
       renderElearningSection(window.THUYSTALK_I18N[state.lang]);
       showToast(
