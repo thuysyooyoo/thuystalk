@@ -2263,7 +2263,7 @@
         bestItem = {
           answer: item.answer,
           source: (item.notebookBranch || "Kho Tri Thức Pháp Lý ThuysTalk")
-            .replace(/Google NotebookLM|NotebookLM|\/notebook/gi, "Kho Tri Thức ThuysTalk")
+            .replace(/Google\s+Notebook\s*LM|Notebook\s*LM|Google\s+Gemini\s+Notebook|Gemini\s+Notebook|\/notebook|\bsổ\s+tay\b/gi, "Kho Tri Thức ThuysTalk")
             .replace(/\([a-f0-9-]{20,}\)/gi, "")
             .trim(),
           topic: item.topic,
@@ -2301,8 +2301,11 @@
   function formatAiResponseHtml(rawText) {
     if (!rawText) return "";
 
-    // 1. Strip emojis (Zero Emojis rule)
-    let clean = String(rawText).replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}💡📌🔍📎🔗🎯🚀✨⚡✅❌⚠️]/gu, "");
+    // 1. Strip emojis (Zero Emojis rule) and clean residual NotebookLM / web-search terms
+    let clean = String(rawText)
+      .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}💡📌🔍📎🔗🎯🚀✨⚡✅❌⚠️]/gu, "")
+      .replace(/Google\s+Notebook\s*LM|Notebook\s*LM|Google\s+Gemini\s+Notebook|Gemini\s+Notebook/gi, "kho tri thức ThuysTalk")
+      .replace(/\b(?:các\s+)?sổ\s+tay(?:\s+này)?\b/gi, "kho tri thức ThuysTalk");
 
     const rawLines = clean.split("\n");
     const out = [];
