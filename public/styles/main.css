@@ -2768,17 +2768,28 @@ body.admin-mode .editable-photo-wrap:hover .photo-change-trigger {
   .expertise-layout,
   .video-showcase-grid,
   .consult-banner-box {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hero-content,
+  .hero-visual-stage,
+  .about-visual-wrap,
+  .about-content,
+  .expertise-intro,
+  .consult-info-col,
+  .consult-form-card {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .expertise-cards-grid,
   .articles-grid,
   .hero-triage-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .courses-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .main-nav {
@@ -2790,7 +2801,7 @@ body.admin-mode .editable-photo-wrap:hover .photo-change-trigger {
   }
 
   .admin-page-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .admin-sidebar {
@@ -2807,7 +2818,63 @@ body.admin-mode .editable-photo-wrap:hover .photo-change-trigger {
   .form-row-2,
   .admin-photos-grid,
   .hero-triage-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hero-visual-stage,
+  .about-visual-wrap {
+    padding: 16px 8px;
+    min-height: auto;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .hero-portrait-frame {
+    width: min(320px, 100%);
+    max-width: 100%;
+    height: auto;
+    aspect-ratio: 336 / 430;
+  }
+
+  .about-main-photo {
+    width: min(340px, 100%);
+    max-width: 100%;
+    height: auto;
+    aspect-ratio: 390 / 410;
+  }
+
+  .hero-geo-jade,
+  .hero-geo-orange {
+    width: min(290px, 82%);
+    height: 82%;
+  }
+
+  .about-geo-backing {
+    width: min(290px, 82%);
+    height: 82%;
+    right: 8px;
+  }
+
+  .hero-script-note {
+    right: 6px;
+    max-width: calc(100% - 16px);
+  }
+
+  .about-script-callout {
+    left: 6px;
+    max-width: calc(100% - 16px);
+  }
+
+  .hero-floating-pill,
+  .about-exp-badge {
+    left: 6px;
+    max-width: calc(100% - 12px);
+  }
+
+  .about-secondary-card {
+    right: 6px;
+    bottom: 4px;
+    width: 132px;
   }
 
   .consult-banner-box {
