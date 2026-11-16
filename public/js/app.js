@@ -215,22 +215,63 @@
     }
   }
 
-  function getThuystalkApiUrl(apiPath) {
-    if (
-      typeof window !== "undefined" &&
-      window.location &&
-      (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") &&
-      window.location.port === "8099"
-    ) {
-      return `${window.location.origin}${apiPath}`;
+  function normalizeBridgeBaseUrl(rawUrl) {
+    const clean = String(rawUrl || "").trim();
+    if (!clean) return "";
+    return clean.replace(/\/api\/(?:notebook-query|notebook-status|notebook-job).*$/i, "").replace(/\/+$/, "");
+  }
+
+  function isHttpsUrl(url) {
+    return /^https:\/\/[a-z0-9.-]+(?::\d+)?(?:\/.*)?$/i.test(String(url || "").trim());
+  }
+
+  function isLocalOriginUrl(url) {
+    return /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/i.test(String(url || "").trim());
+  }
+
+  function getApiBase() {
+    const localDefault = "http://localhost:8099";
+    if (typeof window === "undefined" || !window.location) return "";
+    const proto = String(window.location.protocol || "").toLowerCase();
+    const host = String(window.location.hostname || "").toLowerCase();
+    const port = String(window.location.port || "");
+    const isLocalHost = host === "localhost" || host === "127.0.0.1";
+
+    if (isLocalHost && port === "8099") {
+      return window.location.origin;
     }
-    const base = (state.notebookBridgeUrl || "http://localhost:8099/api/notebook-query")
-      .trim()
-      .replace(/\/api\/notebook-query\/?$/, "");
-    return `${base}${apiPath}`;
+
+    const configured = normalizeBridgeBaseUrl(state && state.notebookBridgeUrl);
+    if (proto === "file:" || isLocalHost) {
+      if (isHttpsUrl(configured) || isLocalOriginUrl(configured)) {
+        return configured;
+      }
+      return localDefault;
+    }
+
+    if (isHttpsUrl(configured)) {
+      return configured;
+    }
+    return "";
+  }
+
+  function getApiUrl(apiPath) {
+    const base = getApiBase();
+    if (!base) return "";
+    const path = String(apiPath || "").startsWith("/") ? String(apiPath || "") : `/${apiPath || ""}`;
+    return `${base}${path}`;
   }
 
   async function postDeviceApi(apiPath, bodyPayload) {
+    const apiUrl = getApiUrl(apiPath);
+    if (!apiUrl) {
+      return {
+        ok: false,
+        status: 503,
+        networkError: true,
+        data: { error: "Chưa gửi được mã xác nhận lúc này. Bạn có thể đăng nhập bằng Google hoặc thử lại sau." }
+      };
+    }
     const token =
       window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.getIdToken === "function"
         ? await window.ThuysTalkFirebase.getIdToken(false)
@@ -239,7 +280,7 @@
       return { ok: false, status: 401, data: { error: "Phiên đăng nhập chưa sẵn sàng." } };
     }
     try {
-      const res = await fetch(getThuystalkApiUrl(apiPath), {
+      const res = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -351,8 +392,7 @@
     aiKb: loadCollection(STORAGE_KEYS.AI_KB, window.THUYSTALK_DEFAULT_KB),
     socialLinks: loadCollection(STORAGE_KEYS.SOCIALS, window.THUYSTALK_DEFAULT_SOCIALS || []),
     videoCategories: loadCollection(STORAGE_KEYS.VIDEO_CATS, window.THUYSTALK_DEFAULT_VIDEO_CATEGORIES || []),
-    notebookBridgeUrl:
-      localStorage.getItem(STORAGE_KEYS.BRIDGE_URL) || "http://localhost:8099/api/notebook-query",
+    notebookBridgeUrl: localStorage.getItem(STORAGE_KEYS.BRIDGE_URL) || "",
     learnerEmail: "",
     learnerUid: "",
     learnerName: localStorage.getItem(STORAGE_KEYS.LEARNER_NAME) || "",
@@ -503,9 +543,10 @@
       }
 
       if (bridgeRes && bridgeRes.url && typeof bridgeRes.url === "string") {
+        const cleanBridgeUrl = bridgeRes.url.trim();
         const isLocalOrigin = /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname);
-        if (!isLocalOrigin || !/^https?:\/\/(localhost|127\.0\.0\.1)/i.test(bridgeRes.url)) {
-          state.notebookBridgeUrl = bridgeRes.url.trim();
+        if (isHttpsUrl(cleanBridgeUrl) || (isLocalOrigin && isLocalOriginUrl(normalizeBridgeBaseUrl(cleanBridgeUrl)))) {
+          state.notebookBridgeUrl = cleanBridgeUrl;
           localStorage.setItem(STORAGE_KEYS.BRIDGE_URL, state.notebookBridgeUrl);
         }
       }
@@ -679,7 +720,7 @@
       if (bridgeRes && bridgeRes.url && typeof bridgeRes.url === "string") {
         const cleanUrl = bridgeRes.url.trim();
         const isLocalOrigin = /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname);
-        if (!isLocalOrigin || !/^https?:\/\/(localhost|127\.0\.0\.1)/i.test(cleanUrl)) {
+        if (isHttpsUrl(cleanUrl) || (isLocalOrigin && isLocalOriginUrl(normalizeBridgeBaseUrl(cleanUrl)))) {
           state.notebookBridgeUrl = cleanUrl;
           localStorage.setItem(STORAGE_KEYS.BRIDGE_URL, cleanUrl);
         }
@@ -1784,13 +1825,14 @@
       );
 
       const isFileProtocol = window.location.protocol === "file:";
+      const localHopBase = isFileProtocol ? getApiBase() : "";
       const playerMediaHtml = embedSrc
         ? isFileProtocol
           ? `
             <img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(vTitle)}" style="width:100%;height:100%;object-fit:cover;opacity:0.55;" />
             <div class="video-play-overlay" style="background:rgba(4,40,32,0.78); padding:24px; text-align:center;">
-              <a href="http://localhost:8099/index.html#video" class="play-btn-pill" style="text-decoration:none;">
-                Mở qua http://localhost:8099 để phát Video YouTube trực tiếp (Tránh lỗi 153 của trình duyệt khi mở file://)
+              <a href="${escapeHtml(localHopBase)}/index.html#video" class="play-btn-pill" style="text-decoration:none;">
+                Mở qua máy chủ nội bộ để phát Video YouTube trực tiếp (Tránh lỗi 153 của trình duyệt khi mở file://)
               </a>
               <a href="https://www.youtube.com/watch?v=${escapeHtml(ytId)}" target="_blank" rel="noopener noreferrer" style="color:#FFF; font-size:0.84rem; font-weight:700; text-decoration:underline; margin-top:6px;">
                 Hoặc mở xem ngay trên YouTube (@thuystalk)
@@ -2600,7 +2642,24 @@
     }
 
     // 2. Call the async backend AI Knowledge Bridge
-    const queryEndpoint = getThuystalkApiUrl("/api/notebook-query");
+    const queryEndpoint = getApiUrl("/api/notebook-query");
+    if (!queryEndpoint) {
+      const kbFallback = searchLocalKnowledgeBase(q);
+      if (kbFallback) {
+        renderLocalKbHit(kbFallback);
+        return;
+      }
+      appendAiActionNotice(
+        "Hệ thống tra cứu chuyên sâu chưa có kết nối máy chủ API lúc này. Vui lòng gửi câu hỏi cho Thúy để được hỗ trợ trực tiếp.",
+        {
+          showRetry: true,
+          showSendToThuy: true,
+          query: q,
+          onRetry: () => executeAiQuery(q, forceDeepLookup, route)
+        }
+      );
+      return;
+    }
     const chatBox = document.getElementById("notebookChatMessages");
     let loadingBubble = null;
     let thinkingTimerId = null;
@@ -2740,7 +2799,7 @@
         return;
       }
 
-      const pollUrl = getThuystalkApiUrl(`/api/notebook-job?id=${encodeURIComponent(data.job_id)}`);
+      const pollUrl = getApiUrl(`/api/notebook-job?id=${encodeURIComponent(data.job_id)}`);
       const pollStartedAt = Date.now();
       const MAX_POLL_MS = 6 * 60 * 1000;
 
@@ -6081,8 +6140,13 @@
         alert("Phiên đăng nhập Quản trị viên đã hết hạn hoặc chưa xác thực. Vui lòng đăng nhập lại bằng Google.");
         return;
       }
+      const bulkEmailUrl = getApiUrl("/api/send-bulk-email");
+      if (!bulkEmailUrl) {
+        alert("Chưa có kết nối máy chủ gửi email. Vui lòng bật máy chủ nội bộ hoặc cấu hình URL HTTPS hợp lệ ở Tab 05.");
+        return;
+      }
       const cleanText = String(artBody || "").replace(/<[^>]*>/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-      const res = await fetch("http://localhost:8099/api/send-bulk-email", {
+      const res = await fetch(bulkEmailUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -6871,35 +6935,38 @@
             showToast(msg);
             return;
           }
-          const resp = await fetch("http://localhost:8099/api/parse-excel", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": "Bearer " + idToken
-            },
-            body: JSON.stringify({
-              filename: file.name,
-              data_base64: b64
-            })
-          });
-          if (resp.status === 401 || resp.status === 403) {
-            const msg = `Phiên đăng nhập Quản trị viên không hợp lệ hoặc đã hết hạn (${resp.status}). Vui lòng đăng nhập lại bằng Google.`;
-            if (statusEl) statusEl.textContent = msg;
-            showToast(msg);
-            alert(msg);
-            return;
-          }
-          if (resp.ok) {
-            const data = await resp.json();
-            if (data && Array.isArray(data.questions) && data.questions.length > 0) {
-              state.generatedMiniTestDraft = data.questions;
-              renderAdminElearningTab(body, vals);
-              const newStatusEl = document.getElementById("cmsExcelImportStatus");
-              if (newStatusEl) {
-                newStatusEl.textContent = `Đã nạp thành công ${data.questions.length} câu hỏi Mini Test từ file "${file.name}"!`;
-              }
-              showToast(`Đã điền tự động ${data.questions.length} câu hỏi Mini Test từ file "${file.name}"!`);
+          const parseExcelUrl = getApiUrl("/api/parse-excel");
+          if (parseExcelUrl) {
+            const resp = await fetch(parseExcelUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + idToken
+              },
+              body: JSON.stringify({
+                filename: file.name,
+                data_base64: b64
+              })
+            });
+            if (resp.status === 401 || resp.status === 403) {
+              const msg = `Phiên đăng nhập Quản trị viên không hợp lệ hoặc đã hết hạn (${resp.status}). Vui lòng đăng nhập lại bằng Google.`;
+              if (statusEl) statusEl.textContent = msg;
+              showToast(msg);
+              alert(msg);
               return;
+            }
+            if (resp.ok) {
+              const data = await resp.json();
+              if (data && Array.isArray(data.questions) && data.questions.length > 0) {
+                state.generatedMiniTestDraft = data.questions;
+                renderAdminElearningTab(body, vals);
+                const newStatusEl = document.getElementById("cmsExcelImportStatus");
+                if (newStatusEl) {
+                  newStatusEl.textContent = `Đã nạp thành công ${data.questions.length} câu hỏi Mini Test từ file "${file.name}"!`;
+                }
+                showToast(`Đã điền tự động ${data.questions.length} câu hỏi Mini Test từ file "${file.name}"!`);
+                return;
+              }
             }
           }
         } catch (err) {
@@ -6924,7 +6991,7 @@
           };
           reader.readAsText(file, "utf-8");
         } else {
-          showToast("Để đọc trực tiếp file .xlsx, hãy mở trang qua http://localhost:8099 (hoặc dùng file .csv).");
+          showToast("Để đọc trực tiếp file .xlsx, hãy chạy máy chủ ThuysTalk hoặc dùng file .csv.");
         }
       });
     }
@@ -7063,7 +7130,7 @@
             class="form-control"
             style="flex:1; min-width:280px; background:#FFFFFF;"
             value="${escapeHtml(state.notebookBridgeUrl)}"
-            placeholder="http://localhost:8099/api/notebook-query"
+            placeholder="https://your-tunnel-url.trycloudflare.com"
           />
           <button type="button" class="btn btn-jade btn-sm" id="cmsSaveBridgeUrlBtn">
             Lưu URL API Trung Gian
@@ -7145,8 +7212,13 @@
 
     document.getElementById("cmsTestBridgeBtn").addEventListener("click", async () => {
       const val = document.getElementById("cmsBridgeUrlInput").value.trim();
-      const statusUrl = val.replace(/\/api\/notebook-query\/?$/, "/api/notebook-status");
+      const customBase = normalizeBridgeBaseUrl(val);
+      const statusUrl = customBase ? `${customBase}/api/notebook-status` : getApiUrl("/api/notebook-status");
       const msgEl = document.getElementById("cmsBridgeStatusMsg");
+      if (!statusUrl) {
+        msgEl.textContent = "Chưa có địa chỉ API Trung Gian HTTPS hợp lệ để kiểm tra.";
+        return;
+      }
       msgEl.textContent = "Đang kiểm tra kết nối tới API Trung Gian (" + statusUrl + ")...";
       try {
         const res = await fetch(statusUrl);
@@ -7794,30 +7866,37 @@
       localStorage.setItem(STORAGE_KEYS.LANG, state.lang);
     }
 
-    // Check if local server (http://localhost:8099) is running:
-    // 1. Update sidebar status indicator on admin.html
-    // 2. If user opened via file:// (which causes YouTube Error 153), automatically hop to http://localhost:8099!
-    fetch("http://localhost:8099/api/notebook-status")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((info) => {
-        if (!info) return;
-        const sideStatus = document.getElementById("adminSidebarBridgeStatus");
-        if (sideStatus) {
-          sideStatus.textContent = "Động cơ AI Pháp lý: ĐANG KẾT NỐI TRỰC TIẾP (4 Chuyên đề Pháp lý sẵn sàng)";
-        }
-        // Only auto-redirect human file:// browsers (not headless screenshot verifiers)
-        if (window.location.protocol === "file:" && !navigator.webdriver) {
-          const parts = window.location.pathname.split(/[\\/]/);
-          const pageName = parts[parts.length - 1] || "index.html";
-          window.location.replace(`http://localhost:8099/${pageName}${window.location.search}${window.location.hash}`);
-        }
-      })
-      .catch(() => {
-        const sideStatus = document.getElementById("adminSidebarBridgeStatus");
-        if (sideStatus) {
-          sideStatus.textContent = "Động cơ AI Pháp lý: Chế độ Kho AI Nội bộ (Mở chay_web_thuystalk.bat để bật Live API)";
-        }
-      });
+    // Check API server status only when running on localhost/file: or valid HTTPS bridge URL
+    const apiBase = getApiBase();
+    const statusEndpoint = getApiUrl("/api/notebook-status");
+    if (statusEndpoint) {
+      fetch(statusEndpoint)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((info) => {
+          if (!info) return;
+          const sideStatus = document.getElementById("adminSidebarBridgeStatus");
+          if (sideStatus) {
+            sideStatus.textContent = "Động cơ AI Pháp lý: ĐANG KẾT NỐI TRỰC TIẾP (4 Chuyên đề Pháp lý sẵn sàng)";
+          }
+          // Only auto-redirect human file:// browsers (not headless screenshot verifiers)
+          if (window.location.protocol === "file:" && !navigator.webdriver && apiBase) {
+            const parts = window.location.pathname.split(/[\\/]/);
+            const pageName = parts[parts.length - 1] || "index.html";
+            window.location.replace(`${apiBase}/${pageName}${window.location.search}${window.location.hash}`);
+          }
+        })
+        .catch(() => {
+          const sideStatus = document.getElementById("adminSidebarBridgeStatus");
+          if (sideStatus) {
+            sideStatus.textContent = "Động cơ AI Pháp lý: Chế độ Kho AI Nội bộ (Mở chay_web_thuystalk.bat để bật Live API)";
+          }
+        });
+    } else {
+      const sideStatus = document.getElementById("adminSidebarBridgeStatus");
+      if (sideStatus) {
+        sideStatus.textContent = "Động cơ AI Pháp lý: Chế độ Kho AI Nội bộ (Chưa cấu hình URL API HTTPS)";
+      }
+    }
 
     // If we are on the dedicated internal Admin Page (admin.html) — Fail-closed until Google Admin verified:
     if (document.getElementById("adminSidebarNav")) {
