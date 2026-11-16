@@ -31,6 +31,7 @@
     VIDEOS: "thuystalk_cms_videos_v3",
     COURSES: "thuystalk_cms_courses_v3",
     AI_KB: "thuystalk_cms_ai_kb_v3",
+    AI_USER_CACHE: "thuystalk_ai_user_cache_v1",
     SOCIALS: "thuystalk_cms_social_links_v1",
     VIDEO_CATS: "thuystalk_cms_video_categories_v1",
     LAST_LESSON_MAP: "thuystalk_last_lesson_by_course_v1",
@@ -2433,6 +2434,57 @@
     }
   }
 
+  function normalizeAiQueryKey(q) {
+    return String(q || "")
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, " ")
+      .replace(/^[?!.,;:\s]+|[?!.,;:\s]+$/g, "");
+  }
+
+  function loadUserAiCache() {
+    const list = readStorageJson(localStorage, STORAGE_KEYS.AI_USER_CACHE, []);
+    return Array.isArray(list) ? list : [];
+  }
+
+  function findUserAiCacheMatch(question, notebookId) {
+    const qKey = normalizeAiQueryKey(question);
+    if (!qKey) return null;
+    const list = loadUserAiCache();
+    for (let i = list.length - 1; i >= 0; i--) {
+      const entry = list[i];
+      if (!entry || typeof entry.answer !== "string" || !entry.answer.trim()) continue;
+      if (entry.qKey === qKey && (!notebookId || !entry.notebookId || entry.notebookId === notebookId)) {
+        return {
+          answer: entry.answer,
+          source: entry.source || "Kho Tri Thức Pháp Lý ThuysTalk"
+        };
+      }
+    }
+    return null;
+  }
+
+  function saveUserAiCacheEntry({ query, notebookId, answer, source }) {
+    const qKey = normalizeAiQueryKey(query);
+    const cleanAnswer = String(answer || "").trim();
+    if (!qKey || !cleanAnswer) return;
+    const list = loadUserAiCache().filter(
+      (item) => item && !(item.qKey === qKey && (!notebookId || item.notebookId === notebookId))
+    );
+    list.push({
+      qKey,
+      query: String(query || "").trim(),
+      notebookId: notebookId || "",
+      source: source || "Kho Tri Thức Pháp Lý ThuysTalk",
+      answer: cleanAnswer,
+      cachedAt: Date.now()
+    });
+    while (list.length > 30) {
+      list.shift();
+    }
+    writeStorageJson(localStorage, STORAGE_KEYS.AI_USER_CACHE, list);
+  }
+
   function prefillAndOpenConsultForm(questionText) {
     const cleanQ = String(questionText || "").trim();
     const msgInp = document.getElementById("consultMsgInput");
@@ -2507,6 +2559,12 @@
     inp.value = "";
 
     const route = detectNotebookRoute(q);
+    const userCached = findUserAiCacheMatch(q, route.notebookId);
+    if (userCached) {
+      renderLocalKbHit(userCached);
+      return;
+    }
+
     const localMatched = !forceDeepLookup ? searchLocalKnowledgeBase(q) : null;
     if (localMatched) {
       renderLocalKbHit(localMatched);
@@ -2529,7 +2587,12 @@
   async function executeAiQuery(q, forceDeepLookup = false, precomputedRoute = null) {
     const route = precomputedRoute || detectNotebookRoute(q);
 
-    // 1. Check high-confidence local KB match first when not forcing deep lookup
+    // 1. Check visitor FIFO cache & high-confidence local KB match first
+    const userCached = findUserAiCacheMatch(q, route.notebookId);
+    if (userCached) {
+      renderLocalKbHit(userCached);
+      return;
+    }
     const matched = !forceDeepLookup ? searchLocalKnowledgeBase(q) : null;
     if (matched) {
       renderLocalKbHit(matched);
@@ -2632,19 +2695,14 @@
 
     const deliverSuccessAnswer = (answerText) => {
       stopThinkingUi();
-      appendChatMessage(
-        "ai",
-        answerText,
-        `Kho Tri Thức Pháp Lý ThuysTalk · ${route.title.vi}`
-      );
-      state.aiKb.unshift({
-        id: "kb-live-" + Date.now(),
-        notebookBranch: `Kho Tri Thức Pháp Lý ThuysTalk · ${route.title.vi}`,
-        topic: q,
-        keywords: q.toLowerCase(),
-        answer: answerText
+      const citationSource = `Kho Tri Thức Pháp Lý ThuysTalk · ${route.title.vi}`;
+      appendChatMessage("ai", answerText, citationSource);
+      saveUserAiCacheEntry({
+        query: q,
+        notebookId: route.notebookId,
+        answer: answerText,
+        source: citationSource
       });
-      saveCollection(STORAGE_KEYS.AI_KB, state.aiKb);
     };
 
     try {
