@@ -1067,6 +1067,162 @@
     }
   }
 
+  function isVerifiedHttpUrl(rawUrl) {
+    const val = normalizeUrlForCheck(rawUrl);
+    if (!val) return false;
+    try {
+      const parsed = new URL(val);
+      return parsed.protocol === "https:" || parsed.protocol === "http:";
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function renderLegalFieldsCmsMarkup(prefix) {
+    const todayStr = new Date().toLocaleDateString("vi-VN");
+    return `
+      <div class="cms-legal-fields-box" style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:12px 14px; margin:12px 0;">
+        <div style="font-size:0.84rem; font-weight:800; color:var(--jade-900); margin-bottom:8px;">
+          Thông tin Pháp lý &amp; Hiệu lực (Hiển thị minh bạch dưới nội dung)
+        </div>
+        <div class="form-row-2">
+          <div class="form-group">
+            <label>Căn cứ pháp lý (Số hiệu văn bản)</label>
+            <input type="text" id="${escapeHtml(prefix)}RefNumber" class="form-control" style="background:#fff;" placeholder="VD: QĐ 31/2026/QĐ-TTg, CV 23913/CHQ-GSQL..." />
+          </div>
+          <div class="form-group">
+            <label>Ngày hiệu lực văn bản</label>
+            <input type="text" id="${escapeHtml(prefix)}EffectiveDate" class="form-control" style="background:#fff;" placeholder="VD: 01/07/2026" />
+          </div>
+        </div>
+        <div class="form-row-2" style="margin-bottom:0;">
+          <div class="form-group">
+            <label>Link văn bản gốc (URL https:// hoặc http:// đã xác minh)</label>
+            <input type="text" id="${escapeHtml(prefix)}SourceUrl" class="form-control" style="background:#fff;" placeholder="https://vanban.chinhphu.vn/..." />
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label>Cập nhật lần cuối</label>
+              <input type="text" id="${escapeHtml(prefix)}LastUpdated" class="form-control" style="background:#fff;" value="${escapeHtml(todayStr)}" placeholder="dd/mm/yyyy" />
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label>Tình trạng hiệu lực</label>
+              <select id="${escapeHtml(prefix)}ValidityStatus" class="form-control" style="background:#fff;">
+                <option value="Còn hiệu lực">Còn hiệu lực</option>
+                <option value="Sửa đổi/bổ sung">Sửa đổi/bổ sung</option>
+                <option value="Hết hiệu lực">Hết hiệu lực</option>
+                <option value="Tham khảo thực tiễn">Tham khảo thực tiễn</option>
+                <option value="">-- Không chọn --</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function readLegalFieldsFromCms(prefix) {
+    const refEl = document.getElementById(prefix + "RefNumber");
+    const effEl = document.getElementById(prefix + "EffectiveDate");
+    const urlEl = document.getElementById(prefix + "SourceUrl");
+    const updEl = document.getElementById(prefix + "LastUpdated");
+    const stEl = document.getElementById(prefix + "ValidityStatus");
+
+    const refNumber = refEl ? refEl.value.trim() : "";
+    const effectiveDate = effEl ? effEl.value.trim() : "";
+    const rawUrl = urlEl ? urlEl.value.trim() : "";
+    const lastUpdated = updEl ? updEl.value.trim() : "";
+    const validityStatus = stEl ? stEl.value.trim() : "";
+
+    if (rawUrl && !isVerifiedHttpUrl(rawUrl)) {
+      return {
+        ok: false,
+        error: "Link văn bản gốc phải là địa chỉ URL hợp lệ (bắt đầu bằng https:// hoặc http://)."
+      };
+    }
+
+    return {
+      ok: true,
+      legalBasis: {
+        refNumber,
+        effectiveDate,
+        sourceUrl: rawUrl ? normalizeUrlForCheck(rawUrl) : ""
+      },
+      lastUpdated,
+      validityStatus
+    };
+  }
+
+  function fillLegalFieldsToCms(prefix, item) {
+    const lb = (item && item.legalBasis) || {};
+    const refEl = document.getElementById(prefix + "RefNumber");
+    const effEl = document.getElementById(prefix + "EffectiveDate");
+    const urlEl = document.getElementById(prefix + "SourceUrl");
+    const updEl = document.getElementById(prefix + "LastUpdated");
+    const stEl = document.getElementById(prefix + "ValidityStatus");
+    if (refEl) refEl.value = lb.refNumber || "";
+    if (effEl) effEl.value = lb.effectiveDate || "";
+    if (urlEl) urlEl.value = lb.sourceUrl || "";
+    if (updEl) updEl.value = (item && item.lastUpdated) || new Date().toLocaleDateString("vi-VN");
+    if (stEl) stEl.value = (item && item.validityStatus) !== undefined ? item.validityStatus : "Còn hiệu lực";
+  }
+
+  function resetLegalFieldsInCms(prefix) {
+    fillLegalFieldsToCms(prefix, {
+      legalBasis: { refNumber: "", effectiveDate: "", sourceUrl: "" },
+      lastUpdated: new Date().toLocaleDateString("vi-VN"),
+      validityStatus: "Còn hiệu lực"
+    });
+  }
+
+  function renderLegalMetadataBlockHtml(item, fallbackItem = null) {
+    const primaryLb = (item && item.legalBasis) || {};
+    const backupLb = (fallbackItem && fallbackItem.legalBasis) || {};
+    const refNumber = String(primaryLb.refNumber || backupLb.refNumber || "").trim();
+    const effectiveDate = String(primaryLb.effectiveDate || backupLb.effectiveDate || "").trim();
+    const rawUrl = String(primaryLb.sourceUrl || backupLb.sourceUrl || "").trim();
+    const safeUrl = rawUrl && isVerifiedHttpUrl(rawUrl) ? normalizeUrlForCheck(rawUrl) : "";
+    const lastUpdated = String((item && item.lastUpdated) || (fallbackItem && fallbackItem.lastUpdated) || "").trim();
+    const validityStatus = String((item && item.validityStatus) || (fallbackItem && fallbackItem.validityStatus) || "").trim();
+
+    if (!refNumber && !effectiveDate && !safeUrl && !lastUpdated && !validityStatus) {
+      return "";
+    }
+
+    let badgeStyle = "background:#ecfdf5; color:#047857; border:1px solid #6ee7b7;";
+    if (/hết hiệu lực/i.test(validityStatus)) {
+      badgeStyle = "background:#fef2f2; color:#b91c1c; border:1px solid #fca5a5;";
+    } else if (/sửa đổi|bổ sung/i.test(validityStatus)) {
+      badgeStyle = "background:#fffbeb; color:#b45309; border:1px solid #fcd34d;";
+    } else if (/tham khảo/i.test(validityStatus)) {
+      badgeStyle = "background:#f1f5f9; color:#334155; border:1px solid #cbd5e1;";
+    }
+
+    const parts = [];
+    if (refNumber || effectiveDate || safeUrl) {
+      const refDisp = refNumber ? `<strong>${escapeHtml(refNumber)}</strong>` : "";
+      const effDisp = effectiveDate ? ` (Hiệu lực: ${escapeHtml(effectiveDate)})` : "";
+      const linkDisp = safeUrl
+        ? ` · <a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" style="color:#0f766e; font-weight:700; text-decoration:underline;">Xem văn bản gốc</a>`
+        : "";
+      parts.push(`<div><strong>Căn cứ pháp lý:</strong> ${refDisp}${effDisp}${linkDisp}</div>`);
+    }
+    if (lastUpdated) {
+      parts.push(`<div><strong>Cập nhật lần cuối:</strong> ${escapeHtml(lastUpdated)}</div>`);
+    }
+    if (validityStatus) {
+      parts.push(
+        `<div><strong>Tình trạng hiệu lực:</strong> <span class="legal-validity-badge" style="display:inline-block; padding:2px 8px; border-radius:999px; font-size:0.75rem; font-weight:800; ${badgeStyle}">${escapeHtml(validityStatus)}</span></div>`
+      );
+    }
+
+    return `
+      <div class="legal-metadata-card" style="margin-top:14px; padding:10px 14px; border-radius:10px; background:#f8fafc; border:1px solid #cbd5e1; font-size:0.82rem; color:#1e293b; display:flex; flex-direction:column; gap:4px;">
+        ${parts.join("")}
+      </div>
+    `;
+  }
+
   function showToast(msg) {
     const el = document.getElementById("toastNotification");
     if (!el) return;
@@ -1656,6 +1812,7 @@
         <p style="color:var(--jade-700); font-weight:700;">${escapeHtml(lSummary)}</p>
         <hr style="border:none; border-top:1px solid var(--ink-200); margin:16px 0;" />
         ${sanitizeRichHtml(lContent)}
+        ${renderLegalMetadataBlockHtml(lesson, course)}
       </div>
       ${exerciseHtml}
       ${quizHtml}
@@ -2453,6 +2610,7 @@
         </p>
         <hr style="border:none; border-top:1px solid var(--ink-200); margin:16px 0;" />
         ${sanitizeRichHtml(aBody)}
+        ${renderLegalMetadataBlockHtml(art)}
       </div>
       <div class="material-lead-box" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;">
         <div>
@@ -2638,6 +2796,9 @@
             .replace(/\([a-f0-9-]{20,}\)/gi, "")
             .trim(),
           topic: item.topic,
+          legalBasis: item.legalBasis || null,
+          lastUpdated: item.lastUpdated || "",
+          validityStatus: item.validityStatus || "",
           score
         };
       }
@@ -2746,7 +2907,7 @@
     return out.join("");
   }
 
-  function appendChatMessage(role, text, citation) {
+  function appendChatMessage(role, text, citation, legalMetaItem = null) {
     const box = document.getElementById("notebookChatMessages");
     if (!box) return null;
     const div = document.createElement("div");
@@ -2756,8 +2917,10 @@
       div.innerHTML = `<div class="chat-msg-text">${formatted}</div>`;
     } else {
       const formatted = formatAiResponseHtml(text);
+      const legalHtml = legalMetaItem ? renderLegalMetadataBlockHtml(legalMetaItem) : "";
       div.innerHTML = `
         <div class="chat-msg-text">${formatted}</div>
+        ${legalHtml}
         ${citation ? `<div class="chat-source-citation">Nguồn trích xuất: ${escapeHtml(citation)}</div>` : ""}
         <div class="chat-bubble-disclaimer">
           AI có thể có sai sót, hãy liên hệ với Thúy <a href="tel:0767648862">0767.648.862</a> để được tư vấn cụ thể.
@@ -2913,7 +3076,7 @@
 
   function renderLocalKbHit(matched) {
     if (!matched) return;
-    appendChatMessage("ai", matched.answer, matched.source);
+    appendChatMessage("ai", matched.answer, matched.source, matched);
   }
 
   async function handleNotebookSearch(forceDeepLookup = false) {
@@ -6337,6 +6500,7 @@
             <label>Nội dung toàn văn bài viết (Gõ trực tiếp kiểu Word, căn lề, chèn bảng, ảnh nén hoặc link YouTube) *</label>
             ${renderWordEditorMarkup("cmsArtEditor", "Nhập nội dung bài viết trực tiếp tại đây như trong Word, căn lề, bôi màu và chèn ảnh dễ dàng...")}
           </div>
+          ${renderLegalFieldsCmsMarkup("cmsArtLegal")}
           ${renderAttachmentsEditorMarkup("cmsArtAttachmentsEditor")}
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <button type="submit" class="btn btn-primary btn-sm" id="cmsArtSubmitBtn">
@@ -6389,6 +6553,7 @@
 
         const bodyContent = typeof target.body === "object" ? (target.body.vi || target.body) : target.body;
         artEditor.setHtml(bodyContent);
+        fillLegalFieldsToCms("cmsArtLegal", target);
         if (artAttEditor) {
           const publicAtts = getPublicAttachments(target);
           artAttEditor.setItems(publicAtts);
@@ -6432,6 +6597,7 @@
       editingArtId = null;
       document.getElementById("cmsNewArticleForm").reset();
       artEditor.clear();
+      resetLegalFieldsInCms("cmsArtLegal");
       if (artAttEditor) artAttEditor.clear();
       document.getElementById("cmsArtFormHeading").textContent = "Soạn Bài Viết Chuyên Sâu Mới (Trình Soạn Thảo Kiểu Word Trực Quan)";
       document.getElementById("cmsArtEditModeBadge").style.display = "none";
@@ -6454,6 +6620,12 @@
 
       if (!formattedBody) {
         showToast("Vui lòng nhập nội dung bài viết.");
+        return;
+      }
+
+      const legalRes = readLegalFieldsFromCms("cmsArtLegal");
+      if (!legalRes.ok) {
+        showToast(legalRes.error);
         return;
       }
 
@@ -6483,6 +6655,9 @@
           art.photoSlot = photoSlot;
           art.excerpt = { vi: excerpt, en: excerpt };
           art.body = { vi: formattedBody, en: formattedBody };
+          art.legalBasis = legalRes.legalBasis;
+          art.lastUpdated = legalRes.lastUpdated;
+          art.validityStatus = legalRes.validityStatus;
           art.attachments = attRes.publicAttachments;
           art.isDemo = false;
           art.updatedAt = new Date().toLocaleDateString("vi-VN");
@@ -6507,6 +6682,9 @@
           title: { vi: titleVi, en: titleEn },
           excerpt: { vi: excerpt, en: excerpt },
           body: { vi: formattedBody, en: formattedBody },
+          legalBasis: legalRes.legalBasis,
+          lastUpdated: legalRes.lastUpdated,
+          validityStatus: legalRes.validityStatus,
           attachments: attRes.publicAttachments,
           isDemo: false
         };
@@ -7292,6 +7470,7 @@
                 )}"
               />
             </div>
+            ${renderLegalFieldsCmsMarkup("cmsLessonLegal")}
           </div>
 
           <!-- BƯỚC 2: ĐẨY FILE EXCEL / CSV HOẶC CHỈNH SỬA BỘ MINI TEST TRỰC QUAN -->
@@ -7370,13 +7549,22 @@
     if (lessonEditor && savedFormValues && savedFormValues.rawBody) {
       lessonEditor.setHtml(savedFormValues.rawBody);
     }
+    if (savedFormValues && savedFormValues.legalMeta) {
+      fillLegalFieldsToCms("cmsLessonLegal", savedFormValues.legalMeta);
+    }
 
     function getCurrentLessonFormValues() {
+      const legalRes = readLegalFieldsFromCms("cmsLessonLegal");
       return {
         courseId: document.getElementById("cmsLessonCourseId").value,
         title: document.getElementById("cmsLessonTitle").value,
         rawBody: lessonEditor ? lessonEditor.getHtml() : "",
-        exercise: document.getElementById("cmsLessonExercise").value
+        exercise: document.getElementById("cmsLessonExercise").value,
+        legalMeta: {
+          legalBasis: legalRes.legalBasis || { refNumber: "", effectiveDate: "", sourceUrl: "" },
+          lastUpdated: legalRes.lastUpdated || "",
+          validityStatus: legalRes.validityStatus || "Còn hiệu lực"
+        }
       };
     }
 
@@ -7704,6 +7892,12 @@
         return;
       }
 
+      const legalRes = readLegalFieldsFromCms("cmsLessonLegal");
+      if (!legalRes.ok) {
+        showToast(legalRes.error);
+        return;
+      }
+
       const miniTest = JSON.parse(JSON.stringify(state.generatedMiniTestDraft));
       const formattedBody = sanitizeRichHtml(formatRawOrHtmlContent(rawBody));
       const plainSummary = rawBody.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -7716,7 +7910,10 @@
         summary: { vi: plainSummary.slice(0, 140) + "...", en: plainSummary.slice(0, 140) + "..." },
         content: { vi: formattedBody, en: formattedBody },
         miniTest,
-        exercise: { vi: exercise, en: exercise }
+        exercise: { vi: exercise, en: exercise },
+        legalBasis: legalRes.legalBasis,
+        lastUpdated: legalRes.lastUpdated,
+        validityStatus: legalRes.validityStatus
       });
 
       course.isDemo = false;
@@ -7837,6 +8034,7 @@
             <label>Nội dung câu trả lời chuẩn xác để AI phản hồi *</label>
             <textarea id="cmsKbAnswer" class="form-control" rows="4" required placeholder="Nhập kết luận, căn cứ pháp lý và lưu ý thực tế để AI trả lời người dùng..."></textarea>
           </div>
+          ${renderLegalFieldsCmsMarkup("cmsKbLegal")}
           <button type="submit" class="btn btn-primary btn-sm">Lưu vào Kho Nguồn Tri Thức AI</button>
         </form>
       </div>
@@ -7902,12 +8100,21 @@
       const keywords = document.getElementById("cmsKbKeywords").value.trim();
       const answer = document.getElementById("cmsKbAnswer").value.trim();
 
+      const legalRes = readLegalFieldsFromCms("cmsKbLegal");
+      if (!legalRes.ok) {
+        showToast(legalRes.error);
+        return;
+      }
+
       const newKb = {
         id: "kb-" + Date.now(),
         notebookBranch,
         topic,
         keywords,
         answer,
+        legalBasis: legalRes.legalBasis,
+        lastUpdated: legalRes.lastUpdated,
+        validityStatus: legalRes.validityStatus,
         isDemo: false
       };
       const ok = await persistCmsDoc("ai_kb", newKb.id, newKb);
