@@ -4102,6 +4102,19 @@
       : "admin.html";
   }
 
+  function getAdminTab06BadgeText() {
+    const learnersCount = Array.isArray(state.adminLearners) ? state.adminLearners.length : 0;
+    const leadsCount = Array.isArray(state.adminLeads) ? state.adminLeads.length : 0;
+    return `${learnersCount} TV · ${leadsCount} lượt`;
+  }
+
+  function updateAdminLeadsNavBadge() {
+    const badgeEl = document.querySelector('#adminSidebarNav [data-cmstab="leads"] .admin-nav-count');
+    if (badgeEl) {
+      badgeEl.textContent = getAdminTab06BadgeText();
+    }
+  }
+
   function renderAdminStudioModal(highlightSlot = null) {
     if (!state.adminMode) return;
     const sidebarNav = document.getElementById("adminSidebarNav");
@@ -4110,7 +4123,6 @@
     if (!body) return;
 
     const totalLessons = state.courses.reduce((acc, c) => acc + (c.lessons ? c.lessons.length : 0), 0);
-    const leadsCount = JSON.parse(localStorage.getItem(STORAGE_KEYS.LEADS) || "[]").length;
 
     const socialCount = Array.isArray(state.socialLinks) ? state.socialLinks.length : 0;
     const tabs = [
@@ -4152,7 +4164,7 @@
       {
         id: "leads",
         label: "06 · Người Dùng & Sao Lưu",
-        count: `${leadsCount} lượt`,
+        count: getAdminTab06BadgeText(),
         title: "06 · Danh Sách Đăng Ký Tài Liệu & Sao Lưu Hệ Thống",
         desc: "Xuất danh sách người dùng đăng ký tải tài liệu / tư vấn ra file Excel CSV hoặc sao lưu toàn bộ cấu hình CMS."
       }
@@ -8655,9 +8667,8 @@
 
   // --- TAB 6: LEADS & FULL CMS BACKUP (POWERED DIRECTLY BY CLOUD FIRESTORE) ---
   function renderAdminLeadsTab(body) {
-    const localLeads = JSON.parse(localStorage.getItem(STORAGE_KEYS.LEADS) || "[]");
-    let currentLearners = [];
-    let currentLeads = [...localLeads];
+    let currentLearners = Array.isArray(state.adminLearners) ? [...state.adminLearners] : [];
+    let currentLeads = Array.isArray(state.adminLeads) ? [...state.adminLeads] : [];
 
     function buildLearnersTableHtml(learners) {
       if (!learners || learners.length === 0) {
@@ -8865,11 +8876,12 @@
     }
 
     onAdminLeadsUpdated = (kind, list) => {
-      if (kind === "learners") {
+      if (kind === "learners" && Array.isArray(list)) {
         currentLearners = list;
-      } else if (kind === "leads" && Array.isArray(list) && list.length > 0) {
+      } else if (kind === "leads" && Array.isArray(list)) {
         currentLeads = list;
       }
+      updateAdminLeadsNavBadge();
       refreshTablesFromData();
     };
 
@@ -8883,17 +8895,16 @@
           window.ThuysTalkFirebase.fetchLearners(),
           window.ThuysTalkFirebase.fetchLeads()
         ]);
-        currentLearners = learners || [];
+        currentLearners = Array.isArray(learners) ? learners : [];
+        currentLeads = Array.isArray(leads) ? leads : [];
         state.adminLearners = currentLearners;
-        if (leads && leads.length > 0) {
-          currentLeads = leads;
-          state.adminLeads = currentLeads;
-        }
+        state.adminLeads = currentLeads;
+        updateAdminLeadsNavBadge();
         refreshTablesFromData();
         initAdminProtectedListeners();
       } catch (err) {
         console.warn("loadFirestoreData notice:", err);
-        if (learnersStatus) learnersStatus.textContent = "Hiển thị dữ liệu cục bộ.";
+        if (learnersStatus) learnersStatus.textContent = "Không tải được dữ liệu Cloud Firestore.";
       }
     }
 
@@ -9167,22 +9178,40 @@
       return;
     }
     isAdminProtectedListening = true;
-    adminLearnersUnsub = window.ThuysTalkFirebase.listenCollection("learners", (list) => {
-      if (Array.isArray(list)) {
-        state.adminLearners = list;
-        if (state.activeCmsTab === "leads" && typeof onAdminLeadsUpdated === "function") {
-          onAdminLeadsUpdated("learners", list);
-        }
-      }
+    Promise.all([
+      typeof window.ThuysTalkFirebase.fetchLearners === "function"
+        ? window.ThuysTalkFirebase.fetchLearners().catch(() => null)
+        : Promise.resolve(null),
+      typeof window.ThuysTalkFirebase.fetchLeads === "function"
+        ? window.ThuysTalkFirebase.fetchLeads().catch(() => null)
+        : Promise.resolve(null)
+    ]).then(([learners, leads]) => {
+      if (!state.adminMode) return;
+      if (Array.isArray(learners)) state.adminLearners = learners;
+      if (Array.isArray(leads)) state.adminLeads = leads;
+      updateAdminLeadsNavBadge();
     });
-    adminLeadsUnsub = window.ThuysTalkFirebase.listenCollection("leads", (list) => {
-      if (Array.isArray(list)) {
-        state.adminLeads = list;
-        if (state.activeCmsTab === "leads" && typeof onAdminLeadsUpdated === "function") {
-          onAdminLeadsUpdated("leads", list);
+
+    if (typeof window.ThuysTalkFirebase.listenCollection === "function") {
+      adminLearnersUnsub = window.ThuysTalkFirebase.listenCollection("learners", (list) => {
+        if (Array.isArray(list)) {
+          state.adminLearners = list;
+          updateAdminLeadsNavBadge();
+          if (state.activeCmsTab === "leads" && typeof onAdminLeadsUpdated === "function") {
+            onAdminLeadsUpdated("learners", list);
+          }
         }
-      }
-    });
+      });
+      adminLeadsUnsub = window.ThuysTalkFirebase.listenCollection("leads", (list) => {
+        if (Array.isArray(list)) {
+          state.adminLeads = list;
+          updateAdminLeadsNavBadge();
+          if (state.activeCmsTab === "leads" && typeof onAdminLeadsUpdated === "function") {
+            onAdminLeadsUpdated("leads", list);
+          }
+        }
+      });
+    }
   }
 
   function initAdminAuthGate(requestedSlot = null) {
