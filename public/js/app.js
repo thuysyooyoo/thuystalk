@@ -6882,9 +6882,20 @@
           (hasStt ? cols[6] : cols[5]) ||
           "Chính xác! Căn cứ theo nội dung tài liệu và văn bản pháp lý.";
         if (!qText) return;
+        const answerMap = { A: 0, B: 1, C: 2, 1: 0, 2: 1, 3: 2 };
+        const normAns = String(ansRaw || "")
+          .trim()
+          .toUpperCase()
+          .replace(/\.0+$/, "")
+          .replace(/[.)]+$/, "")
+          .trim();
         let cIdx = 0;
-        if (ansRaw.includes("B") || ansRaw === "1" || ansRaw === "2") cIdx = ansRaw === "2" ? 1 : ansRaw.includes("B") ? 1 : 0;
-        if (ansRaw.includes("C") || ansRaw === "3") cIdx = 2;
+        if (Object.prototype.hasOwnProperty.call(answerMap, normAns)) {
+          cIdx = answerMap[normAns];
+        } else {
+          const mAns = normAns.match(/(?:^|\b)([ABC123])(?:\b|$)/);
+          cIdx = mAns ? answerMap[mAns[1]] : 0;
+        }
         parsed.push({
           q: {
             vi: qText.toLowerCase().startsWith("câu") ? qText : `Câu ${idx + 1}: ${qText}`,

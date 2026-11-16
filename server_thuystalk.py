@@ -746,14 +746,14 @@ def parse_minitest_rows(rows):
         if not opt_c.upper().startswith("C."):
             opt_c = f"C. {opt_c}"
 
-        correct_idx = 0
-        if "B" in correct_raw or correct_raw == "1" or correct_raw == "2":
-            if "B" in correct_raw:
-                correct_idx = 1
-            elif "C" in correct_raw:
-                correct_idx = 2
-        if "C" in correct_raw or correct_raw == "3":
-            correct_idx = 2
+        correct_map = {"A": 0, "B": 1, "C": 2, "1": 0, "2": 1, "3": 2}
+        norm_ans = re.sub(r"\.0+$", "", str(correct_raw or "").strip().upper())
+        norm_ans = norm_ans.rstrip(".)").strip()
+        if norm_ans in correct_map:
+            correct_idx = correct_map[norm_ans]
+        else:
+            m_ans = re.search(r"(?:^|\b)([ABC123])(?:\b|$)", norm_ans)
+            correct_idx = correct_map[m_ans.group(1)] if m_ans else 0
 
         if not explanation:
             explanation = "Căn cứ theo nội dung bài giảng và quy định pháp lý hải quan hiện hành."
