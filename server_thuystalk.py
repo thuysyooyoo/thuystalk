@@ -75,16 +75,22 @@ AI_MAX_CACHE_ENTRIES = 200
 AI_QUERY_TIMEOUT_SECONDS = 300
 VN_TZ = datetime.timezone(datetime.timedelta(hours=7))
 AI_QUOTA_ERROR_PATTERNS = (
-    "usage limit",
-    "limit reached",
-    "quota",
-    "rate limit",
-    "resource exhausted",
-    "resource_exhausted",
-    "query_resource_exhausted",
-    "error code 8",
-    "code 8:",
-    "429",
+    re.compile(r"\busage\s+limit\b", re.IGNORECASE),
+    re.compile(r"\blimit\s+reached\b", re.IGNORECASE),
+    re.compile(r"\bquota\b", re.IGNORECASE),
+    re.compile(r"\brate\s*limit\b", re.IGNORECASE),
+    re.compile(r"\bresource\s+exhausted\b", re.IGNORECASE),
+    re.compile(r"\bresource_exhausted\b", re.IGNORECASE),
+    re.compile(r"\bquery_resource_exhausted\b", re.IGNORECASE),
+    re.compile(r"\berror\s+code\s*8\b", re.IGNORECASE),
+    re.compile(r"\bcode\s*8\s*:", re.IGNORECASE),
+    re.compile(r"\b429\b"),
+)
+AI_ANSWER_QUOTA_REJECTION_PATTERNS = (
+    re.compile(r"temporarily\s+rejected\s+the\s+query", re.IGNORECASE),
+    re.compile(r"\busage\s+limit\s+(?:was\s+|has\s+been\s+)?reached\b", re.IGNORECASE),
+    re.compile(r"\bquery_resource_exhausted\b", re.IGNORECASE),
+    re.compile(r"\brate\s+limit\s+exceeded\b", re.IGNORECASE),
 )
 
 _AI_LOCK = threading.Lock()
@@ -280,8 +286,8 @@ def _prune_ai_state(now: float):
 
 
 def _has_quota_keyword(text: str) -> bool:
-    low = str(text or "").lower()
-    return any(pat in low for pat in AI_QUOTA_ERROR_PATTERNS)
+    raw = str(text or "")
+    return any(pat.search(raw) for pat in AI_QUOTA_ERROR_PATTERNS)
 
 
 def _extract_nlm_output(stdout_str: str):
@@ -301,23 +307,24 @@ def _extract_nlm_output(stdout_str: str):
 
 
 def _is_nlm_quota_error(stdout_str: str, stderr_str: str, parsed_json, returncode: int, answer_text: str) -> bool:
-    """Nhận diện hết hạn mức NotebookLM/Gemini Notebook từ đầu ra hoặc lỗi của nlm."""
-    if _has_quota_keyword(stderr_str):
-        return True
+    """Nhận diện hết hạn mức NotebookLM/Gemini Notebook chỉ trên lỗi thật hoặc thông báo từ chối dịch vụ."""
+    has_json_error = False
     if isinstance(parsed_json, dict):
         err_bits = []
         for container in (parsed_json, parsed_json.get("value") if isinstance(parsed_json.get("value"), dict) else {}):
+            if container.get("error") is not None or str(container.get("status") or "").lower() == "error":
+                has_json_error = True
             for field in ("error", "message", "detail", "details", "debug_code", "status"):
                 if container.get(field) is not None:
                     err_bits.append(str(container.get(field)))
-        if _has_quota_keyword(" ".join(err_bits)):
+        if err_bits and _has_quota_keyword(" ".join(err_bits)):
             return True
-    if (returncode != 0 or not answer_text) and _has_quota_keyword(stdout_str):
+
+    if returncode != 0 or not answer_text or has_json_error:
+        return _has_quota_keyword(stderr_str) or _has_quota_keyword(stdout_str)
+
+    if len(answer_text) < 400 and any(pat.search(answer_text) for pat in AI_ANSWER_QUOTA_REJECTION_PATTERNS):
         return True
-    if answer_text and len(answer_text) < 400 and _has_quota_keyword(answer_text):
-        low_ans = answer_text.lower()
-        if any(p in low_ans for p in ("temporarily rejected", "usage limit", "limit reached", "resource exhausted", "resource_exhausted", "rate limit", "429")):
-            return True
     return False
 
 
