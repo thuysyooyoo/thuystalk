@@ -402,6 +402,7 @@ def _invoke_nlm_query(notebook_id: str, query: str) -> tuple:
             "--new-conversation",
             "--timeout",
             str(AI_QUERY_TIMEOUT_SECONDS),
+            "--",
             notebook_id,
             query,
         ],
