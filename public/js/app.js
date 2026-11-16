@@ -2881,6 +2881,55 @@
         });
       });
     }
+    updateGuestQuotaWarning();
+  }
+
+  function updateGuestQuotaWarning(overrideCount) {
+    const chatBody = document.querySelector(".notebook-chat-body");
+    if (!chatBody) return;
+    let warnEl = document.getElementById("guestQuotaWarning");
+    const isLoggedIn = Boolean(state.learnerEmail && state.learnerUid);
+    const usedCount = typeof overrideCount === "number"
+      ? overrideCount
+      : parseInt(localStorage.getItem(STORAGE_KEYS.GUEST_QUERY_COUNT) || "0", 10);
+    const remaining = Math.max(0, 5 - usedCount);
+
+    if (isLoggedIn || usedCount < 3 || usedCount >= 5) {
+      if (warnEl) warnEl.style.display = "none";
+      return;
+    }
+
+    if (!warnEl) {
+      warnEl = document.createElement("div");
+      warnEl.id = "guestQuotaWarning";
+      warnEl.className = "guest-quota-warning";
+      const disclaimerBar = chatBody.querySelector(".chat-disclaimer-bar");
+      if (disclaimerBar) {
+        chatBody.insertBefore(warnEl, disclaimerBar);
+      } else {
+        chatBody.appendChild(warnEl);
+      }
+    }
+
+    warnEl.style.display = "flex";
+    const msg = state.lang === "en"
+      ? `${remaining} free lookup${remaining > 1 ? "s" : ""} remaining before sign-in is required.`
+      : `Còn ${remaining} lượt tra cứu miễn phí trước khi cần đăng nhập.`;
+    const btnText = state.lang === "en" ? "Sign in" : "Đăng nhập ngay";
+    warnEl.innerHTML = `
+      <span>${escapeHtml(msg)}</span>
+      <button type="button" class="guest-quota-login-link">${escapeHtml(btnText)}</button>
+    `;
+    const loginLink = warnEl.querySelector(".guest-quota-login-link");
+    if (loginLink) {
+      loginLink.addEventListener("click", () => {
+        requireLearnerLogin({
+          reason: state.lang === "en"
+            ? "Sign in with Google to unlock unlimited free legal lookups."
+            : "Đăng nhập tài khoản ThuysTalk để tra cứu không giới hạn miễn phí."
+        });
+      });
+    }
   }
 
   function detectNotebookRoute(question) {
@@ -3308,14 +3357,17 @@
   }
 
   async function runWithGuestQuotaAndExecute(q, forceDeepLookup, route) {
-    // SILENT 5-QUERY FREE QUOTA FOR GUESTS (No upfront notice shown; gate appears on the 6th lookup if not logged in)
+    // 5-QUERY FREE QUOTA FOR GUESTS; warn when <= 2 remain, gate on 6th lookup
     if (!state.learnerEmail || !state.learnerUid) {
       const usedCount = parseInt(localStorage.getItem(STORAGE_KEYS.GUEST_QUERY_COUNT) || "0", 10);
       if (usedCount >= 5) {
+        updateGuestQuotaWarning(usedCount);
         appendLearnerLoginGate(q, forceDeepLookup);
         return;
       }
-      localStorage.setItem(STORAGE_KEYS.GUEST_QUERY_COUNT, String(usedCount + 1));
+      const nextCount = usedCount + 1;
+      localStorage.setItem(STORAGE_KEYS.GUEST_QUERY_COUNT, String(nextCount));
+      updateGuestQuotaWarning(nextCount);
     }
     await executeAiQuery(q, forceDeepLookup, route);
   }
