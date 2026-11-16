@@ -6,6 +6,8 @@
 (function () {
   "use strict";
 
+  const SITE_URL = "https://thuystalk.web.app";
+
   const STORAGE_KEYS = {
     LANG: "thuystalk_lang_v3",
     MEDIA: "thuystalk_custom_media_v3",
@@ -1341,7 +1343,7 @@
     linkedin: { name: "LinkedIn", placeholder: "https://linkedin.com/in/thuystalk" },
     instagram: { name: "Instagram", placeholder: "https://instagram.com/thuystalk" },
     email: { name: "Email", placeholder: "mailto:thuystalk.official@gmail.com" },
-    website: { name: "Website", placeholder: "https://thuystalk.vn" }
+    website: { name: "Website", placeholder: SITE_URL }
   };
 
   function getSocialIconSvg(platform) {
