@@ -1498,6 +1498,7 @@
     // 9. Consultation Section
     renderConsultSection(t);
     syncMobileDrawerLanguage();
+    syncAdminPhotoControls();
   }
 
   function initMobileNavigation() {
@@ -1743,7 +1744,7 @@
             <img src="${escapeHtml(photoUrl)}" ${slotMediaId ? `data-media-id="${escapeHtml(slotMediaId)}"` : ""} alt="${escapeHtml(titleText)}" style="${photoStyle}" />
             <span class="course-badge-top">${escapeHtml(badgeText)}</span>
             ${
-              c.photoSlot
+              c.photoSlot && isVerifiedAdminSession()
                 ? `<button type="button" class="photo-change-trigger" data-slot="${escapeHtml(c.photoSlot)}">
                     ${state.lang === "vi" ? "Đổi ảnh" : "Change Photo"}
                    </button>`
@@ -2471,7 +2472,7 @@
         : `
           <img src="${escapeHtml(thumbUrl)}" ${thumbSlotMediaId ? `data-media-id="${escapeHtml(thumbSlotMediaId)}"` : ""} alt="${escapeHtml(vTitle)}" style="${thumbStyle}" />
           ${
-            activeVid.thumbSlot
+            activeVid.thumbSlot && isVerifiedAdminSession()
               ? `<button type="button" class="photo-change-trigger" data-slot="${escapeHtml(activeVid.thumbSlot)}">
                   ${state.lang === "vi" ? "Đổi ảnh" : "Change Photo"}
                  </button>`
@@ -2686,7 +2687,7 @@
             <img src="${escapeHtml(pUrl)}" ${pMediaId ? `data-media-id="${escapeHtml(pMediaId)}"` : ""} alt="${escapeHtml(aTitle)}" style="${pStyle}" />
             <span class="article-pillar-badge">${escapeHtml(aPillar)}</span>
             ${
-              a.photoSlot && !a.customImg
+              a.photoSlot && !a.customImg && isVerifiedAdminSession()
                 ? `<button type="button" class="photo-change-trigger" data-slot="${escapeHtml(a.photoSlot)}">
                     ${state.lang === "vi" ? "Đổi ảnh" : "Change Photo"}
                    </button>`
@@ -3843,8 +3844,40 @@
   // ==========================================================================
   // 10. DEDICATED INTERNAL ADMIN PAGE (admin.html — Left Sidebar + Workspace)
   // ==========================================================================
+  function isVerifiedAdminSession() {
+    if (!state.adminMode || !window.ThuysTalkFirebase || typeof window.ThuysTalkFirebase.getCurrentUser !== "function") {
+      return false;
+    }
+    const u = window.ThuysTalkFirebase.getCurrentUser();
+    return Boolean(u && typeof window.ThuysTalkFirebase.isAdminUser === "function" && window.ThuysTalkFirebase.isAdminUser(u));
+  }
+
+  function syncAdminPhotoControls() {
+    const isAdmin = isVerifiedAdminSession();
+    document.body.classList.toggle("admin-mode", isAdmin);
+    if (!isAdmin) {
+      document.querySelectorAll(".photo-change-trigger").forEach((el) => el.remove());
+      return;
+    }
+    document.querySelectorAll(".editable-photo-wrap[data-photo-slot]").forEach((wrap) => {
+      const slot = wrap.dataset.photoSlot;
+      if (!slot || wrap.querySelector(".photo-change-trigger")) return;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "photo-change-trigger";
+      btn.dataset.slot = slot;
+      btn.textContent = state.lang === "en" ? "Change Photo" : "Đổi ảnh";
+      wrap.appendChild(btn);
+    });
+    bindPhotoTriggers(document);
+  }
+
   function bindPhotoTriggers(root = document) {
-    root.querySelectorAll(".photo-change-trigger").forEach((btn) => {
+    if (!isVerifiedAdminSession()) {
+      (root || document).querySelectorAll(".photo-change-trigger").forEach((btn) => btn.remove());
+      return;
+    }
+    (root || document).querySelectorAll(".photo-change-trigger").forEach((btn) => {
       btn.onclick = (e) => {
         e.stopPropagation();
         const slot = btn.dataset.slot || "heroPortrait";
@@ -5856,7 +5889,8 @@
     localStorage.removeItem(STORAGE_KEYS.LEARNER_PHONE);
     updateHeaderLearnerStatus();
     updateConsultFormStatus();
-    renderElearningSection(window.THUYSTALK_I18N[state.lang]);
+    syncAdminPhotoControls();
+    renderAll();
   }
 
   function stopEmailVerificationPolling() {
@@ -6345,6 +6379,10 @@
     }
     localStorage.setItem(STORAGE_KEYS.LEARNER_EMAIL, user.email);
     state.adminMode = !!(window.ThuysTalkFirebase && window.ThuysTalkFirebase.isAdminUser(user));
+    syncAdminPhotoControls();
+    if (isVerifiedAdminSession()) {
+      renderAll();
+    }
 
     if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchLearnerProgress === "function") {
       window.ThuysTalkFirebase.fetchLearnerProgress(user.email).then((cloudProg) => {
@@ -6364,7 +6402,8 @@
 
     updateHeaderLearnerStatus();
     updateConsultFormStatus();
-    renderElearningSection(window.THUYSTALK_I18N[state.lang]);
+    syncAdminPhotoControls();
+    renderAll();
     setSessionFlag(STORAGE_KEYS.PENDING_REDIRECT_REASON, "");
     consumePendingAuthCallback(user);
     await executePendingRedirectAction(user);
