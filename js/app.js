@@ -1497,8 +1497,43 @@
 
     // 9. Consultation Section
     renderConsultSection(t);
+    renderTriageBar();
     syncMobileDrawerLanguage();
     syncAdminPhotoControls();
+  }
+
+  function renderTriageBar() {
+    const labelEl = document.getElementById("heroTriageLabel");
+    const gridEl = document.getElementById("heroTriageGrid");
+    if (!labelEl || !gridEl) return;
+    const isEn = state.lang === "en";
+    labelEl.textContent = isEn ? "What do you need?" : "Bạn cần gì?";
+    const copy = {
+      policy: {
+        title: isEn ? "Latest Policies & Rulings" : "Chính sách & Quy định mới",
+        sub: isEn ? "New customs official letters & port clearance rules" : "Công văn hải quan & quy định cửa khẩu mới"
+      },
+      hs: {
+        title: isEn ? "Clearance SOP & HS Code" : "Quy trình Thông quan & Mã HS",
+        sub: isEn ? "AI lookup across 6 GRI rules & import/export procedures" : "Tra cứu AI 6 quy tắc GRI & thủ tục XNK"
+      },
+      risk: {
+        title: isEn ? "Cross-Border Procurement Risks" : "Rủi ro Mua hàng Quốc tế",
+        sub: isEn ? "Legal defense & post-clearance audit case studies" : "Case study phòng vệ pháp lý & hậu kiểm"
+      },
+      docs: {
+        title: isEn ? "Shipping Document Check" : "Kiểm tra Bộ chứng từ",
+        sub: isEn ? "Contract, Invoice, Packing List & B/L cross-check guide" : "Checklist Hợp đồng, Invoice, Packing List & B/L"
+      }
+    };
+    gridEl.querySelectorAll("[data-triage-key]").forEach((card) => {
+      const item = copy[card.dataset.triageKey];
+      if (!item) return;
+      const tEl = card.querySelector(".triage-title");
+      const sEl = card.querySelector(".triage-sub");
+      if (tEl) tEl.textContent = item.title;
+      if (sEl) sEl.textContent = item.sub;
+    });
   }
 
   function initMobileNavigation() {
@@ -9136,6 +9171,10 @@
     if (params.get("lang") === "en" || params.get("lang") === "vi") {
       state.lang = params.get("lang");
       localStorage.setItem(STORAGE_KEYS.LANG, state.lang);
+    }
+    const requestedArtCat = (params.get("cat") || "").trim();
+    if (requestedArtCat && document.getElementById("articleFilterTabs")) {
+      state.activeArticleCat = requestedArtCat;
     }
 
     // Check API server status only when running on localhost/file: or valid HTTPS bridge URL
