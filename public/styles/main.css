@@ -786,7 +786,7 @@ body.admin-mode .admin-toggle-btn {
   border-radius: var(--radius-pill);
   font-size: 0.74rem;
   font-weight: 800;
-  display: inline-flex;
+  display: none;
   align-items: center;
   cursor: pointer;
   opacity: 0;
@@ -794,10 +794,14 @@ body.admin-mode .admin-toggle-btn {
   transition: var(--transition);
 }
 
-.editable-photo-wrap:hover .photo-change-trigger,
 body.admin-mode .photo-change-trigger {
-  opacity: 1;
+  display: inline-flex;
+  opacity: 0.9;
   transform: translateY(0);
+}
+
+body.admin-mode .editable-photo-wrap:hover .photo-change-trigger {
+  opacity: 1;
 }
 
 .photo-change-trigger:hover {
