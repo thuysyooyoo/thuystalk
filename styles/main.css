@@ -394,7 +394,9 @@ section[id] {
   background: #FFFFFF;
   box-shadow: -12px 0 36px rgba(4, 40, 32, 0.22);
   transform: translateX(100%);
-  transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.24s step-end;
   display: flex;
   flex-direction: column;
   padding: 20px;
@@ -403,6 +405,9 @@ section[id] {
 
 .mobile-nav-drawer.open {
   transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
+  transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s step-start;
 }
 
 .mobile-nav-drawer-head {
