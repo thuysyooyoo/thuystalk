@@ -1,5 +1,5 @@
 [build]
-  publish = "."
+  publish = "public"
 
 # Block any direct access to backend SQL/scripts/docs (Forced 404)
 [[redirects]]
