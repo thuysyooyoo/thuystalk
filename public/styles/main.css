@@ -3004,7 +3004,7 @@ body.admin-mode .editable-photo-wrap:hover .photo-change-trigger {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--jade-300);
+  color: #A7F3D0;
   margin: 0 8px 10px;
 }
 
@@ -3017,9 +3017,9 @@ body.admin-mode .editable-photo-wrap:hover .photo-change-trigger {
 .admin-nav-item {
   width: 100%;
   text-align: left;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
   padding: 13px 16px;
   border-radius: 12px;
   font-size: 0.86rem;
@@ -3065,9 +3065,9 @@ body.admin-mode .editable-photo-wrap:hover .photo-change-trigger {
 }
 
 .admin-status-pill {
-  background: rgba(14, 140, 107, 0.25);
-  border: 1px solid rgba(56, 198, 159, 0.4);
-  color: #A9F5DF;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(167, 243, 208, 0.38);
+  color: #A7F3D0;
   padding: 10px 12px;
   border-radius: 10px;
   font-size: 0.75rem;
