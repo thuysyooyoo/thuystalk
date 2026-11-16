@@ -402,8 +402,47 @@ def _invoke_nlm_query(notebook_id: str, query: str) -> tuple:
 
 
 def postprocess_ai_answer(answer_text: str) -> str:
-    """Chuẩn hóa cơ bản câu trả lời AI (sẽ mở rộng chi tiết theo R4-14)."""
-    return str(answer_text or "").strip()
+    """Hậu xử lý câu trả lời AI (R4-14 phần 1): ẩn NotebookLM/Gemini Notebook/sổ tay và bỏ lời mời tìm web."""
+    text = str(answer_text or "").strip()
+    if not text:
+        return ""
+
+    # 1. Loại bỏ dòng hoặc câu mời tìm kiếm trên web
+    cleaned_lines = []
+    web_prompt_re = re.compile(
+        r"(?:(?:nếu\s+(?:bạn|quý\s+vị)\s+muốn[^.\n!?]*[,:]\s*)?"
+        r"(?:bạn\s+có\s+muốn|quý\s+vị\s+có\s+muốn|tôi\s+có\s+thể|mình\s+có\s+thể|nếu\s+cần|hãy\s+cho\s+tôi\s+biết|"
+        r"would\s+you\s+like|do\s+you\s+want|i\s+can)[^.\n!?]*)?"
+        r"(?:tìm(?:\s+kiếm)?(?:\s+thêm)?(?:\s+thông\s+tin)?\s+trên\s+(?:web|internet)|search\s+(?:the\s+)?web)[^.\n!?]*[.?]*",
+        flags=re.IGNORECASE,
+    )
+    for line in text.splitlines():
+        line_clean = web_prompt_re.sub("", line).strip()
+        if line and not line_clean:
+            continue
+        # Bỏ dòng chỉ còn dấu * hoặc khoảng trắng sau khi cắt câu mời
+        if re.fullmatch(r"[\s*_~\-]+", line_clean) and not re.match(r"^(-{3,}|\*{3,}|_{3,})$", line.strip()):
+            continue
+        cleaned_lines.append(line_clean)
+
+    text = "\n".join(cleaned_lines)
+
+    # 2. Thay thế các cụm tên kỹ thuật / sổ tay bằng "kho tri thức ThuysTalk"
+    replacements = [
+        (r"\bgoogle\s+notebook\s*lm\b", "kho tri thức ThuysTalk"),
+        (r"\bnotebook\s*lm\b", "kho tri thức ThuysTalk"),
+        (r"\bgoogle\s+gemini\s+notebook\b", "kho tri thức ThuysTalk"),
+        (r"\bgemini\s+notebook\b", "kho tri thức ThuysTalk"),
+        (r"\bcác\s+sổ\s+tay(?:\s+(?:này|hiện\s+có|được\s+cung\s+cấp))?\b", "kho tri thức ThuysTalk"),
+        (r"\bsổ\s+tay(?:\s+(?:này|nói\s+trên|hiện\s+có|được\s+cung\s+cấp))?\b", "kho tri thức ThuysTalk"),
+    ]
+    for pattern, repl in replacements:
+        text = re.sub(pattern, repl, text, flags=re.IGNORECASE)
+
+    # Khử lặp cụm thương hiệu và dòng trống dư thừa
+    text = re.sub(r"(?:kho tri thức ThuysTalk\s*){2,}", "kho tri thức ThuysTalk ", text, flags=re.IGNORECASE)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 def _release_ai_quota_slot(actor_type: str, actor_key: str, reserved_ts: float):
