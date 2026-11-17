@@ -5691,10 +5691,12 @@
         setSessionFlag(STORAGE_KEYS.PENDING_REDIRECT_REASON, "");
         setSessionFlag(STORAGE_KEYS.PENDING_ACTION, "");
         try {
-          if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.deleteUnconsentedGoogleUser) {
-            await window.ThuysTalkFirebase.deleteUnconsentedGoogleUser(shouldDeleteAccount);
-          } else if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.logoutLearner) {
-            await window.ThuysTalkFirebase.logoutLearner();
+          if (!isVerifiedAdminAccount(curUser)) {
+            if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.deleteUnconsentedGoogleUser) {
+              await window.ThuysTalkFirebase.deleteUnconsentedGoogleUser(shouldDeleteAccount);
+            } else if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.logoutLearner) {
+              await window.ThuysTalkFirebase.logoutLearner();
+            }
           }
         } finally {
           declineBtn.disabled = false;
@@ -6257,7 +6259,16 @@
   async function abortDeviceChallengeWithError(message, shouldSignOut) {
     activeAuthStep = "";
     setSessionFlag(STORAGE_KEYS.PENDING_AUTH_CHALLENGE_UID, "");
-    if (shouldSignOut && window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.logoutLearner === "function") {
+    const curUser =
+      window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.getCurrentUser === "function"
+        ? window.ThuysTalkFirebase.getCurrentUser()
+        : null;
+    if (
+      shouldSignOut &&
+      !isVerifiedAdminAccount(curUser) &&
+      window.ThuysTalkFirebase &&
+      typeof window.ThuysTalkFirebase.logoutLearner === "function"
+    ) {
       try {
         await window.ThuysTalkFirebase.logoutLearner();
       } catch (e) {}
@@ -6386,8 +6397,30 @@
     }
   }
 
+  function isVerifiedAdminAccount(user) {
+    return !!(
+      user &&
+      user.emailVerified === true &&
+      user.email &&
+      window.ThuysTalkFirebase &&
+      typeof window.ThuysTalkFirebase.isAdminUser === "function" &&
+      window.ThuysTalkFirebase.isAdminUser(user)
+    );
+  }
+
   async function completeAuthenticatedLearnerEntry(user, options = {}) {
     if (!user || user.emailVerified !== true || !user.email) return;
+    if (isVerifiedAdminAccount(user)) {
+      if (getPendingRegProfile(user)) removePendingRegProfile(user);
+      setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, "");
+      setSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID, "");
+      pendingConsentContext = null;
+      markTrustedGoogleBrowser(user.uid);
+      activeAuthStep = "";
+      await finalizeLearnerSession(user, null);
+      if (options.toastMessage) showToast(options.toastMessage);
+      return;
+    }
     const source = options.source || "ThuysTalk Login";
     const fromSessionRestore = !!options.fromSessionRestore;
     const docRes =
@@ -6604,6 +6637,16 @@
       activeAuthStep = "";
       return;
     }
+    if (isVerifiedAdminAccount(user)) {
+      markTrustedGoogleBrowser(user.uid);
+      setSessionFlag(STORAGE_KEYS.PENDING_GOOGLE_PROFILE_UID, "");
+      setSessionFlag(STORAGE_KEYS.NEW_GOOGLE_AUTH_UID, "");
+      pendingConsentContext = null;
+      activeAuthStep = "";
+      await finalizeLearnerSession(user, null);
+      if (!gRes.fromSessionRestore) showToast("Đăng nhập Quản trị viên thành công!");
+      return;
+    }
     const providers = Array.isArray(user.providerData) ? user.providerData : [];
     const onlyGoogleProvider = providers.length === 1 && providers[0] && providers[0].providerId === "google.com";
     const isAdmin = !!(window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.isAdminUser === "function" && window.ThuysTalkFirebase.isAdminUser(user));
@@ -6639,7 +6682,7 @@
   async function finalizeLearnerSession(user, profileDoc) {
     if (!user || user.emailVerified !== true || !user.email) return;
     let docData = profileDoc && typeof profileDoc === "object" ? profileDoc : null;
-    if (!docData && window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchLearnerDoc === "function") {
+    if (!docData && !isVerifiedAdminAccount(user) && window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchLearnerDoc === "function") {
       const res = await window.ThuysTalkFirebase.fetchLearnerDoc(user.uid);
       if (res && !res.error && res.data) docData = res.data;
     }
@@ -6732,6 +6775,13 @@
       return;
     }
     if (state.learnerUid === user.uid && state.learnerEmail === user.email) {
+      return;
+    }
+    if (isVerifiedAdminAccount(user)) {
+      markTrustedGoogleBrowser(user.uid);
+      setSessionFlag(STORAGE_KEYS.PENDING_AUTH_CHALLENGE_UID, "");
+      activeAuthStep = "";
+      await finalizeLearnerSession(user, null);
       return;
     }
 
@@ -9316,6 +9366,7 @@
 
     function showAdminWorkspace(user) {
       state.adminMode = true;
+      if (user && user.uid) markTrustedGoogleBrowser(user.uid);
       if (errorEl) {
         errorEl.style.display = "none";
         errorEl.textContent = "";
