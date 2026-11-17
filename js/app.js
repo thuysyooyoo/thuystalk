@@ -8726,6 +8726,21 @@
     });
   }
 
+  function csvSafeCell(v) {
+    const raw = v === null || v === undefined ? "" : String(v);
+    const safe = /^[=+\-@\t\r]/.test(raw) ? "'" + raw : raw;
+    return `"${safe.replace(/"/g, '""')}"`;
+  }
+
+  function buildCsvFromRows(rows) {
+    return (
+      "\uFEFF" +
+      rows
+        .map((r) => (Array.isArray(r) ? r : []).map((cell) => csvSafeCell(cell)).join(","))
+        .join("\r\n")
+    );
+  }
+
   // --- TAB 6: LEADS & FULL CMS BACKUP (POWERED DIRECTLY BY CLOUD FIRESTORE) ---
   function renderAdminLeadsTab(body) {
     let currentLearners = Array.isArray(state.adminLearners) ? [...state.adminLearners] : [];
@@ -9016,11 +9031,7 @@
           l.progress ? Object.keys(l.progress).filter((k) => l.progress[k]).length + " bai" : "0%"
         ])
       ];
-      const csv =
-        "\uFEFF" +
-        rows
-          .map((r) => r.map((cell) => `"${String(cell || "").replace(/"/g, '""')}"`).join(","))
-          .join("\r\n");
+      const csv = buildCsvFromRows(rows);
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -9058,11 +9069,7 @@
           ];
         })
       ];
-      const csv =
-        "\uFEFF" +
-        rows
-          .map((r) => r.map((cell) => `"${String(cell || "").replace(/"/g, '""')}"`).join(","))
-          .join("\r\n");
+      const csv = buildCsvFromRows(rows);
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
