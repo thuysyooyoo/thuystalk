@@ -4355,7 +4355,7 @@
       appendChatMessage("user", q, null, null, { chatBoxId: "popupChatMessages" });
       popupInp.value = "";
       if (typeof popupInp.__resetTextareaHeight === "function") popupInp.__resetTextareaHeight();
-      await runWithGuestQuotaAndExecute(q, false, route, "popupChatMessages");
+      await runWithGuestQuotaAndExecute(q, true, route, "popupChatMessages");
     };
 
     const openAiChatPopup = (preselectRouteId = null) => {
