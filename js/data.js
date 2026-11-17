@@ -251,8 +251,8 @@ window.THUYSTALK_I18N = {
       greeting: "XIN CHÀO, MÌNH LÀ",
       firstName: "Nguyễn Thị Ngọc",
       highlightName: "Thúy",
-      role: "Chuyên gia Tư vấn Xuất Nhập Khẩu – Logistics & Ứng dụng AI",
-      bio: "Hơn 9 năm tự tay thực hiện từng khâu trong chuỗi cung ứng quốc tế — từ đàm phán ngoại thương, áp mã HS, mở tờ khai hải quan đến tự động hóa quy trình bằng AI. Mình xây dựng ThuysTalk để chia sẻ kiến thức thực tế miễn phí, gửi tặng biểu mẫu gốc và đồng hành cùng bạn kinh doanh chính ngạch an toàn, bền vững.",
+      role: "Chuyên gia Tư vấn XNK, Hải Quan & Ứng dụng AI",
+      bio: "Hơn 9 năm thực chiến chuỗi cung ứng quốc tế, áp mã HS, thông quan hải quan và tự động hóa quy trình bằng AI. Chia sẻ kiến thức chính ngạch, biểu mẫu gốc và công cụ AI tra cứu miễn phí.",
       btnPrimary: "Xem Tài Liệu & Mini Test",
       btnSecondary: "Tra cứu Pháp lý & Mã HS",
       scriptNote: "Tận tâm – Minh bạch – Bền vững",
@@ -261,8 +261,8 @@ window.THUYSTALK_I18N = {
     },
     expertise: {
       eyebrow: "LĨNH VỰC CHUYÊN MÔN THỰC CHIẾN",
-      title: "Kiến Thức Thực Tế Bảo Vệ Dòng Tiền & Pháp Lý",
-      desc: "Không lý thuyết suông. Mọi chủ đề trên ThuysTalk đều đính kèm quy trình từng bước, văn bản pháp lý đối chiếu và biểu mẫu thực tế để bạn áp dụng ngay.",
+      title: "Chuyên Môn Thực Chiến",
+      desc: "Quy trình từng bước kèm văn bản pháp lý và biểu mẫu áp dụng ngay.",
       btnExplore: "Khám phá tài liệu & Mini Test",
       cards: [
         {
@@ -302,25 +302,25 @@ window.THUYSTALK_I18N = {
       miniCaption: "Hội nghị Đối thoại Hải quan – Doanh nghiệp 2026",
       eyebrow: "VỀ TÔI · CÂU CHUYỆN THUYTALK",
       title: "Mình là Nguyễn Thị Ngọc Thúy",
-      subtitle: "Chuyên gia Tư vấn XNK – Logistics & Tiên phong Ứng dụng AI",
-      p1: "Tốt nghiệp Học viện Ngân hàng chuyên ngành Thương mại Quốc tế, hơn 9 năm qua mình đã trực tiếp đi qua từng mắt xích của ngành xuất nhập khẩu: từ đàm phán giá, soạn thảo hợp đồng ngoại thương, chuẩn bị bộ chứng từ, tự mở tờ khai hải quan cho đến làm việc trực tiếp khi kiểm hóa và kiểm tra sau thông quan.",
-      p2: "Tiếp xúc với hàng ngàn chủ doanh nghiệp và người làm nghề, mình thấu hiểu nỗi lo lớn nhất không nằm ở việc thiếu thông tin, mà là thông tin rời rạc và những chiếc bẫy ngầm có thể khiến lô hàng bị đình trệ hàng tuần lễ. Đó là lý do mình lập nên ThuysTalk — nơi chia sẻ thẳng thắn, minh bạch với triết lý: Làm đúng, làm đủ, làm rõ ràng.",
+      subtitle: "Chuyên gia XNK – Logistics & Ứng dụng AI",
+      p1: "Tốt nghiệp Học viện Ngân hàng chuyên ngành Thương mại Quốc tế, hơn 9 năm qua mình trực tiếp xử lý từng mắt xích XNK: đàm phán ngoại thương, bộ chứng từ, mở tờ khai hải quan đến kiểm hóa và kiểm tra sau thông quan.",
+      p2: "ThuysTalk được xây dựng để chia sẻ kiến thức chính ngạch minh bạch, gửi tặng biểu mẫu thực chiến với triết lý: Làm đúng, làm đủ, làm rõ ràng.",
       milestones: [
         "Đồng hành toàn trình: Đàm phán quốc tế – Thủ tục Hải quan – Kiểm soát rủi ro pháp lý & thuế quan.",
         "Tiên phong công nghệ: Thiết kế hệ thống AI Agent & Tự động hóa giúp rút ngắn 70% thời gian xử lý chứng từ.",
         "Trao giá trị thật: Đăng ký miễn phí để lưu tiến độ Mini Test và tải trọn bộ biểu mẫu, checklist đính kèm."
       ],
       stats: [
-        { val: "9<span>+</span>", lbl: "Năm kinh nghiệm thực tế XNK & Hải quan" },
-        { val: "100<span>%</span>", lbl: "Kiến thức chính ngạch, minh bạch & kèm biểu mẫu" },
-        { val: "Miễn phí", lbl: "Tài liệu & Mini Test lưu tiến độ trực tuyến" }
+        { val: "9<span>+</span>", lbl: "Năm kinh nghiệm" },
+        { val: "186<span>+</span>", lbl: "Văn bản pháp lý" },
+        { val: "Miễn phí", lbl: "Biểu mẫu & Mini Test" }
       ],
       btnConnect: "Đăng ký tư vấn chuyên sâu cùng Thúy"
     },
     elearning: {
       eyebrow: "KHO TÀI LIỆU CHUYÊN ĐỀ & MINI TEST",
-      title: "Tài Liệu Chuyên Môn Thực Chiến & Mini Test",
-      desc: "Đọc tài liệu cô đọng, làm bộ Mini Test tình huống để tự đánh giá mức độ nắm bắt, tự động lưu tiến độ và tải trọn bộ biểu mẫu thực tế trực tiếp về máy.",
+      title: "Tài Liệu & Mini Test Thực Chiến",
+      desc: "Vuốt ngang hoặc bấm mũi tên để xem tiếp các chuyên đề và làm Mini Test.",
       bannerTitleGuest: "Đăng nhập Email để lưu tiến độ Mini Test & tải bộ tài liệu gốc",
       bannerDescGuest: "Nhập địa chỉ Email để hệ thống lưu lại các chuyên đề đã xem và tải biểu mẫu, checklist đính kèm.",
       bannerPlaceholder: "Nhập email của bạn (VD: lan.nguyen@company.com)...",
@@ -332,8 +332,8 @@ window.THUYSTALK_I18N = {
     },
     video: {
       eyebrow: "KÊNH YOUTUBE @THUYSTALK",
-      title: "Video Phân Tích & Chia Sẻ Kinh Nghiệm Thực Tế",
-      desc: "Hệ thống 4 chuyên mục video từ phân tích văn bản hải quan mới nhất, giải thích luật dễ hiểu đến các câu chuyện thực tế trên thương trường quốc tế.",
+      title: "Video Phân Tích Thực Tế",
+      desc: "Giải thích quy định hải quan dễ hiểu từ tình huống thực tế.",
       tabs: [
         { id: "all", label: "Tất cả video" },
         { id: "CM1", label: "CM1 · Văn bản nóng" },
@@ -347,8 +347,8 @@ window.THUYSTALK_I18N = {
     },
     articles: {
       eyebrow: "BÀI VIẾT CHUYÊN SÂU · ĐĂNG TOÀN VĂN TRÊN WEB",
-      title: "Góc Nhìn Pháp Lý Hải Quan, Tình Huống Thực Tế & Quản Trị",
-      desc: "Mỗi bài viết đều bắt đầu từ vấn đề thực tế của doanh nghiệp, đối chiếu căn cứ pháp lý mới nhất và đưa ra giải pháp từng bước rõ ràng.",
+      title: "Bài Viết Chuyên Sâu & Case Study",
+      desc: "Vuốt ngang hoặc bấm mũi tên để đọc tiếp các phân tích pháp lý.",
       tabs: [
         { id: "all", label: "Tất cả bài viết" },
         { id: "CS", label: "Tình huống thực tế (CS)" },
@@ -409,8 +409,8 @@ window.THUYSTALK_I18N = {
       greeting: "HELLO, I AM",
       firstName: "Nguyen Thi Ngoc",
       highlightName: "Thuy",
-      role: "Practical International Trade, Customs Compliance & AI Automation Specialist",
-      bio: "With over 9 years of hands-on experience across the international supply chain—from foreign trade contracts, HS classification, and customs declaration to AI workflow automation—I built ThuysTalk to share free practical materials, authentic templates, and advisory for sustainable global trade.",
+      role: "Practical Trade, Customs Compliance & AI Specialist",
+      bio: "Over 9 years of hands-on supply chain, HS classification, customs clearance, and AI automation experience. Free official knowledge, authentic templates, and AI lookup tools.",
       btnPrimary: "Open Materials & Mini Test",
       btnSecondary: "Legal & HS Lookup",
       scriptNote: "Practical – Transparent – Sustainable",
@@ -419,8 +419,8 @@ window.THUYSTALK_I18N = {
     },
     expertise: {
       eyebrow: "CORE EXPERTISE & TRAINING PILLARS",
-      title: "Actionable Knowledge That Protects Your Cash Flow & Compliance",
-      desc: "Zero vague theory. Every topic on ThuysTalk includes step-by-step SOPs, official regulatory citations, and ready-to-use templates.",
+      title: "Hands-On Expertise",
+      desc: "Step-by-step SOPs backed by legal rulings and ready-to-use templates.",
       btnExplore: "Explore Free Courses",
       cards: [
         {
@@ -460,25 +460,25 @@ window.THUYSTALK_I18N = {
       miniCaption: "Customs – Enterprise Dialogue Conference 2026",
       eyebrow: "ABOUT ME · THE THUYTALK STORY",
       title: "I'm Nguyen Thi Ngoc Thuy",
-      subtitle: "International Trade & Customs Specialist · AI Automation Pioneer",
-      p1: "A graduate of the Banking Academy majoring in International Trade, I have spent over 9 years executing every single link in the import-export chain: supplier negotiation, foreign trade contract drafting, shipping documentation, direct customs declaration, physical inspection, and post-clearance compliance.",
-      p2: "Working alongside thousands of business owners and practitioners, I realized the biggest risk isn't a lack of information—it's fragmented advice and hidden compliance traps that stall containers at ports. I created ThuysTalk as an independent trade knowledge hub guided by one principle: Do it right, do it thoroughly, do it clearly.",
+      subtitle: "Trade & Customs Specialist · AI Automation",
+      p1: "A Banking Academy graduate in International Trade with over 9 years executing every link in the chain: negotiation, shipping docs, customs filing, physical inspection, and post-clearance audit.",
+      p2: "I built ThuysTalk to share transparent compliance knowledge and practical templates guided by one principle: Do it right, do it thoroughly, do it clearly.",
       milestones: [
         "End-to-End Execution: International Negotiation – Customs Clearance – Tariff & Legal Risk Control.",
         "Tech-Driven Operations: Designing AI Agents & automation pipelines that cut document review time by 70%.",
         "Value-First Sharing: Free account registration to track Mini-Test progress and download attached templates directly."
       ],
       stats: [
-        { val: "9<span>+</span>", lbl: "Years of Hands-On Trade & Customs Experience" },
-        { val: "100<span>%</span>", lbl: "Compliant, Transparent & Template-Backed" },
-        { val: "Free", lbl: "Progress-Tracked Materials & Mini Test" }
+        { val: "9<span>+</span>", lbl: "Years Experience" },
+        { val: "186<span>+</span>", lbl: "Legal Texts" },
+        { val: "Free", lbl: "Materials & Mini Test" }
       ],
       btnConnect: "Book a 1-on-1 Advisory Session"
     },
     elearning: {
       eyebrow: "THUYTALK MATERIALS & MINI TEST",
-      title: "Practical Materials · Mini Test & Direct Template Download",
-      desc: "Learn through structured micro-lessons, complete multi-question Mini Tests & practical exercises, track your completion percentage, and download attached templates directly.",
+      title: "Practical Materials & Mini Test",
+      desc: "Swipe horizontally or tap arrows to browse modules and take Mini Tests.",
       bannerTitleGuest: "Sign in with your Email (Free) to save course progress & download templates",
       bannerDescGuest: "Enter your Email address to automatically save completed lessons and download checklists & templates directly.",
       bannerPlaceholder: "Enter your email (e.g., alex@company.com)...",
@@ -490,8 +490,8 @@ window.THUYSTALK_I18N = {
     },
     video: {
       eyebrow: "YOUTUBE CHANNEL @THUYSTALK",
-      title: "Practical Trade & Customs Video Library",
-      desc: "Explore 4 signature series covering breaking customs regulations, plain-language legal breakdowns, trade history, and real-world case studies.",
+      title: "Practical Trade Videos",
+      desc: "Clear customs law breakdowns from real business scenarios.",
       tabs: [
         { id: "all", label: "All Videos" },
         { id: "CM1", label: "CM1 · Hot Regulations" },
@@ -505,8 +505,8 @@ window.THUYSTALK_I18N = {
     },
     articles: {
       eyebrow: "IN-DEPTH ARTICLES · FULL TEXT ON SITE",
-      title: "Customs Compliance, Case Studies & Trade Management",
-      desc: "Every article starts from a real operational bottleneck, cross-references official legal texts, and delivers a concrete action plan.",
+      title: "In-Depth Articles & Case Studies",
+      desc: "Swipe horizontally or tap arrows to continue reading analyses.",
       tabs: [
         { id: "all", label: "All Articles" },
         { id: "CS", label: "Case Study (CS)" },
