@@ -4650,3 +4650,94 @@ body[data-page="home"] #notebook.notebook-section-home {
     border-radius: 18px;
   }
 }
+
+/* ==========================================================================
+   PHASE 4: COMPACT MOBILE CONSULTATION FORM (#tu-van)
+   ========================================================================== */
+@media (max-width: 680px) {
+  .consult-banner-box {
+    padding: 18px 14px !important;
+    gap: 12px !important;
+    border-radius: 20px !important;
+  }
+
+  .consult-info-col h2 {
+    font-size: 1.08rem !important;
+    line-height: 1.25 !important;
+    margin-bottom: 8px !important;
+  }
+
+  #consultDesc,
+  #consultSecurityNote,
+  #consultFormTitle,
+  #consultFormSub {
+    display: none !important;
+  }
+
+  .consult-host-card {
+    padding: 8px 10px !important;
+    gap: 10px !important;
+    margin-bottom: 0 !important;
+    border-radius: 12px !important;
+  }
+
+  .consult-host-card > div:last-child {
+    min-width: 0;
+  }
+
+  .consult-host-card > div:last-child > div:last-child {
+    font-size: 0.68rem !important;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+  }
+
+  .consult-host-photo {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 10px !important;
+  }
+
+  #consultHostName {
+    font-size: 0.84rem !important;
+  }
+
+  #consultHostRole {
+    font-size: 0.7rem !important;
+  }
+
+  .consult-form-card {
+    padding: 14px !important;
+    border-radius: 14px !important;
+  }
+
+  #consultGuestFieldsGroup .form-row-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .consult-form-card .form-group {
+    margin-bottom: 8px !important;
+  }
+
+  .consult-form-card label {
+    font-size: 0.7rem !important;
+    margin-bottom: 2px !important;
+  }
+
+  .consult-form-card .form-control {
+    padding: 7px 10px !important;
+    font-size: 0.76rem !important;
+    border-radius: 8px !important;
+  }
+
+  .consult-form-card textarea.form-control {
+    min-height: 48px !important;
+    height: 48px !important;
+  }
+
+  #consultConsentLabel {
+    font-size: 0.66rem !important;
+    line-height: 1.34 !important;
+    margin: 6px 0 10px !important;
+  }
+}
