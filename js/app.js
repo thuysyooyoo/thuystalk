@@ -1728,6 +1728,139 @@
     return Math.round((done / total) * 100);
   }
 
+  const carouselSyncCallbacks = new Map();
+  let __carouselResizeBound = false;
+
+  function setupHorizontalCarouselControls({ gridId, sectionSel, itemSelector, allHref }) {
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+    const items = Array.from(grid.querySelectorAll(itemSelector));
+    const total = items.length;
+
+    let wrap = grid.parentElement;
+    if (!wrap || !wrap.classList.contains("carousel-track-wrap")) {
+      wrap = document.createElement("div");
+      wrap.className = "carousel-track-wrap";
+      if (grid.parentNode) {
+        grid.parentNode.insertBefore(wrap, grid);
+      }
+      wrap.appendChild(grid);
+    }
+
+    Array.from(wrap.children).forEach((ch) => {
+      if (ch.classList && ch.classList.contains("carousel-edge-btn")) ch.remove();
+    });
+
+    const prevBtn = document.createElement("button");
+    prevBtn.type = "button";
+    prevBtn.className = "carousel-edge-btn prev is-hidden";
+    prevBtn.setAttribute("aria-label", state.lang === "en" ? "Scroll left" : "Trượt sang trái");
+    prevBtn.innerHTML = "&lsaquo;";
+
+    const nextBtn = document.createElement("button");
+    nextBtn.type = "button";
+    nextBtn.className = "carousel-edge-btn next is-hidden";
+    nextBtn.setAttribute("aria-label", state.lang === "en" ? "Scroll right" : "Trượt sang phải");
+    nextBtn.innerHTML = "&rsaquo;";
+
+    wrap.appendChild(prevBtn);
+    wrap.appendChild(nextBtn);
+
+    let miniPrev = null;
+    let miniNext = null;
+    let counterPill = null;
+
+    if (isHomePage() && sectionSel) {
+      const bar = document.querySelector(`${sectionSel} .section-header-bar`);
+      if (bar) {
+        bar.querySelectorAll(":scope > a.btn").forEach((a) => {
+          a.style.display = "none";
+        });
+        const oldControls = bar.querySelector(".carousel-header-controls");
+        if (oldControls) oldControls.remove();
+
+        if (total > 0) {
+          const controls = document.createElement("div");
+          controls.className = "carousel-header-controls";
+          controls.innerHTML = `
+            <button type="button" class="carousel-nav-mini-btn carousel-mini-prev" aria-label="${state.lang === "en" ? "Previous item" : "Xem mục trước"}">&lsaquo;</button>
+            <span class="carousel-counter-pill">1/${total}</span>
+            <button type="button" class="carousel-nav-mini-btn carousel-mini-next" aria-label="${state.lang === "en" ? "Next item" : "Xem mục tiếp"}">&rsaquo;</button>
+            <a href="${escapeHtml(allHref)}" class="carousel-all-link">${state.lang === "en" ? "All →" : "Tất cả →"}</a>
+          `;
+          bar.appendChild(controls);
+          miniPrev = controls.querySelector(".carousel-mini-prev");
+          miniNext = controls.querySelector(".carousel-mini-next");
+          counterPill = controls.querySelector(".carousel-counter-pill");
+        }
+      }
+    }
+
+    const getStep = () => {
+      const first = items[0];
+      if (first && first.offsetWidth > 0) return first.offsetWidth + 10;
+      return Math.max(220, Math.round(grid.clientWidth * 0.8));
+    };
+
+    const scrollByStep = (dir) => {
+      const step = getStep();
+      const maxScroll = Math.max(0, grid.scrollWidth - grid.clientWidth);
+      if (dir > 0 && grid.scrollLeft >= maxScroll - 8) {
+        grid.scrollTo({ left: 0, behavior: "smooth" });
+      } else if (dir < 0 && grid.scrollLeft <= 6) {
+        grid.scrollTo({ left: maxScroll, behavior: "smooth" });
+      } else {
+        grid.scrollBy({ left: dir * step, behavior: "smooth" });
+      }
+    };
+
+    const syncUi = () => {
+      const canScroll = total > 1 && grid.scrollWidth > grid.clientWidth + 6;
+      const step = getStep();
+      const maxScroll = Math.max(0, grid.scrollWidth - grid.clientWidth);
+      let idx = 1;
+      if (canScroll && step > 0) {
+        if (grid.scrollLeft >= maxScroll - 8) idx = total;
+        else idx = Math.min(total, Math.max(1, Math.round(grid.scrollLeft / step) + 1));
+      }
+      if (counterPill) {
+        counterPill.textContent = `${idx}/${total}`;
+        counterPill.style.display = canScroll ? "" : "none";
+      }
+      if (miniPrev) miniPrev.style.display = canScroll ? "" : "none";
+      if (miniNext) miniNext.style.display = canScroll ? "" : "none";
+      prevBtn.classList.toggle("is-hidden", !canScroll || grid.scrollLeft <= 6);
+      nextBtn.classList.toggle("is-hidden", !canScroll || grid.scrollLeft >= maxScroll - 6);
+    };
+
+    prevBtn.addEventListener("click", () => scrollByStep(-1));
+    nextBtn.addEventListener("click", () => scrollByStep(1));
+    if (miniPrev) miniPrev.addEventListener("click", () => scrollByStep(-1));
+    if (miniNext) miniNext.addEventListener("click", () => scrollByStep(1));
+
+    grid.__carouselSync = syncUi;
+    if (!grid.dataset.carouselBound) {
+      grid.dataset.carouselBound = "1";
+      grid.addEventListener("scroll", () => {
+        if (typeof grid.__carouselSync === "function") grid.__carouselSync();
+      }, { passive: true });
+    }
+
+    carouselSyncCallbacks.set(gridId, syncUi);
+    if (!__carouselResizeBound) {
+      __carouselResizeBound = true;
+      window.addEventListener("resize", () => {
+        carouselSyncCallbacks.forEach((fn) => fn());
+      }, { passive: true });
+    }
+
+    syncUi();
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(syncUi);
+    }
+    window.setTimeout(syncUi, 60);
+  }
+
   function renderElearningSection(t) {
     setText("elearnEyebrow", t.elearning.eyebrow);
     setText("elearnTitle", t.elearning.title);
@@ -1798,7 +1931,7 @@
     const grid = document.getElementById("coursesGrid");
     if (!grid) return;
 
-    const displayedCourses = isHomePage() ? state.courses.slice(0, 2) : state.courses;
+    const displayedCourses = isHomePage() ? state.courses.slice(0, 3) : state.courses;
 
     if (!displayedCourses.length) {
       grid.innerHTML = `
@@ -1885,6 +2018,12 @@
 
     bindPhotoTriggers(grid);
     hydrateMediaImages(grid);
+    setupHorizontalCarouselControls({
+      gridId: "coursesGrid",
+      sectionSel: "#hoc",
+      itemSelector: ".course-card",
+      allHref: "elearning.html"
+    });
   }
 
   function getNextUnfinishedLessonIndex(course) {
@@ -2024,6 +2163,23 @@
       )
       .join("");
 
+    const courseIdx = state.courses.findIndex((c) => c.id === course.id);
+    const totalLessons = course.lessons.length;
+    const hasPrev = state.activeLessonIndex > 0 || state.courses.length > 1;
+    const hasNext = state.activeLessonIndex < totalLessons - 1 || state.courses.length > 1;
+    const lessonNavHtml = hasPrev || hasNext
+      ? `
+      <div class="reader-modal-nav">
+        <button type="button" class="reader-nav-btn prev" id="modalPrevLessonBtn">
+          &lsaquo; ${state.activeLessonIndex > 0 ? (state.lang === "en" ? "Prev lesson" : "Bài học trước") : (state.lang === "en" ? "Prev module" : "Chuyên đề trước")}
+        </button>
+        <span class="reader-nav-index">${state.lang === "en" ? "Lesson" : "Bài"} ${state.activeLessonIndex + 1}/${totalLessons}</span>
+        <button type="button" class="reader-nav-btn next" id="modalNextLessonBtn">
+          ${state.activeLessonIndex < totalLessons - 1 ? (state.lang === "en" ? "Next lesson" : "Bài học tiếp") : (state.lang === "en" ? "Next module" : "Chuyên đề tiếp")} &rsaquo;
+        </button>
+      </div>`
+      : "";
+
     const bodyEl = document.getElementById("classroomModalBody");
     bodyEl.innerHTML = `
       <div class="filter-tabs" style="margin-bottom:20px;">${lessonTabs}</div>
@@ -2065,7 +2221,8 @@
           </button>
           ${courseAttButtonsHtml}
         </div>
-      </div>`;
+      </div>
+      ${lessonNavHtml}`;
 
     bodyEl.querySelectorAll("[data-lidx]").forEach((b) => {
       b.addEventListener("click", () => {
@@ -2128,6 +2285,37 @@
         handleSendCourseKit(course.id, idx);
       });
     });
+
+    const prevLessonBtn = document.getElementById("modalPrevLessonBtn");
+    if (prevLessonBtn) {
+      prevLessonBtn.addEventListener("click", () => {
+        if (state.activeLessonIndex > 0) {
+          state.activeLessonIndex -= 1;
+          saveLastLessonIndex(course.id, state.activeLessonIndex);
+          renderClassroomModal();
+        } else if (state.courses.length > 1 && courseIdx >= 0) {
+          const prevCourse = state.courses[(courseIdx - 1 + state.courses.length) % state.courses.length];
+          const lastIdx = Math.max(0, (prevCourse.lessons ? prevCourse.lessons.length : 1) - 1);
+          openCourseClassroom(prevCourse.id, lastIdx);
+        }
+        bodyEl.scrollTop = 0;
+      });
+    }
+
+    const nextLessonBtn = document.getElementById("modalNextLessonBtn");
+    if (nextLessonBtn) {
+      nextLessonBtn.addEventListener("click", () => {
+        if (state.activeLessonIndex < totalLessons - 1) {
+          state.activeLessonIndex += 1;
+          saveLastLessonIndex(course.id, state.activeLessonIndex);
+          renderClassroomModal();
+        } else if (state.courses.length > 1 && courseIdx >= 0) {
+          const nextCourse = state.courses[(courseIdx + 1) % state.courses.length];
+          openCourseClassroom(nextCourse.id, 0);
+        }
+        bodyEl.scrollTop = 0;
+      });
+    }
   }
 
   const inFlightDownloadKeys = new Set();
@@ -2612,7 +2800,7 @@
 
     const listEl = document.getElementById("videoPlaylistCol");
     if (listEl) {
-      const playlistItems = isHomePage() ? filtered.slice(0, 3) : filtered;
+      const playlistItems = isHomePage() ? filtered.slice(0, 4) : filtered;
       if (!playlistItems.length) {
         listEl.innerHTML = `
           <div class="empty-state-card" style="background:rgba(255,255,255,0.04); border:1px dashed rgba(255,255,255,0.18); border-radius:12px; padding:22px 16px; text-align:center; color:#cbd5e1; font-size:0.85rem;">
@@ -2663,6 +2851,12 @@
         });
       });
       hydrateMediaImages(listEl);
+      setupHorizontalCarouselControls({
+        gridId: "videoPlaylistCol",
+        sectionSel: "#video",
+        itemSelector: ".video-list-item",
+        allHref: "videos.html"
+      });
     }
   }
 
@@ -2701,15 +2895,54 @@
       ? `${cleanModalDur ? `Thời lượng: ${escapeHtml(cleanModalDur)} · ` : ""}Ngày đăng: ${escapeHtml(video.date || "11/2026")}`
       : `Trạng thái: ${state.lang === "en" ? "Coming Soon" : "Sắp ra mắt"} · Ngày đăng: ${escapeHtml(video.date || "11/2026")}`;
 
+    const filteredVideos = getFilteredVideos();
+    const vidList = filteredVideos.length ? filteredVideos : state.videos;
+    const vidIdx = vidList.findIndex((v) => v.id === video.id);
+    const vidNavHtml = vidList.length > 1 && vidIdx >= 0
+      ? `
+      <div class="reader-modal-nav">
+        <button type="button" class="reader-nav-btn prev" id="modalPrevVideoBtn">
+          &lsaquo; ${state.lang === "en" ? "Prev video" : "Video trước"}
+        </button>
+        <span class="reader-nav-index">${state.lang === "en" ? "Ep." : "Tập"} ${vidIdx + 1}/${vidList.length}</span>
+        <button type="button" class="reader-nav-btn next" id="modalNextVideoBtn">
+          ${state.lang === "en" ? "Next video" : "Video tiếp theo"} &rsaquo;
+        </button>
+      </div>`
+      : "";
+
     document.getElementById("articleModalTitle").textContent = vCmLabel + " · @thuystalk";
-    document.getElementById("articleModalBody").innerHTML = `
+    const modalBodyEl = document.getElementById("articleModalBody");
+    modalBodyEl.innerHTML = `
       <div class="reader-content">
         <h2>${escapeHtml(vTitle)}</h2>
         <p style="color:var(--jade-700); font-weight:700;">${vidMetaLine}</p>
         <hr style="border:none; border-top:1px solid var(--ink-200); margin:16px 0;" />
         ${sanitizeRichHtml(vScript)}
       </div>
-      ${vidAttBoxHtml}`;
+      ${vidAttBoxHtml}
+      ${vidNavHtml}`;
+
+    const prevVidBtn = document.getElementById("modalPrevVideoBtn");
+    if (prevVidBtn) {
+      prevVidBtn.addEventListener("click", () => {
+        const targetVid = vidList[(vidIdx - 1 + vidList.length) % vidList.length];
+        if (targetVid) {
+          openVideoModal(targetVid);
+          modalBodyEl.scrollTop = 0;
+        }
+      });
+    }
+    const nextVidBtn = document.getElementById("modalNextVideoBtn");
+    if (nextVidBtn) {
+      nextVidBtn.addEventListener("click", () => {
+        const targetVid = vidList[(vidIdx + 1) % vidList.length];
+        if (targetVid) {
+          openVideoModal(targetVid);
+          modalBodyEl.scrollTop = 0;
+        }
+      });
+    }
 
     document.getElementById("articleModalBody").querySelectorAll(".video-att-download-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -2764,7 +2997,7 @@
     const grid = document.getElementById("articlesGrid");
     if (!grid) return;
 
-    const displayedArticles = isHomePage() ? filtered.slice(0, 3) : filtered;
+    const displayedArticles = isHomePage() ? filtered.slice(0, 4) : filtered;
 
     if (!displayedArticles.length) {
       grid.innerHTML = `
@@ -2827,6 +3060,12 @@
 
     bindPhotoTriggers(grid);
     hydrateMediaImages(grid);
+    setupHorizontalCarouselControls({
+      gridId: "articlesGrid",
+      sectionSel: "#bai-viet",
+      itemSelector: ".article-card",
+      allHref: "bai-viet.html"
+    });
   }
 
   function openArticleReader(art) {
@@ -2844,8 +3083,28 @@
       )
       .join("");
 
+    const filteredArts =
+      state.activeArticleCat === "all"
+        ? state.articles
+        : state.articles.filter((a) => a.pillar === state.activeArticleCat);
+    const artList = filteredArts.length ? filteredArts : state.articles;
+    const artIdx = artList.findIndex((a) => a.id === art.id);
+    const artNavHtml = artList.length > 1 && artIdx >= 0
+      ? `
+      <div class="reader-modal-nav">
+        <button type="button" class="reader-nav-btn prev" id="modalPrevArticleBtn">
+          &lsaquo; ${state.lang === "en" ? "Prev article" : "Bài trước"}
+        </button>
+        <span class="reader-nav-index">${state.lang === "en" ? "Article" : "Bài"} ${artIdx + 1}/${artList.length}</span>
+        <button type="button" class="reader-nav-btn next" id="modalNextArticleBtn">
+          ${state.lang === "en" ? "Next article" : "Bài tiếp theo"} &rsaquo;
+        </button>
+      </div>`
+      : "";
+
     document.getElementById("articleModalTitle").textContent = aPillar + " · " + (art.date || "");
-    document.getElementById("articleModalBody").innerHTML = `
+    const modalBodyEl = document.getElementById("articleModalBody");
+    modalBodyEl.innerHTML = `
       <div class="reader-content">
         <h2>${escapeHtml(aTitle)}</h2>
         <p style="color:var(--ink-500); font-size:0.85rem; font-weight:700;">
@@ -2878,7 +3137,29 @@
             ${state.lang === "vi" ? "Đăng ký tư vấn" : "Book Advisory"}
           </a>
         </div>
-      </div>`;
+      </div>
+      ${artNavHtml}`;
+
+    const prevArtBtn = document.getElementById("modalPrevArticleBtn");
+    if (prevArtBtn) {
+      prevArtBtn.addEventListener("click", () => {
+        const targetArt = artList[(artIdx - 1 + artList.length) % artList.length];
+        if (targetArt) {
+          openArticleReader(targetArt);
+          modalBodyEl.scrollTop = 0;
+        }
+      });
+    }
+    const nextArtBtn = document.getElementById("modalNextArticleBtn");
+    if (nextArtBtn) {
+      nextArtBtn.addEventListener("click", () => {
+        const targetArt = artList[(artIdx + 1) % artList.length];
+        if (targetArt) {
+          openArticleReader(targetArt);
+          modalBodyEl.scrollTop = 0;
+        }
+      });
+    }
 
     document.getElementById("articleModalBody").querySelectorAll(".article-att-download-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
