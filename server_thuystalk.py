@@ -29,9 +29,11 @@ import sys
 import threading
 import time
 import urllib.parse
+import urllib.request
 import uuid
 import webbrowser
 from email import encoders
+from email.header import Header
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -53,10 +55,25 @@ ADMIN_EMAILS = {
 ALLOWED_ORIGINS = {
     "https://thuystalk.web.app",
     "https://thuystalk.firebaseapp.com",
+    "https://thuysyooyoo.github.io",
     "http://localhost:8099",
     "http://127.0.0.1:8099",
 }
 MAX_POST_BODY_BYTES = 5 * 1024 * 1024  # 5 MB
+MAX_DOC_CHECK_BODY_BYTES = 20 * 1024 * 1024  # 20 MB for base64 document bundles
+DOC_AUDIT_RECEIVER = "thuystalk.official@gmail.com"
+DOC_CHECK_DISCLAIMER = "AI có thể có sai sót, liên hệ Thúy 0767.648.862 để được tư vấn cụ thể."
+DOC_CHECK_ALLOWED_EXTENSIONS = {
+    ".pdf", ".docx", ".xlsx", ".xls", ".csv", ".txt", ".md", ".jpg", ".jpeg", ".png", ".webp",
+}
+DOC_TRAINING_ALLOWED_EXTENSIONS = {".txt", ".md", ".csv", ".xlsx", ".docx", ".pdf"}
+DOC_CHECK_MAX_FILES = 8
+DOC_CHECK_MAX_SINGLE_FILE_BYTES = 8 * 1024 * 1024
+DOC_CHECK_MAX_TOTAL_FILE_BYTES = 14 * 1024 * 1024
+DOC_CHECK_IP_HOURLY_LIMIT = 15
+_DOC_CHECK_LOCK = threading.Lock()
+_DOC_CHECK_IP_HITS = {}
+_DOC_RULES_CACHE = {"fetched_at": 0.0, "text": ""}
 GOOGLE_AUTH_REQUEST = google_auth_requests.Request()
 DEVICE_CODE_TTL_SECONDS = 600
 DEVICE_CODE_MAX_ATTEMPTS = 5
@@ -871,6 +888,319 @@ def parse_minitest_rows(rows):
     return questions
 
 
+DEFAULT_DOC_CHECK_RULES = (
+    "- Đối chiếu chéo tên người bán/mua (Shipper/Consignee), địa chỉ, mã số thuế giữa Sales Contract, Commercial Invoice, Packing List, B/L và C/O.\n"
+    "- Đối chiếu tổng số kiện, trọng lượng tịnh (Net Weight), trọng lượng cả bì (Gross Weight), CBM giữa Invoice, Packing List và B/L.\n"
+    "- Kiểm tra đồng nhất đơn giá, thành tiền, điều kiện Incoterms, đồng tiền thanh toán và điều khoản thanh toán trên Hợp đồng và Invoice.\n"
+    "- Kiểm tra tên hàng, mô tả hàng hóa, mã HS (6-8 số) giữa các chứng từ và cảnh báo nếu HS thuộc diện kiểm tra chuyên ngành hoặc rủi ro thuế."
+)
+
+
+def _sanitize_doc_filename(raw_name: str, fallback: str = "tai-lieu.bin") -> str:
+    """Làm sạch tên tệp người dùng tải lên, loại bỏ ký tự điều khiển và path traversal."""
+    cleaned = os.path.basename(str(raw_name or "").replace("\\", "/")).strip()
+    cleaned = re.sub(r"[\x00-\x1f\r\n]+", "_", cleaned)
+    if not cleaned or cleaned in (".", ".."):
+        return fallback
+    return cleaned[:160]
+
+
+def _decode_uploaded_base64(raw_b64: str, max_bytes: int) -> bytes:
+    """Giải mã base64 an toàn và kiểm tra kích thước nhị phân tối đa."""
+    text = str(raw_b64 or "").strip()
+    if "," in text and text[:64].lower().startswith("data:"):
+        text = text.split(",", 1)[1].strip()
+    if not text:
+        raise ValueError("Nội dung tệp rỗng.")
+    raw = base64.b64decode(text, validate=True)
+    if not raw:
+        raise ValueError("Tệp không có dữ liệu.")
+    if len(raw) > max_bytes:
+        raise ValueError(f"Kích thước tệp vượt quá giới hạn {max_bytes // (1024 * 1024)} MB.")
+    return raw
+
+
+def _fetch_doc_checker_training_rules(force_refresh: bool = False) -> str:
+    """Lấy quy tắc và tài liệu huấn luyện AI kiểm tra chứng từ từ Firestore site_settings/doc_checker_rules (cache 60s)."""
+    now = time.time()
+    with _DOC_CHECK_LOCK:
+        if not force_refresh and _DOC_RULES_CACHE["text"] and (now - float(_DOC_RULES_CACHE["fetched_at"]) < 60.0):
+            return _DOC_RULES_CACHE["text"]
+
+    url = (
+        f"https://firestore.googleapis.com/v1/projects/{FIREBASE_PROJECT_ID}"
+        "/databases/(default)/documents/site_settings/doc_checker_rules"
+    )
+    sections = []
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            doc = json.loads(resp.read().decode("utf-8"))
+        fields = doc.get("fields") or {}
+        rules_text = str((fields.get("rulesText") or {}).get("stringValue") or "").strip()
+        if rules_text:
+            sections.append(f"[QUY TẮC KIỂM TRA TỪ QUẢN TRỊ VIÊN]\n{rules_text[:6000]}")
+        docs_arr = ((fields.get("trainingDocs") or {}).get("arrayValue") or {}).get("values") or []
+        for idx, item in enumerate(docs_arr[:12], start=1):
+            map_fields = (item.get("mapValue") or {}).get("fields") or {}
+            t_name = str((map_fields.get("title") or {}).get("stringValue") or f"Tài liệu {idx}").strip()
+            t_body = str((map_fields.get("content") or {}).get("stringValue") or "").strip()
+            if t_body:
+                sections.append(f"[TÀI LIỆU HUẤN LUYỆN #{idx}: {t_name}]\n{t_body[:4000]}")
+    except Exception as exc:
+        print(f"[DOC_CHECK] Khong doc duoc rule tu Firestore (dung rule mac dinh): {exc}", flush=True)
+
+    combined = "\n\n".join(sections).strip() or DEFAULT_DOC_CHECK_RULES
+    combined = combined[:18000]
+    with _DOC_CHECK_LOCK:
+        _DOC_RULES_CACHE["fetched_at"] = now
+        _DOC_RULES_CACHE["text"] = combined
+    return combined
+
+
+def _render_pdf_pages_for_vision(raw_bytes: bytes, max_pages: int = 3) -> list:
+    """Chuyển tối đa 3 trang PDF scan thành ảnh PNG để AI đọc trực quan."""
+    rendered = []
+    try:
+        import pypdfium2 as pdfium  # type: ignore
+        pdf = pdfium.PdfDocument(raw_bytes)
+        try:
+            for page_idx in range(min(len(pdf), max_pages)):
+                page = pdf[page_idx]
+                bitmap = page.render(scale=1.6)
+                pil_img = bitmap.to_pil()
+                buf = io.BytesIO()
+                pil_img.save(buf, format="PNG")
+                rendered.append(("image/png", buf.getvalue(), f"trang {page_idx + 1}"))
+        finally:
+            pdf.close()
+    except Exception as exc:
+        print(f"[DOC_CHECK] Khong render duoc anh PDF scan: {exc}", flush=True)
+    return rendered
+
+
+def _extract_document_payload(filename: str, raw_bytes: bytes) -> dict:
+    """Trích xuất văn bản (PDF/DOCX/XLSX/TXT) hoặc dữ liệu ảnh trực quan từ tệp tải lên."""
+    ext = Path(filename).suffix.lower()
+    text_out = ""
+    visual_parts = []
+    note = ""
+
+    try:
+        if ext in (".txt", ".md", ".csv"):
+            text_out = raw_bytes.decode("utf-8", errors="replace")
+        elif ext == ".docx":
+            import docx  # type: ignore
+            document = docx.Document(io.BytesIO(raw_bytes))
+            chunks = [p.text.strip() for p in document.paragraphs if p.text and p.text.strip()]
+            for table in document.tables[:15]:
+                for row in table.rows[:60]:
+                    cells = [c.text.strip() for c in row.cells]
+                    if any(cells):
+                        chunks.append(" | ".join(cells))
+            text_out = "\n".join(chunks)
+        elif ext == ".xlsx":
+            import openpyxl  # type: ignore
+            wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), data_only=True, read_only=True)
+            sheet_chunks = []
+            try:
+                for sheet_name in wb.sheetnames[:6]:
+                    ws = wb[sheet_name]
+                    rows_txt = []
+                    for r_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
+                        if r_idx > 120:
+                            break
+                        vals = [str(c).strip() if c is not None else "" for c in row[:15]]
+                        if any(vals):
+                            rows_txt.append(" | ".join(vals))
+                    if rows_txt:
+                        sheet_chunks.append(f"[Sheet: {sheet_name}]\n" + "\n".join(rows_txt))
+            finally:
+                wb.close()
+            text_out = "\n\n".join(sheet_chunks)
+        elif ext == ".xls":
+            note = "Định dạng Excel cũ (.xls): AI đọc giới hạn sơ bộ, Thúy sẽ kiểm tra file gốc qua email."
+        elif ext == ".pdf":
+            import pdfplumber  # type: ignore
+            pages_txt = []
+            with pdfplumber.open(io.BytesIO(raw_bytes)) as pdf:
+                for p_idx, page in enumerate(pdf.pages[:10], start=1):
+                    txt = (page.extract_text() or "").strip()
+                    if txt:
+                        pages_txt.append(f"[Trang {p_idx}]\n{txt}")
+            text_out = "\n\n".join(pages_txt)
+            if len(text_out.strip()) < 40:
+                rendered = _render_pdf_pages_for_vision(raw_bytes, max_pages=3)
+                for mime_t, img_bytes, page_tag in rendered:
+                    visual_parts.append((f"{filename} ({page_tag})", mime_t, img_bytes))
+                if rendered:
+                    note = f"PDF dạng ảnh scan ({len(rendered)} trang đầu được phân tích bằng thị giác AI)."
+                else:
+                    note = "PDF dạng ảnh scan chưa đọc được OCR cục bộ; file gốc đã được chuyển bảo mật cho chuyên gia."
+        elif ext in (".jpg", ".jpeg", ".png", ".webp"):
+            mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+            visual_parts.append((filename, mime_map.get(ext, "image/png"), raw_bytes))
+            note = "Ảnh chứng từ được gửi trực tiếp cho AI đọc và chuyển chuyên gia kiểm tra."
+    except Exception as exc:
+        note = f"Không đọc hết nội dung tự động ({exc}); file gốc vẫn được gửi bảo mật qua email cho Thúy kiểm tra."
+
+    return {
+        "filename": filename,
+        "text": text_out.strip()[:12000],
+        "visual_parts": visual_parts,
+        "note": note,
+    }
+
+
+def _evaluate_dossier_with_gemini(customer_meta: dict, extracted_docs: list, training_rules: str) -> tuple[str, str]:
+    """Đánh giá sơ bộ tính đồng nhất bộ chứng từ bằng Gemini multimodal kết hợp tài liệu huấn luyện của Admin."""
+    api_key = (os.environ.get("THUYSTALK_GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY") or "").strip()
+
+    doc_summary_lines = []
+    visual_attachments = []
+    for idx, doc in enumerate(extracted_docs, start=1):
+        line = f"### Chứng từ #{idx}: {doc['filename']}"
+        if doc["note"]:
+            line += f"\n(Ghi chú kỹ thuật: {doc['note']})"
+        if doc["text"]:
+            line += f"\nNội dung trích xuất:\n{doc['text'][:8000]}"
+        doc_summary_lines.append(line)
+        for v_label, v_mime, v_bytes in doc["visual_parts"]:
+            if len(visual_attachments) < 6:
+                visual_attachments.append((v_label, v_mime, v_bytes))
+
+    trade_type = customer_meta.get("tradeType") or "Xuất nhập khẩu"
+    cust_note = customer_meta.get("notes") or "(Không có ghi chú thêm)"
+
+    prompt_text = (
+        "Bạn là Chuyên gia Kiểm tra Bộ Chứng Từ Xuất Nhập Khẩu & Hải Quan của ThuysTalk (15 năm kinh nghiệm thực chiến).\n"
+        "NHIỆM VỤ: Kiểm tra sơ bộ tính ĐỒNG NHẤT, phát hiện SAI SÓT / MÂU THUẪN / RỦI RO HẢI QUAN & THUẾ, "
+        "và tư vấn HƯỚNG ĐIỀU CHỈNH cho bộ chứng từ mà khách hàng vừa tải lên.\n\n"
+        f"NGHIỆP VỤ / LOẠI HÌNH: {trade_type}\n"
+        f"GHI CHÚ CỦA KHÁCH HÀNG: {cust_note}\n\n"
+        f"TÀI LIỆU & QUY TẮC HUẤN LUYỆN TỪ CHUYÊN GIA THUYTALK:\n{training_rules}\n\n"
+        "DANH SÁCH CHỨNG TỪ KHÁCH HÀNG TẢI LÊN:\n"
+        + "\n\n".join(doc_summary_lines)
+        + "\n\nYÊU CẦU TRÌNH BÀY KẾT QUẢ (Tiếng Việt, rõ ràng, chuyên nghiệp, KHÔNG dùng emoji/ký tự trang trí, đánh số rõ ràng):\n"
+        "1. **Tóm tắt bộ chứng từ đã nhận**: Liệt kê nhanh từng file và vai trò chứng từ nhận diện được.\n"
+        "2. **Đánh giá sơ bộ sự đồng nhất giữa các chứng từ**: So sánh Shipper/Consignee, Mô tả hàng hóa, Mã HS, Số lượng/Trọng lượng (NW/GW/Số kiện), Trị giá/Đơn giá, Incoterms, B/L - Invoice - Packing List - Hợp đồng - C/O.\n"
+        "3. **Cảnh báo sai sót & điểm rủi ro cần lưu ý**: Nêu cụ thể điểm lệch hoặc thông tin còn thiếu có nguy cơ bị hải quan/ngân hàng bác hồ sơ hoặc ấn định thuế.\n"
+        "4. **Hướng đề xuất điều chỉnh cụ thể**: Khuyến nghị sửa chứng từ nào, sửa mục nào trước khi truyền tờ khai hoặc xuất/nhập hàng.\n"
+        f"5. Cuối cùng nhắc rõ: {DOC_CHECK_DISCLAIMER}"
+    )
+
+    if api_key:
+        try:
+            from google import genai  # type: ignore
+            from google.genai import types  # type: ignore
+
+            client = genai.Client(api_key=api_key)
+            contents = [prompt_text]
+            for v_label, v_mime, v_bytes in visual_attachments:
+                contents.append(f"[Ảnh chứng từ kèm theo: {v_label}]")
+                contents.append(types.Part.from_bytes(data=v_bytes, mime_type=v_mime))
+
+            resp = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=contents,
+                config=types.GenerateContentConfig(temperature=0.2, max_output_tokens=2048),
+            )
+            answer_text = str(getattr(resp, "text", "") or "").strip()
+            if answer_text:
+                if "0767.648.862" not in answer_text:
+                    answer_text += f"\n\n**Lưu ý quan trọng:** {DOC_CHECK_DISCLAIMER}"
+                return answer_text, "gemini-2.5-flash"
+        except Exception as exc:
+            print(f"[DOC_CHECK] Gemini loi, chuyen sang phan tich du phong: {exc}", flush=True)
+
+    fallback_lines = [
+        "1. **Tóm tắt bộ chứng từ đã nhận**:",
+    ]
+    for doc in extracted_docs:
+        fallback_lines.append(f"- {doc['filename']}" + (f" ({doc['note']})" if doc["note"] else ""))
+    fallback_lines.extend([
+        "",
+        "2. **Trạng thái kiểm tra tự động sơ bộ**:",
+        "- Hệ thống AI phân tích sâu tạm thời quá tải hoặc đang chờ xác nhận OCR thủ công cho tệp scan.",
+        "- Toàn bộ bộ chứng từ gốc của bạn đã được đóng gói gửi **bảo mật** về email chuyên gia Nguyễn Thị Ngọc Thúy để đối chiếu chi tiết từng chỉ tiêu (Hợp đồng, Invoice, Packing List, B/L, C/O, mã HS & quy định kiểm tra chuyên ngành).",
+        "",
+        f"3. **Lưu ý quan trọng**: {DOC_CHECK_DISCLAIMER}",
+    ])
+    return "\n".join(fallback_lines), "fallback"
+
+
+def _send_confidential_dossier_email(customer_meta: dict, decoded_files: list, ai_analysis: str) -> tuple[bool, str]:
+    """Gửi bảo mật toàn bộ bộ chứng từ gốc kèm phân tích sơ bộ về DUY NHẤT email thuystalk.official@gmail.com."""
+    smtp_cfg = _get_smtp_config()
+    if not smtp_cfg["app_password"]:
+        return False, "Chưa cấu hình THUYSTALK_SMTP_APP_PASSWORD trong .env để chuyển email bảo mật."
+
+    now_vn = datetime.datetime.now(VN_TZ).strftime("%d/%m/%Y %H:%M:%S")
+    c_name = str(customer_meta.get("name") or "Khách hàng chưa ghi tên").strip()
+    c_phone = str(customer_meta.get("phone") or "").strip()
+    c_email = str(customer_meta.get("email") or "(Chưa cung cấp)").strip()
+    c_trade = str(customer_meta.get("tradeType") or "Xuất nhập khẩu").strip()
+    c_notes = str(customer_meta.get("notes") or "(Không có)").strip()
+
+    safe_name_subj = re.sub(r"[\r\n]+", " ", c_name)[:60]
+    safe_phone_subj = re.sub(r"[\r\n]+", " ", c_phone)[:30]
+    subject = f"[THUYSTALK · BẢO MẬT CHỨNG TỪ] {safe_name_subj} ({safe_phone_subj}) - {len(decoded_files)} tệp"
+
+    msg = MIMEMultipart("mixed")
+    msg["From"] = f"ThuysTalk Doc Auditor <{smtp_cfg['sender']}>"
+    msg["To"] = DOC_AUDIT_RECEIVER
+    msg["Subject"] = str(Header(subject, "utf-8"))
+
+    file_rows = "".join(
+        f"<li><strong>{html.escape(f['filename'])}</strong> ({len(f['bytes']):,} bytes)</li>"
+        for f in decoded_files
+    )
+    analysis_html = html.escape(ai_analysis).replace("\n", "<br>")
+    html_body = (
+        "<div style='font-family:Arial,Helvetica,sans-serif;max-width:740px;margin:0 auto;color:#111827;line-height:1.55;'>"
+        "<div style='background:#0D4738;color:#FFFFFF;padding:18px 22px;border-radius:12px 12px 0 0;'>"
+        "<div style='font-size:12px;letter-spacing:0.06em;color:#FDBA74;font-weight:700;'>HỒ SƠ BẢO MẬT TỪ CÔNG CỤ KIỂM TRA BỘ CHỨNG TỪ</div>"
+        f"<h2 style='margin:6px 0 0;font-size:18px;'>Khách hàng: {html.escape(c_name)}</h2>"
+        "</div>"
+        "<div style='border:1px solid #D1D5DB;border-top:none;padding:20px 22px;border-radius:0 0 12px 12px;background:#FFFFFF;'>"
+        "<table style='width:100%;border-collapse:collapse;margin-bottom:16px;font-size:14px;'>"
+        f"<tr><td style='padding:6px 0;width:150px;color:#4B5563;'><strong>Điện thoại / Zalo:</strong></td><td><strong>{html.escape(c_phone)}</strong></td></tr>"
+        f"<tr><td style='padding:6px 0;color:#4B5563;'><strong>Email khách:</strong></td><td>{html.escape(c_email)}</td></tr>"
+        f"<tr><td style='padding:6px 0;color:#4B5563;'><strong>Loại hình:</strong></td><td>{html.escape(c_trade)}</td></tr>"
+        f"<tr><td style='padding:6px 0;color:#4B5563;'><strong>Thời gian gửi:</strong></td><td>{html.escape(now_vn)} (UTC+7)</td></tr>"
+        f"<tr><td style='padding:6px 0;color:#4B5563;vertical-align:top;'><strong>Ghi chú khách hàng:</strong></td><td>{html.escape(c_notes)}</td></tr>"
+        "</table>"
+        f"<h3 style='color:#0D4738;margin:14px 0 6px;'>Danh sách {len(decoded_files)} chứng từ đính kèm bảo mật:</h3>"
+        f"<ul style='margin:0 0 16px 18px;padding:0;font-size:13px;'>{file_rows}</ul>"
+        "<h3 style='color:#0D4738;margin:14px 0 8px;'>Bản đánh giá sơ bộ AI vừa trả cho khách hàng:</h3>"
+        f"<div style='background:#F9FAFB;border:1px solid #E5E7EB;border-left:4px solid #F47A20;padding:14px;border-radius:8px;font-size:13px;'>{analysis_html}</div>"
+        "</div></div>"
+    )
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+    for f in decoded_files:
+        part = MIMEBase("application", "octet-stream")
+        part.set_payload(f["bytes"])
+        encoders.encode_base64(part)
+        part.add_header("Content-Disposition", "attachment", filename=("utf-8", "", f["filename"]))
+        msg.attach(part)
+
+    server = None
+    try:
+        server, sender = _open_smtp_connection(timeout=18)
+        server.sendmail(sender, [DOC_AUDIT_RECEIVER], msg.as_string())
+        return True, ""
+    except Exception as exc:
+        print(f"[DOC_CHECK] Loi gui email bao mat toi {DOC_AUDIT_RECEIVER}: {exc}", flush=True)
+        return False, f"Lỗi gửi email bảo mật: {exc}"
+    finally:
+        if server is not None:
+            try:
+                server.quit()
+            except Exception:
+                pass
+
+
 class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
@@ -1019,6 +1349,8 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             "/api/send-bulk-email",
             "/api/device/send-code",
             "/api/device/verify",
+            "/api/doc-check",
+            "/api/parse-doc-training",
         }
         if parsed.path not in allowed_post_routes:
             self.close_connection = True
@@ -1043,13 +1375,15 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json(400, {"ok": False, "error": "Header Content-Length không hợp lệ."})
             return
 
-        if content_length < 0 or content_length > MAX_POST_BODY_BYTES:
+        max_body = MAX_DOC_CHECK_BODY_BYTES if parsed.path == "/api/doc-check" else MAX_POST_BODY_BYTES
+        if content_length < 0 or content_length > max_body:
+            limit_mb = max_body // (1024 * 1024)
             self.close_connection = True
-            self._send_json(413, {"ok": False, "error": "Dữ liệu gửi lên vượt quá giới hạn 5 MB."})
+            self._send_json(413, {"ok": False, "error": f"Dữ liệu gửi lên vượt quá giới hạn {limit_mb} MB."})
             return
 
         learner_identity = None
-        if parsed.path in ("/api/parse-excel", "/api/send-bulk-email"):
+        if parsed.path in ("/api/parse-excel", "/api/send-bulk-email", "/api/parse-doc-training"):
             auth_ok, status_code, auth_msg = self._verify_admin_token()
             if not auth_ok:
                 self.close_connection = True
@@ -1079,6 +1413,10 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_device_send_code(payload, learner_identity)
         elif parsed.path == "/api/device/verify":
             self.handle_device_verify(payload, learner_identity)
+        elif parsed.path == "/api/doc-check":
+            self.handle_doc_check(payload)
+        elif parsed.path == "/api/parse-doc-training":
+            self.handle_parse_doc_training(payload)
 
     def handle_send_bulk_email(self, payload: dict):
         try:
@@ -1543,6 +1881,125 @@ class ThuysTalkRequestHandler(http.server.SimpleHTTPRequestHandler):
                     "error": f"Mã xác nhận chưa chính xác. Bạn còn {remaining} lần thử.",
                 },
             )
+
+    def handle_parse_doc_training(self, payload: dict):
+        """Phân tích tệp tài liệu huấn luyện AI kiểm tra chứng từ do Admin tải lên."""
+        try:
+            raw_name = _sanitize_doc_filename(payload.get("filename"), fallback="rule.txt")
+            ext = Path(raw_name).suffix.lower()
+            if ext not in DOC_TRAINING_ALLOWED_EXTENSIONS:
+                self._send_json(400, {
+                    "ok": False,
+                    "error": "Định dạng tài liệu huấn luyện không hỗ trợ. Chỉ nhận .txt, .md, .csv, .xlsx, .docx, .pdf.",
+                })
+                return
+            raw_bytes = _decode_uploaded_base64(payload.get("contentBase64"), max_bytes=4 * 1024 * 1024)
+            extracted = _extract_document_payload(raw_name, raw_bytes)
+            content = extracted["text"].strip()
+            if not content:
+                self._send_json(400, {
+                    "ok": False,
+                    "error": "Không trích xuất được nội dung chữ từ tài liệu này (nếu là PDF scan hãy chuyển sang DOCX/TXT hoặc gõ tóm tắt vào ô quy tắc).",
+                })
+                return
+            self._send_json(200, {
+                "ok": True,
+                "title": Path(raw_name).stem[:120],
+                "filename": raw_name,
+                "content": content[:8000],
+                "chars": len(content),
+            })
+        except ValueError as exc:
+            self._send_json(400, {"ok": False, "error": str(exc)})
+        except Exception as exc:
+            self._send_json(500, {"ok": False, "error": f"Lỗi đọc tài liệu huấn luyện: {exc}"})
+
+    def handle_doc_check(self, payload: dict):
+        """Nhận bộ chứng từ khách hàng, kiểm tra đồng nhất bằng AI và gửi bảo mật về thuystalk.official@gmail.com."""
+        client_ip = (self.client_address[0] if self.client_address else "unknown") or "unknown"
+        now = time.time()
+        with _DOC_CHECK_LOCK:
+            cutoff = now - 3600.0
+            for ip_key in list(_DOC_CHECK_IP_HITS.keys()):
+                kept = [ts for ts in _DOC_CHECK_IP_HITS[ip_key] if ts >= cutoff]
+                if kept:
+                    _DOC_CHECK_IP_HITS[ip_key] = kept
+                else:
+                    del _DOC_CHECK_IP_HITS[ip_key]
+            recent_hits = _DOC_CHECK_IP_HITS.get(client_ip, [])
+            if len(recent_hits) >= DOC_CHECK_IP_HOURLY_LIMIT:
+                self._send_json(429, {
+                    "ok": False,
+                    "error": "Bạn đã gửi quá nhiều yêu cầu kiểm tra trong 1 giờ. Vui lòng thử lại sau hoặc liên hệ trực tiếp Thúy 0767.648.862.",
+                })
+                return
+
+        name = str(payload.get("name") or "").strip()
+        phone = str(payload.get("phone") or "").strip()
+        email_addr = str(payload.get("email") or "").strip()
+        trade_type = str(payload.get("tradeType") or "Xuất nhập khẩu").strip()[:100]
+        notes = str(payload.get("notes") or "").strip()[:2500]
+        files_in = payload.get("files")
+
+        if len(name) < 2 or len(phone) < 7:
+            self._send_json(400, {"ok": False, "error": "Vui lòng nhập đầy đủ Họ tên và Số điện thoại / Zalo để nhận hỗ trợ."})
+            return
+        if not isinstance(files_in, list) or not files_in:
+            self._send_json(400, {"ok": False, "error": "Vui lòng đính kèm ít nhất 1 tệp chứng từ (PDF, DOCX, XLSX hoặc ảnh JPG/PNG)."})
+            return
+        if len(files_in) > DOC_CHECK_MAX_FILES:
+            self._send_json(400, {"ok": False, "error": f"Tối đa {DOC_CHECK_MAX_FILES} tệp cho mỗi lượt kiểm tra."})
+            return
+
+        decoded_files = []
+        total_decoded_bytes = 0
+        for idx, f_item in enumerate(files_in, start=1):
+            if not isinstance(f_item, dict):
+                self._send_json(400, {"ok": False, "error": f"Dữ liệu tệp thứ {idx} không hợp lệ."})
+                return
+            fname = _sanitize_doc_filename(f_item.get("filename"), fallback=f"chung-tu-{idx}.bin")
+            ext = Path(fname).suffix.lower()
+            if ext not in DOC_CHECK_ALLOWED_EXTENSIONS:
+                self._send_json(400, {
+                    "ok": False,
+                    "error": f"Tệp '{fname}' có định dạng không được hỗ trợ. Chỉ nhận PDF, DOCX, XLSX/XLS, CSV, TXT, JPG, PNG, WEBP.",
+                })
+                return
+            try:
+                raw_bytes = _decode_uploaded_base64(f_item.get("contentBase64"), max_bytes=DOC_CHECK_MAX_SINGLE_FILE_BYTES)
+            except ValueError as exc:
+                self._send_json(400, {"ok": False, "error": f"Tệp '{fname}': {exc}"})
+                return
+            total_decoded_bytes += len(raw_bytes)
+            if total_decoded_bytes > DOC_CHECK_MAX_TOTAL_FILE_BYTES:
+                self._send_json(413, {"ok": False, "error": "Tổng dung lượng bộ chứng từ vượt quá giới hạn 14 MB."})
+                return
+            decoded_files.append({"filename": fname, "bytes": raw_bytes})
+
+        with _DOC_CHECK_LOCK:
+            _DOC_CHECK_IP_HITS.setdefault(client_ip, []).append(now)
+
+        customer_meta = {
+            "name": name[:120],
+            "phone": phone[:40],
+            "email": email_addr[:160],
+            "tradeType": trade_type,
+            "notes": notes,
+        }
+        extracted_docs = [_extract_document_payload(f["filename"], f["bytes"]) for f in decoded_files]
+        training_rules = _fetch_doc_checker_training_rules()
+        ai_analysis, engine_used = _evaluate_dossier_with_gemini(customer_meta, extracted_docs, training_rules)
+        mail_ok, mail_err = _send_confidential_dossier_email(customer_meta, decoded_files, ai_analysis)
+
+        self._send_json(200, {
+            "ok": True,
+            "engine": engine_used,
+            "analysis": ai_analysis,
+            "fileNames": [f["filename"] for f in decoded_files],
+            "confidentialEmailSent": mail_ok,
+            "confidentialEmailError": "" if mail_ok else mail_err,
+            "disclaimer": DOC_CHECK_DISCLAIMER,
+        })
 
     def _send_json(self, status_code: int, data: dict):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")

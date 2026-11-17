@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <title>AI Kiểm Tra Bộ Chứng Từ Xuất Nhập Khẩu · ThuysTalk | Nguyễn Thị Ngọc Thúy</title>
+  <meta name="description" content="Tải lên Hợp đồng, Commercial Invoice, Packing List, B/L, C/O để AI đối chiếu đồng nhất sơ bộ, cảnh báo sai sót và chuyển bảo mật tới chuyên gia Nguyễn Thị Ngọc Thúy tư vấn." />
+
+  <!-- Google Fonts: Plus Jakarta Sans (400;500;600;700;800;900) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="styles/main.css?v=20261117b" />
+</head>
+<body data-page="doccheck">
+
+  <!-- Sticky Header -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="index.html" class="brand-logo">
+        <div class="brand-monogram">T<span>T</span></div>
+        <div class="brand-text">
+          <span class="brand-name">ThuysTalk</span>
+        </div>
+      </a>
+
+      <nav class="main-nav" aria-label="Main Navigation">
+        <a href="index.html" class="nav-link" id="navHome">Trang chủ</a>
+        <a href="index.html#chuyen-mon" class="nav-link" id="navExpertise">Chuyên môn</a>
+        <a href="index.html#ve-toi" class="nav-link" id="navAbout">Về tôi</a>
+        <a href="elearning.html" class="nav-link" id="navElearning">Tài liệu &amp; Mini Test</a>
+        <a href="videos.html" class="nav-link" id="navVideo">Video ThuyTalk</a>
+        <a href="bai-viet.html" class="nav-link" id="navArticles">Bài viết</a>
+        <a href="tra-cuu.html" class="nav-link" id="navNotebook">Tra cứu Pháp lý &amp; Mã HS</a>
+        <a href="kiem-tra-chung-tu.html" class="nav-link active" id="navDocCheck">Kiểm tra Chứng từ</a>
+      </nav>
+
+      <div class="header-actions">
+        <div class="lang-switch" role="group" aria-label="Language Switcher">
+          <button type="button" class="lang-btn active" data-lang="vi">VI</button>
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+        </div>
+        <a href="index.html#tu-van" class="btn btn-primary btn-sm" id="headerCtaBtn">
+          Nhận tài liệu &amp; Tư vấn
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="doc-check-hero">
+    <div class="container">
+      <div class="subpage-breadcrumb" style="margin-bottom:10px;">
+        <a href="index.html" style="color:#FDBA74;">Trang chủ ThuysTalk</a>
+        <span>/</span>
+        <span>Kiểm tra Bộ chứng từ AI</span>
+      </div>
+      <div class="doc-check-confidential-badge" id="docCheckHeroBadge">
+        RÀ SOÁT AI SƠ BỘ &amp; CHUYỂN HỒ SƠ BẢO MẬT ĐẾN CHUYÊN GIA
+      </div>
+      <h1 id="docCheckHeroTitle">Kiểm Tra Tính Đồng Nhất Bộ Chứng Từ Xuất Nhập Khẩu</h1>
+      <p id="docCheckHeroDesc">
+        Tải lên Hợp đồng, Commercial Invoice, Packing List, Vận đơn (B/L), C/O hoặc ảnh chứng từ để AI đối chiếu chéo sơ bộ, cảnh báo sai sót và gợi ý hướng điều chỉnh trước khi truyền tờ khai. Toàn bộ tài liệu của bạn sẽ được gửi bảo mật về email chuyên gia Nguyễn Thị Ngọc Thúy để hỗ trợ rà soát chuyên sâu.
+      </p>
+    </div>
+  </section>
+
+  <!-- Main Workspace -->
+  <section class="container">
+    <div class="doc-check-layout">
+
+      <!-- Left: Upload & Contact Form -->
+      <div class="doc-check-card">
+        <h2 style="font-size:1.18rem;color:var(--jade-900);margin-bottom:6px;" id="docCheckFormHeading">
+          Bước 1 &amp; 2 · Tải bộ chứng từ và thông tin liên hệ
+        </h2>
+        <p style="font-size:0.86rem;color:var(--ink-600);margin-bottom:16px;" id="docCheckFormSub">
+          Hỗ trợ PDF, Word (.docx), Excel (.xlsx/.xls), CSV, TXT và ảnh chụp (JPG, PNG, WEBP). Tối đa 8 tệp / lượt.
+        </p>
+
+        <form id="docCheckerForm">
+          <div class="form-row-2" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+            <div class="form-group">
+              <label for="docCheckName">Họ tên / Doanh nghiệp *</label>
+              <input type="text" id="docCheckName" class="form-control" placeholder="VD: Nguyễn Văn A · Công ty ABC" required />
+            </div>
+            <div class="form-group">
+              <label for="docCheckPhone">Số điện thoại / Zalo *</label>
+              <input type="tel" id="docCheckPhone" class="form-control" placeholder="VD: 0909 xxx xxx" required />
+            </div>
+          </div>
+
+          <div class="form-row-2" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+            <div class="form-group">
+              <label for="docCheckEmail">Email nhận trao đổi thêm</label>
+              <input type="email" id="docCheckEmail" class="form-control" placeholder="tencongty@domain.com" />
+            </div>
+            <div class="form-group">
+              <label for="docCheckTradeType">Loại hình lô hàng</label>
+              <select id="docCheckTradeType" class="form-control">
+                <option value="Nhập khẩu kinh doanh / tiêu dùng">Nhập khẩu kinh doanh / tiêu dùng</option>
+                <option value="Xuất khẩu hàng hóa">Xuất khẩu hàng hóa</option>
+                <option value="DNCX / Gia công / Sản xuất xuất khẩu">DNCX / Gia công / SXXK</option>
+                <option value="Kiểm tra C/O hưởng ưu đãi thuế FTA">Kiểm tra C/O hưởng ưu đãi thuế FTA</option>
+                <option value="Khác (vướng mắc kiểm tra chuyên ngành / HS)">Khác (KTCN / Mã HS / Thông quan)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Bộ chứng từ cần đối chiếu (PDF, DOCX, XLSX, Ảnh) *</label>
+            <div class="doc-check-dropzone" id="docCheckDropzone">
+              <input
+                type="file"
+                id="docCheckFileInput"
+                multiple
+                accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md,.jpg,.jpeg,.png,.webp"
+              />
+              <div style="font-weight:800;color:var(--jade-900);font-size:0.95rem;margin-bottom:4px;">
+                Chạm để chọn hoặc kéo thả các tệp chứng từ vào đây
+              </div>
+              <div style="font-size:0.78rem;color:var(--ink-600);">
+                Ví dụ: Sales Contract, Commercial Invoice, Packing List, Bill of Lading, C/O...
+              </div>
+            </div>
+            <div class="doc-check-file-list" id="docCheckFileList"></div>
+          </div>
+
+          <div class="form-group">
+            <label for="docCheckNotes">Mô tả điểm đang băn khoăn hoặc lưu ý riêng của lô hàng</label>
+            <textarea
+              id="docCheckNotes"
+              class="form-control"
+              rows="3"
+              placeholder="Ví dụ: Em phân vân mô tả hàng trên Invoice lệch với B/L, hoặc cần soi giúp mã HS có dính kiểm tra chuyên ngành không..."
+            ></textarea>
+          </div>
+
+          <label style="display:flex;align-items:flex-start;gap:10px;font-size:0.8rem;color:var(--ink-700);line-height:1.45;margin:10px 0 14px;cursor:pointer;">
+            <input type="checkbox" id="docCheckConfidentialConsent" checked style="margin-top:3px;flex-shrink:0;" />
+            <span>
+              Tôi đồng ý tải lên bộ chứng từ để AI rà soát sơ bộ và gửi <strong>bảo mật</strong> bộ tài liệu gốc này về email chuyên gia <strong>Nguyễn Thị Ngọc Thúy</strong> phục vụ kiểm tra chuyên sâu theo Nghị định 13/2023/NĐ-CP. Không lưu trữ công khai trên hệ thống.
+            </span>
+          </label>
+
+          <button type="submit" class="btn btn-primary" id="docCheckSubmitBtn" style="width:100%;padding:13px 18px;font-size:0.96rem;">
+            Kiểm Tra Sơ Bộ Bằng AI &amp; Gửi Chuyên Gia Thúy
+          </button>
+
+          <div class="doc-check-disclaimer-box" id="docCheckDisclaimerBanner">
+            Lưu ý: AI có thể có sai sót, liên hệ Thúy <a href="tel:0767648862" style="color:#9A3412;text-decoration:underline;">0767.648.862</a> để được tư vấn cụ thể.
+          </div>
+        </form>
+      </div>
+
+      <!-- Right: AI Preliminary Output & Consultation -->
+      <div class="doc-check-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+          <h2 style="font-size:1.18rem;color:var(--jade-900);margin:0;">
+            Kết quả Đối chiếu Sơ bộ &amp; Khuyến nghị AI
+          </h2>
+          <span style="font-size:0.75rem;font-weight:800;color:var(--orange-700);background:#FFF7ED;padding:4px 10px;border-radius:999px;" id="docCheckEngineBadge">
+            Sẵn sàng rà soát
+          </span>
+        </div>
+
+        <div class="doc-check-result-body" id="docCheckResultBody">
+          <p style="color:var(--ink-600);">
+            Sau khi bạn tải lên bộ chứng từ và nhấn kiểm tra, hệ thống sẽ tự động đối chiếu dựa trên bộ quy tắc thực chiến của ThuysTalk để chỉ ra:
+          </p>
+          <ul>
+            <li>Điểm đồng nhất và mâu thuẫn giữa Hợp đồng, Commercial Invoice, Packing List, B/L và C/O.</li>
+            <li>Cảnh báo rủi ro mô tả hàng hóa, số lượng, trọng lượng NW/GW, điều kiện Incoterms hoặc mã HS.</li>
+            <li>Hướng điều chỉnh cụ thể trước khi phát hành chứng từ chính thức hoặc mở tờ khai hải quan.</li>
+          </ul>
+          <p style="color:var(--ink-600);margin-bottom:0;">
+            Đồng thời, toàn bộ bộ chứng từ gốc sẽ được chuyển riêng tư vào hộp thư chuyên gia của chị Thúy để đối chiếu lại bằng kinh nghiệm thực tế khi bạn cần tư vấn sâu.
+          </p>
+        </div>
+
+        <div class="doc-check-mail-status" id="docCheckMailStatus" style="display:none;"></div>
+
+        <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--ink-200);display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
+          <div style="font-size:0.82rem;color:var(--ink-700);font-weight:700;">
+            Cần rà soát gấp trước giờ mở tờ khai?
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a href="tel:0767648862" class="btn btn-outline btn-sm">Gọi 0767.648.862</a>
+            <a href="https://zalo.me/0767648862" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">Nhắn Zalo Thúy</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top">
+        <a href="index.html" class="brand-logo">
+          <div class="brand-monogram">T<span>T</span></div>
+          <div class="brand-text">
+            <span class="brand-name">ThuysTalk</span>
+          </div>
+        </a>
+        <div style="display:flex; gap:20px; flex-wrap:wrap; font-size:0.86rem; font-weight:700; color:var(--ink-600);">
+          <a href="index.html">Trang chủ</a>
+          <a href="elearning.html">Tài liệu &amp; Mini Test</a>
+          <a href="videos.html">Video ThuyTalk</a>
+          <a href="bai-viet.html">Bài viết</a>
+          <a href="tra-cuu.html">Tra cứu Pháp lý &amp; Mã HS</a>
+          <a href="kiem-tra-chung-tu.html" style="color:var(--orange-600);">Kiểm tra Chứng từ</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>Bản quyền 2026 Nguyễn Thị Ngọc Thúy (ThuysTalk).</span>
+        <span>AI có thể có sai sót, liên hệ Thúy 0767.648.862 để được tư vấn cụ thể.</span>
+      </div>
+    </div>
+  </footer>
+
+  <div class="toast-notification" id="toastNotification" role="status" aria-live="polite"></div>
+
+  <!-- Firebase App, Auth & Firestore SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-config.js?v=20261117b"></script>
+  <script src="js/data.js?v=20261117b"></script>
+  <script src="js/vendor/purify.min.js?v=20261117b"></script>
+  <script src="js/app.js?v=20261117b"></script>
+</body>
+</html>

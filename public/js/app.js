@@ -1560,7 +1560,9 @@
       },
       docs: {
         title: isEn ? "Shipping Document Check" : "Kiểm tra Bộ chứng từ",
-        sub: isEn ? "Contract, Invoice, Packing List & B/L cross-check guide" : "Checklist Hợp đồng, Invoice, Packing List & B/L"
+        sub: isEn
+          ? "Upload Contract, Invoice, Packing List & B/L · AI cross-check & private send to Thuy"
+          : "Tải lên Hợp đồng, Invoice, Packing List & B/L · AI đối chiếu & gửi bảo mật tới Thúy"
       }
     };
     gridEl.querySelectorAll("[data-triage-key]").forEach((card) => {
@@ -4213,13 +4215,17 @@
         </div>
         <div class="ai-popup-input-row">
           <span class="ai-step-label" id="popupStep2Label" style="margin-bottom:2px;"></span>
-          <div class="ai-popup-input-flex">
+          <div id="popupStep1ReminderBox" class="ai-popup-step1-gate">
+            <div class="ai-popup-step1-gate-title" id="popupStep1ReminderText"></div>
+            <div class="ai-popup-step1-pills" id="popupStep1ReminderPills"></div>
+          </div>
+          <div class="ai-popup-input-flex" id="popupInputFlex" style="display:none;">
             <div class="ai-popup-textarea-wrap">
-              <textarea id="popupAiQueryInput" class="ai-popup-textarea" rows="1" readonly autocomplete="off"></textarea>
+              <textarea id="popupAiQueryInput" class="ai-popup-textarea" rows="1" autocomplete="off"></textarea>
             </div>
             <button type="button" id="popupAiSendBtn" class="ai-popup-send-btn"></button>
           </div>
-          <div class="ai-popup-input-hint">
+          <div class="ai-popup-input-hint" id="popupInputHintRow" style="display:none;">
             <span id="popupInputHintLeft"></span>
             <span id="popupInputHintRight" style="font-weight:700; color:var(--jade-800);"></span>
           </div>
@@ -4236,6 +4242,11 @@
     const popupInp = document.getElementById("popupAiQueryInput");
     const popupSendBtn = document.getElementById("popupAiSendBtn");
     const closeBtn = document.getElementById("aiChatPopupCloseBtn");
+    const step1ReminderBox = document.getElementById("popupStep1ReminderBox");
+    const step1ReminderText = document.getElementById("popupStep1ReminderText");
+    const step1ReminderPills = document.getElementById("popupStep1ReminderPills");
+    const popupInputFlex = document.getElementById("popupInputFlex");
+    const popupInputHintRow = document.getElementById("popupInputHintRow");
 
     bindAutoExpandTextarea(popupInp, 128, 38);
 
@@ -4244,17 +4255,35 @@
       const meta = FLOATING_VAULT_META.find((v) => v.routeId === selectedRouteId);
       const hintRight = document.getElementById("popupInputHintRight");
       if (!meta) {
-        popupInp.setAttribute("readonly", "readonly");
-        popupInp.placeholder = isEn
-          ? "Step 1 required: tap 1 vault above before typing..."
-          : "Vui lòng chạm chọn 1 kho ở Bước 1 để bắt đầu nhập câu hỏi...";
+        if (step1ReminderBox) step1ReminderBox.style.display = "flex";
+        if (popupInputFlex) popupInputFlex.style.display = "none";
+        if (popupInputHintRow) popupInputHintRow.style.display = "none";
+        if (step1ReminderText) {
+          step1ReminderText.textContent = isEn
+            ? "Pick a knowledge vault below (Step 1) to open the keyboard and type your question:"
+            : "Chạm chọn 1 Kho tri thức bên dưới (Bước 1) để mở bàn phím nhập câu hỏi:";
+        }
+        if (step1ReminderPills) {
+          step1ReminderPills.innerHTML = FLOATING_VAULT_META.map((v) => {
+            const label = isEn ? v.shortEn : v.shortVi;
+            const title = isEn ? v.titleEn : v.titleVi;
+            return `<button type="button" class="ai-popup-step1-pill" data-gate-vault="${escapeHtml(v.routeId)}">${escapeHtml(label)} · ${escapeHtml(title)}</button>`;
+          }).join("");
+          step1ReminderPills.querySelectorAll("[data-gate-vault]").forEach((btn) => {
+            btn.addEventListener("click", () => selectPopupVault(btn.dataset.gateVault, true));
+          });
+        }
         if (hintRight) {
           hintRight.textContent = isEn ? "No vault selected" : "Chưa chọn kho";
           hintRight.style.color = "var(--orange-700)";
         }
       } else {
         const shortLabel = isEn ? meta.shortEn : meta.shortVi;
+        if (step1ReminderBox) step1ReminderBox.style.display = "none";
+        if (popupInputFlex) popupInputFlex.style.display = "flex";
+        if (popupInputHintRow) popupInputHintRow.style.display = "flex";
         popupInp.removeAttribute("readonly");
+        popupInp.disabled = false;
         popupInp.placeholder = isEn
           ? `Step 2: Enter or paste a detailed question into ${shortLabel}...`
           : `Bước 2: Nhập câu hỏi vào ${shortLabel} (có thể dán đoạn văn dài)...`;
@@ -4764,6 +4793,243 @@
           ? `Cảm ơn ${name}! Câu hỏi tư vấn đã được gửi thành công. Chị Thúy sẽ phản hồi trong 24h.`
           : `Thank you ${name}! Your consultation inquiry has been submitted.`
       );
+    });
+  }
+
+  function initDocCheckerPage() {
+    const form = document.getElementById("docCheckerForm");
+    const fileInput = document.getElementById("docCheckFileInput");
+    const dropzone = document.getElementById("docCheckDropzone");
+    const fileListEl = document.getElementById("docCheckFileList");
+    const submitBtn = document.getElementById("docCheckSubmitBtn");
+    const resultBodyEl = document.getElementById("docCheckResultBody");
+    const engineBadgeEl = document.getElementById("docCheckEngineBadge");
+    const mailStatusEl = document.getElementById("docCheckMailStatus");
+    if (!form || !fileInput || !fileListEl) return;
+
+    const MAX_FILES = 8;
+    const MAX_SINGLE_BYTES = 8 * 1024 * 1024;
+    let selectedFiles = [];
+
+    const formatFileSize = (bytes) => {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    };
+
+    const renderSelectedFiles = () => {
+      if (!selectedFiles.length) {
+        fileListEl.innerHTML = "";
+        return;
+      }
+      fileListEl.innerHTML = selectedFiles
+        .map(
+          (f, idx) => `
+          <div class="doc-check-file-item">
+            <div class="doc-check-file-meta">
+              <div class="doc-check-file-name">${escapeHtml(f.name)}</div>
+              <div class="doc-check-file-size">${escapeHtml(formatFileSize(f.size))}</div>
+            </div>
+            <button type="button" class="doc-check-remove-btn" data-remove-doc-idx="${idx}">Bỏ chọn</button>
+          </div>`
+        )
+        .join("");
+
+      fileListEl.querySelectorAll("[data-remove-doc-idx]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const rmIdx = Number(btn.dataset.removeDocIdx);
+          if (!Number.isNaN(rmIdx)) {
+            selectedFiles.splice(rmIdx, 1);
+            renderSelectedFiles();
+          }
+        });
+      });
+    };
+
+    const appendFiles = (incoming) => {
+      const list = Array.from(incoming || []);
+      for (const f of list) {
+        if (selectedFiles.length >= MAX_FILES) {
+          showToast(`Chỉ hỗ trợ tối đa ${MAX_FILES} tệp chứng từ mỗi lượt kiểm tra.`);
+          break;
+        }
+        if (f.size > MAX_SINGLE_BYTES) {
+          showToast(`Tệp "${f.name}" lớn hơn 8 MB, vui lòng nén bớt trước khi tải lên.`);
+          continue;
+        }
+        const dup = selectedFiles.some((x) => x.name === f.name && x.size === f.size);
+        if (!dup) selectedFiles.push(f);
+      }
+      renderSelectedFiles();
+    };
+
+    fileInput.addEventListener("change", () => {
+      appendFiles(fileInput.files);
+      fileInput.value = "";
+    });
+
+    if (dropzone) {
+      ["dragenter", "dragover"].forEach((evName) => {
+        dropzone.addEventListener(evName, (e) => {
+          e.preventDefault();
+          dropzone.classList.add("is-dragover");
+        });
+      });
+      ["dragleave", "drop"].forEach((evName) => {
+        dropzone.addEventListener(evName, (e) => {
+          e.preventDefault();
+          dropzone.classList.remove("is-dragover");
+        });
+      });
+      dropzone.addEventListener("drop", (e) => {
+        if (e.dataTransfer && e.dataTransfer.files) {
+          appendFiles(e.dataTransfer.files);
+        }
+      });
+    }
+
+    const readFileAsBase64 = (file) =>
+      new Promise((resolve, reject) => {
+        const isBigImage = /^image\/(jpeg|jpg|png|webp)$/i.test(file.type) && file.size > 1.2 * 1024 * 1024;
+        if (isBigImage) {
+          const img = new Image();
+          const objUrl = URL.createObjectURL(file);
+          img.onload = () => {
+            try {
+              const maxEdge = 1800;
+              const scale = Math.min(1, maxEdge / Math.max(img.width || 1, img.height || 1));
+              const canvas = document.createElement("canvas");
+              canvas.width = Math.max(1, Math.round(img.width * scale));
+              canvas.height = Math.max(1, Math.round(img.height * scale));
+              const ctx = canvas.getContext("2d");
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+              URL.revokeObjectURL(objUrl);
+              resolve(dataUrl.split(",")[1] || "");
+            } catch (err) {
+              URL.revokeObjectURL(objUrl);
+              reject(err);
+            }
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(objUrl);
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+            reader.onerror = () => reject(new Error("Không đọc được tệp ảnh."));
+            reader.readAsDataURL(file);
+          };
+          img.src = objUrl;
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          const res = String(reader.result || "");
+          resolve(res.includes(",") ? res.split(",")[1] : res);
+        };
+        reader.onerror = () => reject(new Error(`Không đọc được tệp "${file.name}".`));
+        reader.readAsDataURL(file);
+      });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = (document.getElementById("docCheckName")?.value || "").trim();
+      const phone = (document.getElementById("docCheckPhone")?.value || "").trim();
+      const email = (document.getElementById("docCheckEmail")?.value || "").trim();
+      const tradeType = (document.getElementById("docCheckTradeType")?.value || "").trim();
+      const notes = (document.getElementById("docCheckNotes")?.value || "").trim();
+      const consentEl = document.getElementById("docCheckConfidentialConsent");
+
+      if (name.length < 2 || phone.length < 7) {
+        showToast("Vui lòng nhập đầy đủ Họ tên và Số điện thoại / Zalo.");
+        return;
+      }
+      if (!selectedFiles.length) {
+        showToast("Vui lòng chọn ít nhất 1 tệp chứng từ cần đối chiếu.");
+        return;
+      }
+      if (consentEl && !consentEl.checked) {
+        showToast("Vui lòng xác nhận đồng ý gửi bảo mật bộ chứng từ để AI và chuyên gia kiểm tra.");
+        return;
+      }
+
+      const apiUrl = getApiUrl("/api/doc-check");
+      if (!apiUrl) {
+        if (resultBodyEl) {
+          resultBodyEl.innerHTML = sanitizeRichHtml(
+            `<p><strong>Kết nối máy chủ phân tích tệp tạm thời chưa sẵn sàng trên bản xem tĩnh.</strong></p>
+             <p>Bạn vui lòng gửi bộ chứng từ trực tiếp qua email <a href="mailto:thuystalk.official@gmail.com">thuystalk.official@gmail.com</a> hoặc Zalo <strong>0767.648.862</strong> để chị Thúy rà soát bảo mật ngay.</p>
+             <p><em>Lưu ý: AI có thể có sai sót, liên hệ Thúy 0767.648.862 để được tư vấn cụ thể.</em></p>`
+          );
+        }
+        showToast("Chưa kết nối tới API Trung Gian xử lý tệp.");
+        return;
+      }
+
+      const origBtnText = submitBtn ? submitBtn.textContent : "";
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Đang đọc bộ chứng từ & đối chiếu AI...";
+      }
+      if (engineBadgeEl) engineBadgeEl.textContent = "Đang phân tích...";
+      if (mailStatusEl) mailStatusEl.style.display = "none";
+
+      try {
+        const encodedFiles = [];
+        for (const f of selectedFiles) {
+          const contentBase64 = await readFileAsBase64(f);
+          encodedFiles.push({ filename: f.name, contentBase64 });
+        }
+
+        const resp = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            phone,
+            email,
+            tradeType,
+            notes,
+            files: encodedFiles
+          })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.ok) {
+          throw new Error(data.error || `Lỗi xử lý máy chủ (HTTP ${resp.status}).`);
+        }
+
+        if (resultBodyEl) {
+          resultBodyEl.innerHTML = sanitizeRichHtml(formatAiResponseHtml(data.analysis || ""));
+        }
+        if (engineBadgeEl) {
+          engineBadgeEl.textContent = data.engine === "fallback" ? "Đã nhận hồ sơ · Chờ rà soát" : "Hoàn tất đối chiếu sơ bộ";
+        }
+        if (mailStatusEl) {
+          mailStatusEl.style.display = "block";
+          if (data.confidentialEmailSent) {
+            mailStatusEl.style.background = "#ECFDF5";
+            mailStatusEl.style.borderColor = "#A7F3D0";
+            mailStatusEl.style.color = "#065F46";
+            mailStatusEl.textContent =
+              `Đã chuyển bảo mật toàn bộ ${(data.fileNames || []).length} chứng từ gốc về hộp thư chuyên gia thuystalk.official để chị Thúy kiểm tra và tư vấn sâu hơn cho bạn.`;
+          } else {
+            mailStatusEl.style.background = "#FEF2F2";
+            mailStatusEl.style.borderColor = "#FECACA";
+            mailStatusEl.style.color = "#991B1B";
+            mailStatusEl.textContent =
+              data.confidentialEmailError ||
+              "Không thể tự động chuyển email bảo mật lúc này. Vui lòng nhắn trực tiếp Zalo 0767.648.862 để gửi bộ hồ sơ.";
+          }
+        }
+        showToast("Đã hoàn tất kiểm tra sơ bộ bộ chứng từ!");
+      } catch (err) {
+        if (engineBadgeEl) engineBadgeEl.textContent = "Cần kiểm tra lại";
+        showToast(err && err.message ? err.message : "Không thể kiểm tra chứng từ lúc này.");
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = origBtnText || "Kiểm Tra Sơ Bộ Bằng AI & Gửi Chuyên Gia Thúy";
+        }
+      }
     });
   }
 
@@ -9271,6 +9537,38 @@
         <div id="cmsBridgeStatusMsg" style="font-size:0.78rem; font-weight:700; color:var(--jade-800); margin-top:8px;"></div>
       </div>
 
+      <div class="cms-panel-box" style="margin-bottom:18px; border-color:var(--orange-400); background:#FFFBF7;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+          <div>
+            <h4 style="color:var(--jade-900); margin-bottom:4px;">Tài Liệu Huấn Luyện AI Kiểm Tra Bộ Chứng Từ (Card 04)</h4>
+            <p style="font-size:0.8rem; color:var(--ink-600); margin:0;">
+              Cung cấp quy tắc đối chiếu chéo &amp; tài liệu mẫu để AI học trước khi đánh giá Hợp đồng, Invoice, Packing List, B/L, C/O cho khách hàng.
+            </p>
+          </div>
+          <label class="btn btn-jade btn-sm" style="cursor:pointer;">
+            Tải lên tài liệu huấn luyện (.pdf / .docx / .xlsx / .txt)
+            <input type="file" id="cmsDocTrainingUploadInput" accept=".txt,.md,.csv,.xlsx,.docx,.pdf" style="display:none;" />
+          </label>
+        </div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label for="cmsDocCheckRulesInput">Bộ quy tắc kiểm tra chứng từ cốt lõi (AI ưu tiên áp dụng trước tiên)</label>
+          <textarea
+            id="cmsDocCheckRulesInput"
+            class="form-control"
+            rows="4"
+            style="background:#FFFFFF;"
+            placeholder="Ví dụ: 1. Đối chiếu tên Shipper/Consignee và số Invoice giữa B/L - Invoice - Packing List...&#10;2. Kiểm tra điều kiện Incoterms 2020 khớp với cước vận tải và bảo hiểm..."
+          ></textarea>
+        </div>
+        <div id="cmsDocTrainingList" style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;"></div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <button type="button" class="btn btn-primary btn-sm" id="cmsSaveDocRulesBtn">
+            Lưu Quy Tắc &amp; Tài Liệu Huấn Luyện AI Chứng Từ
+          </button>
+          <span id="cmsDocRulesStatusMsg" style="font-size:0.78rem; font-weight:700; color:var(--jade-800);"></span>
+        </div>
+      </div>
+
       <div class="cms-panel-box">
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
           <div>
@@ -9435,6 +9733,171 @@
         showToast("Đã xóa mục dữ liệu AI.");
       });
     });
+
+    // Document Checker Training Rules & Uploaded Docs (Firestore site_settings/doc_checker_rules)
+    (function initAdminDocCheckerTraining() {
+      const DOC_RULES_STORAGE_KEY = "thuystalk_doc_checker_rules_v1";
+      const rulesInput = document.getElementById("cmsDocCheckRulesInput");
+      const listEl = document.getElementById("cmsDocTrainingList");
+      const uploadInp = document.getElementById("cmsDocTrainingUploadInput");
+      const saveBtn = document.getElementById("cmsSaveDocRulesBtn");
+      const statusMsg = document.getElementById("cmsDocRulesStatusMsg");
+      if (!rulesInput || !listEl || !saveBtn) return;
+
+      let trainingDocs = [];
+
+      const renderTrainingDocs = () => {
+        if (!trainingDocs.length) {
+          listEl.innerHTML =
+            '<div style="font-size:0.78rem; color:var(--ink-500); font-style:italic;">Chưa có tài liệu huấn luyện đính kèm thêm (AI vẫn dùng quy tắc bạn nhập ở trên và bộ quy tắc chuẩn XNK).</div>';
+          return;
+        }
+        listEl.innerHTML = trainingDocs
+          .map(
+            (doc, idx) => `
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 12px; border-radius:10px; background:#FFFFFF; border:1px solid var(--ink-200);">
+            <div style="min-width:0; flex:1;">
+              <div style="font-size:0.82rem; font-weight:700; color:var(--jade-900);">${escapeHtml(doc.title || "Tài liệu " + (idx + 1))}</div>
+              <div style="font-size:0.72rem; color:var(--ink-500);">${escapeHtml(String((doc.content || "").length))} ký tự · ${escapeHtml(String(doc.updatedAt || "").slice(0, 10))}</div>
+            </div>
+            <button type="button" class="btn btn-danger btn-sm" data-del-doc-training="${idx}">Xóa</button>
+          </div>`
+          )
+          .join("");
+
+        listEl.querySelectorAll("[data-del-doc-training]").forEach((btn) => {
+          btn.addEventListener("click", async () => {
+            const idx = Number(btn.dataset.delDocTraining);
+            if (Number.isNaN(idx)) return;
+            trainingDocs.splice(idx, 1);
+            renderTrainingDocs();
+            await persistDocRules();
+          });
+        });
+      };
+
+      const persistDocRules = async () => {
+        const payload = {
+          rulesText: rulesInput.value.trim(),
+          trainingDocs: trainingDocs.slice(0, 12),
+          updatedAt: new Date().toISOString()
+        };
+        try {
+          localStorage.setItem(DOC_RULES_STORAGE_KEY, JSON.stringify(payload));
+        } catch (err) {
+          console.warn("localStorage save warning:", err);
+        }
+        if (window.ThuysTalkFirebase && window.ThuysTalkFirebase.isReady() && typeof window.ThuysTalkFirebase.saveSiteSettings === "function") {
+          try {
+            await window.ThuysTalkFirebase.saveSiteSettings("doc_checker_rules", payload);
+            if (statusMsg) statusMsg.textContent = "Đã lưu & đồng bộ quy tắc huấn luyện AI lên Cloud!";
+            showToast("Đã cập nhật tài liệu huấn luyện AI Kiểm tra Chứng từ!");
+            return;
+          } catch (err) {
+            if (statusMsg) statusMsg.textContent = "Lỗi đồng bộ Cloud: " + (err && err.message ? err.message : err);
+            showToast("Không lưu được lên Cloud Firestore.");
+            return;
+          }
+        }
+        if (statusMsg) statusMsg.textContent = "Đã lưu quy tắc cục bộ (Local Mode).";
+        showToast("Đã lưu quy tắc AI Kiểm tra Chứng từ!");
+      };
+
+      const loadDocRules = async () => {
+        try {
+          const cached = JSON.parse(localStorage.getItem(DOC_RULES_STORAGE_KEY) || "null");
+          if (cached && typeof cached === "object") {
+            rulesInput.value = cached.rulesText || "";
+            trainingDocs = Array.isArray(cached.trainingDocs) ? cached.trainingDocs : [];
+          }
+        } catch (e) {
+          // ignore local cache parse error
+        }
+        if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.fetchSiteSettings === "function") {
+          try {
+            const remote = await window.ThuysTalkFirebase.fetchSiteSettings("doc_checker_rules");
+            if (remote && typeof remote === "object") {
+              rulesInput.value = remote.rulesText || "";
+              trainingDocs = Array.isArray(remote.trainingDocs) ? remote.trainingDocs : [];
+              if (statusMsg) statusMsg.textContent = "Đã tải quy tắc mới nhất từ Cloud.";
+            }
+          } catch (e) {
+            // keep cached data
+          }
+        }
+        renderTrainingDocs();
+      };
+
+      saveBtn.addEventListener("click", persistDocRules);
+
+      if (uploadInp) {
+        uploadInp.addEventListener("change", async (ev) => {
+          const file = ev.target.files && ev.target.files[0];
+          ev.target.value = "";
+          if (!file) return;
+          const ext = (file.name.split(".").pop() || "").toLowerCase();
+          if (statusMsg) statusMsg.textContent = `Đang đọc tài liệu "${file.name}"...`;
+
+          try {
+            let parsedTitle = file.name.replace(/\.[^.]+$/, "");
+            let parsedContent = "";
+
+            if (["txt", "md", "csv"].includes(ext)) {
+              parsedContent = await file.text();
+            } else {
+              const parseApi = getApiUrl("/api/parse-doc-training");
+              if (!parseApi) {
+                throw new Error("Cần bật Server Local / API Trung Gian để đọc file PDF, DOCX, XLSX (hoặc tải lên .txt/.md).");
+              }
+              const base64Str = await new Promise((resolve, reject) => {
+                const rd = new FileReader();
+                rd.onload = () => {
+                  const res = String(rd.result || "");
+                  resolve(res.includes(",") ? res.split(",")[1] : res);
+                };
+                rd.onerror = () => reject(new Error("Không đọc được tệp đã chọn."));
+                rd.readAsDataURL(file);
+              });
+              const headers = { "Content-Type": "application/json" };
+              if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.getIdToken === "function") {
+                const tok = await window.ThuysTalkFirebase.getIdToken(false).catch(() => null);
+                if (tok) headers.Authorization = "Bearer " + tok;
+              }
+              const resp = await fetch(parseApi, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ filename: file.name, contentBase64: base64Str })
+              });
+              const data = await resp.json().catch(() => ({}));
+              if (!resp.ok || !data.ok) {
+                throw new Error(data.error || `Không trích xuất được nội dung (HTTP ${resp.status}).`);
+              }
+              parsedTitle = data.title || parsedTitle;
+              parsedContent = data.content || "";
+            }
+
+            parsedContent = String(parsedContent || "").trim().slice(0, 8000);
+            if (!parsedContent) {
+              throw new Error("Tài liệu không có nội dung chữ để AI học.");
+            }
+            trainingDocs.unshift({
+              id: "doc-rule-" + Date.now(),
+              title: parsedTitle,
+              content: parsedContent,
+              updatedAt: new Date().toISOString()
+            });
+            trainingDocs = trainingDocs.slice(0, 12);
+            renderTrainingDocs();
+            await persistDocRules();
+          } catch (err) {
+            if (statusMsg) statusMsg.textContent = err && err.message ? err.message : "Lỗi đọc tài liệu.";
+            showToast(err && err.message ? err.message : "Lỗi đọc tài liệu huấn luyện.");
+          }
+        });
+      }
+
+      loadDocRules();
+    })();
   }
 
   function csvSafeCell(v) {
@@ -10180,6 +10643,7 @@
     updateHeaderLearnerStatus();
     renderAll();
     initConsultForm();
+    initDocCheckerPage();
     bindPhotoTriggers(document);
     hydrateAllFromFirestore();
     if (window.ThuysTalkFirebase && typeof window.ThuysTalkFirebase.onAuthStateChanged === "function") {
