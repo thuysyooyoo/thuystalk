@@ -138,12 +138,45 @@
     return String(email || "").trim().toLowerCase();
   }
 
+  const PENDING_REG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+  function prunePendingRegMap(rawMap, nowMs = Date.now()) {
+    const cleaned = {};
+    let changed = false;
+    if (!rawMap || typeof rawMap !== "object" || Array.isArray(rawMap)) {
+      return { map: cleaned, changed: !!rawMap };
+    }
+    Object.keys(rawMap).forEach((k) => {
+      const rec = rawMap[k];
+      if (!rec || typeof rec !== "object") {
+        changed = true;
+        return;
+      }
+      const savedAt = Number(rec.savedAt);
+      if (!Number.isFinite(savedAt) || nowMs - savedAt > PENDING_REG_TTL_MS) {
+        changed = true;
+        return;
+      }
+      cleaned[k] = rec;
+    });
+    return { map: cleaned, changed };
+  }
+
+  function readCleanedPendingRegMap() {
+    const rawMap = readStorageJson(localStorage, STORAGE_KEYS.PENDING_REG_MAP, {});
+    const { map, changed } = prunePendingRegMap(rawMap, Date.now());
+    if (changed) {
+      writeStorageJson(localStorage, STORAGE_KEYS.PENDING_REG_MAP, map);
+    }
+    return map;
+  }
+
   function savePendingRegProfile(entry) {
     if (!entry || typeof entry !== "object") return;
     const uid = String(entry.uid || "").trim();
     const emailKey = normalizeEmailKey(entry.email);
     if (!uid && !emailKey) return;
-    const map = readStorageJson(localStorage, STORAGE_KEYS.PENDING_REG_MAP, {});
+    const map = readCleanedPendingRegMap();
     const record = {
       uid,
       email: emailKey,
@@ -159,7 +192,7 @@
 
   function getPendingRegProfile(user) {
     if (!user) return null;
-    const map = readStorageJson(localStorage, STORAGE_KEYS.PENDING_REG_MAP, {});
+    const map = readCleanedPendingRegMap();
     if (user.uid && map[`uid:${user.uid}`]) {
       return map[`uid:${user.uid}`];
     }
@@ -170,6 +203,7 @@
     const legacy = readStorageJson(sessionStorage, "thuystalk_pending_reg_profile_v1", null);
     if (
       legacy &&
+      (!legacy.savedAt || Date.now() - Number(legacy.savedAt) <= PENDING_REG_TTL_MS) &&
       ((user.uid && legacy.uid === user.uid) || (emailKey && normalizeEmailKey(legacy.email) === emailKey))
     ) {
       return legacy;
@@ -179,7 +213,7 @@
 
   function removePendingRegProfile(user) {
     if (!user) return;
-    const map = readStorageJson(localStorage, STORAGE_KEYS.PENDING_REG_MAP, {});
+    const map = readCleanedPendingRegMap();
     const uid = String(user.uid || "").trim();
     const emailKey = normalizeEmailKey(user.email);
     let changed = false;
@@ -9459,6 +9493,7 @@
   // INITIALIZE EVENT LISTENERS ON DOM READY (Supports both index.html & admin.html)
   // ==========================================================================
   document.addEventListener("DOMContentLoaded", () => {
+    readCleanedPendingRegMap();
     const params = new URLSearchParams(window.location.search);
     if (params.get("lang") === "en" || params.get("lang") === "vi") {
       state.lang = params.get("lang");
