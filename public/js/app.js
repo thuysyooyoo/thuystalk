@@ -3221,10 +3221,14 @@
     updateGuestQuotaWarning();
   }
 
-  function updateGuestQuotaWarning(overrideCount) {
-    const chatBody = document.querySelector(".notebook-chat-body");
+  function updateGuestQuotaWarning(overrideCount, chatBoxId = "notebookChatMessages") {
+    const isPopup = chatBoxId === "popupChatMessages";
+    const chatBody = isPopup
+      ? document.querySelector("#aiChatPopupModal .ai-chat-popup-card")
+      : document.querySelector(".notebook-chat-body");
     if (!chatBody) return;
-    let warnEl = document.getElementById("guestQuotaWarning");
+    const warnId = isPopup ? "popupGuestQuotaWarning" : "guestQuotaWarning";
+    let warnEl = document.getElementById(warnId);
     const isLoggedIn = Boolean(state.learnerEmail && state.learnerUid);
     const usedCount = typeof overrideCount === "number"
       ? overrideCount
@@ -3238,11 +3242,13 @@
 
     if (!warnEl) {
       warnEl = document.createElement("div");
-      warnEl.id = "guestQuotaWarning";
+      warnEl.id = warnId;
       warnEl.className = "guest-quota-warning";
-      const disclaimerBar = chatBody.querySelector(".chat-disclaimer-bar");
-      if (disclaimerBar) {
-        chatBody.insertBefore(warnEl, disclaimerBar);
+      const anchor = isPopup
+        ? chatBody.querySelector(".ai-popup-input-row")
+        : chatBody.querySelector(".chat-disclaimer-bar");
+      if (anchor) {
+        chatBody.insertBefore(warnEl, anchor);
       } else {
         chatBody.appendChild(warnEl);
       }
@@ -3290,7 +3296,18 @@
     return bestScore > 0 ? bestRoute : null;
   }
 
-  function searchLocalKnowledgeBase(question) {
+  function doesKbItemMatchRoute(item, routeId) {
+    if (!routeId) return true;
+    const branch = String((item && item.notebookBranch) || "").toLowerCase();
+    if (!branch) return routeId === "nb-hs-code";
+    if (routeId === "nb-hs-code") return branch.includes("mã hs") || branch.includes("biểu thuế");
+    if (routeId === "nb-china-export") return branch.includes("xuất khẩu") || branch.includes("quốc tế");
+    if (routeId === "nb-specialized") return branch.includes("chuyên ngành") || branch.includes("cảng biển");
+    if (routeId === "nb-high-risk") return branch.includes("rủi ro") || branch.includes("cửa khẩu") || branch.includes("sau thông quan");
+    return true;
+  }
+
+  function searchLocalKnowledgeBase(question, routeId = null) {
     const qLower = question.toLowerCase().trim();
     const stopWords = new Set([
       "hs",
@@ -3333,6 +3350,7 @@
     let bestScore = 0;
 
     state.aiKb.forEach((item) => {
+      if (routeId && !doesKbItemMatchRoute(item, routeId)) return;
       const kwLower = (item.keywords || "").toLowerCase();
       const topicLower = (item.topic || "").toLowerCase();
       const ansLower = (item.answer || "").toLowerCase();
@@ -3526,7 +3544,8 @@
   }
 
   function appendChatMessage(role, text, citation, legalMetaItem = null, options = {}) {
-    const box = document.getElementById("notebookChatMessages");
+    const chatBoxId = options.chatBoxId || "notebookChatMessages";
+    const box = document.getElementById(chatBoxId);
     if (!box) return null;
     const div = document.createElement("div");
     div.className = `chat-bubble ${role === "user" ? "chat-bubble-user" : "chat-bubble-ai"}`;
@@ -3537,7 +3556,10 @@
       const formatted = formatAiResponseHtml(text);
       const legalHtml = legalMetaItem ? renderLegalMetadataBlockHtml(legalMetaItem) : "";
       const sourcesHtml = renderAiSourcesListHtml(options.sources);
-      const hasPersistentBar = !!document.querySelector(".chat-disclaimer-bar");
+      const hasPersistentBar =
+        chatBoxId === "popupChatMessages"
+          ? !!document.querySelector("#aiChatPopupModal .ai-popup-disclaimer")
+          : !!document.querySelector(".chat-disclaimer-bar");
       const showSendToThuy = !!options.showSendToThuy || isAiNoInfoAnswer(text);
       let resolvedQuery = String(options.query || "").trim();
       if (!resolvedQuery) {
@@ -3587,8 +3609,8 @@
     return div;
   }
 
-  function appendLearnerLoginGate(pendingQuery, forceDeepLookup) {
-    const box = document.getElementById("notebookChatMessages");
+  function appendLearnerLoginGate(pendingQuery, forceDeepLookup, route = null, chatBoxId = "notebookChatMessages") {
+    const box = document.getElementById(chatBoxId || "notebookChatMessages");
     if (!box) return;
     const gateId = "gate_" + Date.now();
     const div = document.createElement("div");
@@ -3615,7 +3637,7 @@
           reason: "Vui lòng đăng nhập tài khoản ThuysTalk để tiếp tục tra cứu miễn phí.",
           onSuccess: () => {
             if (div.parentNode) div.remove();
-            executeAiQuery(pendingQuery, forceDeepLookup);
+            executeAiQuery(pendingQuery, forceDeepLookup, route, chatBoxId);
           }
         });
       });
@@ -3677,6 +3699,8 @@
 
   function prefillAndOpenConsultForm(questionText) {
     const cleanQ = String(questionText || "").trim();
+    const aiPopup = document.getElementById("aiChatPopupModal");
+    if (aiPopup) aiPopup.classList.remove("open");
     const msgInp = document.getElementById("consultMsgInput");
     if (msgInp) {
       if (cleanQ) msgInp.value = cleanQ;
@@ -3696,13 +3720,17 @@
   }
 
   function appendAiActionNotice(messageText, options = {}) {
-    const box = document.getElementById("notebookChatMessages");
+    const chatBoxId = options.chatBoxId || "notebookChatMessages";
+    const box = document.getElementById(chatBoxId);
     if (!box) return null;
     const div = document.createElement("div");
     div.className = "chat-bubble chat-bubble-ai";
     const showRetry = !!options.showRetry && typeof options.onRetry === "function";
     const showSendToThuy = options.showSendToThuy !== false;
-    const hasPersistentBar = !!document.querySelector(".chat-disclaimer-bar");
+    const hasPersistentBar =
+      chatBoxId === "popupChatMessages"
+        ? !!document.querySelector("#aiChatPopupModal .ai-popup-disclaimer")
+        : !!document.querySelector(".chat-disclaimer-bar");
     div.innerHTML = `
       <div class="chat-msg-text"><p class="ai-chat-p">${escapeHtml(messageText)}</p></div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
@@ -3733,15 +3761,17 @@
     return div;
   }
 
-  function renderLocalKbHit(matched) {
+  function renderLocalKbHit(matched, options = {}) {
     if (!matched) return;
     appendChatMessage("ai", matched.answer, matched.source, matched, {
-      sources: Array.isArray(matched.sources) ? matched.sources : []
+      sources: Array.isArray(matched.sources) ? matched.sources : [],
+      chatBoxId: options.chatBoxId || "notebookChatMessages",
+      query: options.query || ""
     });
   }
 
-  function appendTopicPickerPrompt(pendingQuery, forceDeepLookup) {
-    const box = document.getElementById("notebookChatMessages");
+  function appendTopicPickerPrompt(pendingQuery, forceDeepLookup, chatBoxId = "notebookChatMessages") {
+    const box = document.getElementById(chatBoxId || "notebookChatMessages");
     if (!box) return;
     const isEn = state.lang === "en";
     const div = document.createElement("div");
@@ -3769,25 +3799,25 @@
         const chosen = (window.THUYSTALK_NOTEBOOK_ROUTES || []).find((r) => r.id === btn.dataset.pickRoute);
         if (!chosen) return;
         if (div.parentNode) div.remove();
-        runWithGuestQuotaAndExecute(pendingQuery, forceDeepLookup, chosen);
+        runWithGuestQuotaAndExecute(pendingQuery, forceDeepLookup, chosen, chatBoxId);
       });
     });
   }
 
-  async function runWithGuestQuotaAndExecute(q, forceDeepLookup, route) {
+  async function runWithGuestQuotaAndExecute(q, forceDeepLookup, route, chatBoxId = "notebookChatMessages") {
     // 5-QUERY FREE QUOTA FOR GUESTS; warn when <= 2 remain, gate on 6th lookup
     if (!state.learnerEmail || !state.learnerUid) {
       const usedCount = parseInt(localStorage.getItem(STORAGE_KEYS.GUEST_QUERY_COUNT) || "0", 10);
       if (usedCount >= 5) {
-        updateGuestQuotaWarning(usedCount);
-        appendLearnerLoginGate(q, forceDeepLookup);
+        updateGuestQuotaWarning(usedCount, chatBoxId);
+        appendLearnerLoginGate(q, forceDeepLookup, route, chatBoxId);
         return;
       }
       const nextCount = usedCount + 1;
       localStorage.setItem(STORAGE_KEYS.GUEST_QUERY_COUNT, String(nextCount));
-      updateGuestQuotaWarning(nextCount);
+      updateGuestQuotaWarning(nextCount, chatBoxId);
     }
-    await executeAiQuery(q, forceDeepLookup, route);
+    await executeAiQuery(q, forceDeepLookup, route, chatBoxId);
   }
 
   async function handleNotebookSearch(forceDeepLookup = false) {
@@ -3801,67 +3831,70 @@
 
     appendChatMessage("user", q);
     inp.value = "";
+    if (typeof inp.__resetTextareaHeight === "function") inp.__resetTextareaHeight();
 
     const route = detectNotebookRoute(q);
     const userCached = findUserAiCacheMatch(q, route ? route.notebookId : "");
     if (userCached) {
-      renderLocalKbHit(userCached);
+      renderLocalKbHit(userCached, { query: q });
       return;
     }
 
-    const localMatched = !forceDeepLookup ? searchLocalKnowledgeBase(q) : null;
+    const localMatched = !forceDeepLookup ? searchLocalKnowledgeBase(q, route ? route.id : null) : null;
     if (localMatched) {
-      renderLocalKbHit(localMatched);
+      renderLocalKbHit(localMatched, { query: q });
       return;
     }
 
     if (!route) {
-      appendTopicPickerPrompt(q, forceDeepLookup);
+      appendTopicPickerPrompt(q, forceDeepLookup, "notebookChatMessages");
       return;
     }
 
-    await runWithGuestQuotaAndExecute(q, forceDeepLookup, route);
+    await runWithGuestQuotaAndExecute(q, forceDeepLookup, route, "notebookChatMessages");
   }
 
-  async function executeAiQuery(q, forceDeepLookup = false, precomputedRoute = null) {
+  async function executeAiQuery(q, forceDeepLookup = false, precomputedRoute = null, chatBoxId = "notebookChatMessages") {
+    const targetBoxId = chatBoxId || "notebookChatMessages";
     const route = precomputedRoute || detectNotebookRoute(q);
     if (!route) {
-      appendTopicPickerPrompt(q, forceDeepLookup);
+      appendTopicPickerPrompt(q, forceDeepLookup, targetBoxId);
       return;
     }
 
     // 1. Check visitor FIFO cache & high-confidence local KB match first
     const userCached = findUserAiCacheMatch(q, route.notebookId);
     if (userCached) {
-      renderLocalKbHit(userCached);
+      renderLocalKbHit(userCached, { chatBoxId: targetBoxId, query: q });
       return;
     }
-    const matched = !forceDeepLookup ? searchLocalKnowledgeBase(q) : null;
+    const matched = !forceDeepLookup ? searchLocalKnowledgeBase(q, route.id) : null;
     if (matched) {
-      renderLocalKbHit(matched);
+      renderLocalKbHit(matched, { chatBoxId: targetBoxId, query: q });
       return;
     }
 
     // 2. Call the async backend AI Knowledge Bridge
     const queryEndpoint = getApiUrl("/api/notebook-query");
     if (!queryEndpoint) {
-      const kbFallback = searchLocalKnowledgeBase(q);
+      const kbFallback = searchLocalKnowledgeBase(q, route.id);
       if (kbFallback) {
-        renderLocalKbHit(kbFallback);
+        renderLocalKbHit(kbFallback, { chatBoxId: targetBoxId, query: q });
         return;
       }
       appendAiActionNotice(
         "Hệ thống tra cứu chuyên sâu chưa có kết nối máy chủ API lúc này. Vui lòng gửi câu hỏi cho Thúy để được hỗ trợ trực tiếp.",
         {
+          chatBoxId: targetBoxId,
           showRetry: true,
           showSendToThuy: true,
           query: q,
-          onRetry: () => executeAiQuery(q, forceDeepLookup, route)
+          onRetry: () => executeAiQuery(q, forceDeepLookup, route, targetBoxId)
         }
       );
       return;
     }
-    const chatBox = document.getElementById("notebookChatMessages");
+    const chatBox = document.getElementById(targetBoxId);
     let loadingBubble = null;
     let thinkingTimerId = null;
 
@@ -3920,11 +3953,12 @@
           (hhMm
             ? `Tra cứu AI đang tạm nghỉ đến ${hhMm}. Câu hỏi phổ biến vẫn trả lời ngay`
             : "Tra cứu AI đang tạm nghỉ. Câu hỏi phổ biến vẫn trả lời ngay");
-        const fallbackKb = searchLocalKnowledgeBase(q);
+        const fallbackKb = searchLocalKnowledgeBase(q, route.id);
         if (fallbackKb) {
-          renderLocalKbHit(fallbackKb);
+          renderLocalKbHit(fallbackKb, { chatBoxId: targetBoxId, query: q });
         }
         appendAiActionNotice(pauseMsg, {
+          chatBoxId: targetBoxId,
           showRetry: false,
           showSendToThuy: true,
           query: q
@@ -3935,6 +3969,7 @@
         appendAiActionNotice(
           (payload && payload.error) || "Bạn đã dùng hết lượt tra cứu AI trong khung giờ này. Vui lòng thử lại sau ít phút.",
           {
+            chatBoxId: targetBoxId,
             showRetry: false,
             showSendToThuy: true,
             query: q
@@ -3945,10 +3980,11 @@
       appendAiActionNotice(
         (payload && payload.error) || "Hệ thống tra cứu chuyên sâu hiện chưa thể xử lý câu hỏi này. Vui lòng bấm Thử lại hoặc gửi câu hỏi cho Thúy.",
         {
+          chatBoxId: targetBoxId,
           showRetry: true,
           showSendToThuy: true,
           query: q,
-          onRetry: () => executeAiQuery(q, forceDeepLookup, route)
+          onRetry: () => executeAiQuery(q, forceDeepLookup, route, targetBoxId)
         }
       );
     };
@@ -3957,7 +3993,11 @@
       stopThinkingUi();
       const citationSource = `Kho Tri Thức Pháp Lý ThuysTalk · ${route.title.vi}`;
       const cleanSources = Array.isArray(sourcesList) ? sourcesList : [];
-      appendChatMessage("ai", answerText, citationSource, null, { query: q, sources: cleanSources });
+      appendChatMessage("ai", answerText, citationSource, null, {
+        chatBoxId: targetBoxId,
+        query: q,
+        sources: cleanSources
+      });
       if (!isAiNoInfoAnswer(answerText)) {
         saveUserAiCacheEntry({
           query: q,
@@ -4018,10 +4058,11 @@
           appendAiActionNotice(
             "Mất kết nối tới máy chủ tra cứu trong lúc đang xử lý. Vui lòng kiểm tra kết nối rồi bấm Thử lại hoặc gửi câu hỏi cho Thúy.",
             {
+              chatBoxId: targetBoxId,
               showRetry: true,
               showSendToThuy: true,
               query: q,
-              onRetry: () => executeAiQuery(q, forceDeepLookup, route)
+              onRetry: () => executeAiQuery(q, forceDeepLookup, route, targetBoxId)
             }
           );
           return;
@@ -4052,10 +4093,11 @@
       appendAiActionNotice(
         "Quá trình tra cứu vượt quá 6 phút nên đã tạm dừng. Vui lòng bấm Thử lại hoặc gửi câu hỏi cho Thúy để được hỗ trợ trực tiếp.",
         {
+          chatBoxId: targetBoxId,
           showRetry: true,
           showSendToThuy: true,
           query: q,
-          onRetry: () => executeAiQuery(q, forceDeepLookup, route)
+          onRetry: () => executeAiQuery(q, forceDeepLookup, route, targetBoxId)
         }
       );
     } catch (err) {
@@ -4063,13 +4105,317 @@
       appendAiActionNotice(
         "Hiện không kết nối được tới máy chủ tra cứu chuyên sâu. Vui lòng bấm Thử lại sau giây lát hoặc gửi câu hỏi cho Thúy.",
         {
+          chatBoxId: targetBoxId,
           showRetry: true,
           showSendToThuy: true,
           query: q,
-          onRetry: () => executeAiQuery(q, forceDeepLookup, route)
+          onRetry: () => executeAiQuery(q, forceDeepLookup, route, targetBoxId)
         }
       );
     }
+  }
+
+  function bindAutoExpandTextarea(el, maxHeightPx = 128, minHeightPx = 38) {
+    if (!el || el.dataset.autoExpandBound === "1") return;
+    el.dataset.autoExpandBound = "1";
+    const resize = () => {
+      el.style.height = "auto";
+      const nextH = Math.min(maxHeightPx, Math.max(minHeightPx, el.scrollHeight));
+      el.style.height = nextH + "px";
+    };
+    el.__resetTextareaHeight = () => {
+      el.style.height = minHeightPx + "px";
+    };
+    el.__resizeTextarea = resize;
+    el.addEventListener("input", resize);
+    el.addEventListener("change", resize);
+    el.addEventListener("paste", () => window.setTimeout(resize, 0));
+    resize();
+  }
+
+  const FLOATING_VAULT_META = [
+    {
+      routeId: "nb-hs-code",
+      tagVi: "KHO A · 87 VĂN BẢN",
+      tagEn: "VAULT A · 87 DOCS",
+      shortVi: "Kho A",
+      shortEn: "Vault A",
+      titleVi: "Phân loại Mã HS & 6 Quy tắc GRI",
+      titleEn: "HS Code Classification & 6 GRI"
+    },
+    {
+      routeId: "nb-china-export",
+      tagVi: "KHO B · 26 VĂN BẢN",
+      tagEn: "VAULT B · 26 DOCS",
+      shortVi: "Kho B",
+      shortEn: "Vault B",
+      titleVi: "Kiểm soát Xuất khẩu TQ 2026",
+      titleEn: "China Export Control 2026"
+    },
+    {
+      routeId: "nb-specialized",
+      tagVi: "KHO C · 52 VĂN BẢN",
+      tagEn: "VAULT C · 52 DOCS",
+      shortVi: "Kho C",
+      shortEn: "Vault C",
+      titleVi: "Thủ tục Kiểm tra Chuyên ngành",
+      titleEn: "Specialized Customs Inspection"
+    },
+    {
+      routeId: "nb-high-risk",
+      tagVi: "KHO D · 21 VĂN BẢN",
+      tagEn: "VAULT D · 21 DOCS",
+      shortVi: "Kho D",
+      shortEn: "Vault D",
+      titleVi: "Hàng Rủi Ro & Cửa Khẩu QĐ 31",
+      titleEn: "High-Risk Cargo & Dec. 31"
+    }
+  ];
+
+  function initFloatingAiChatPopup() {
+    if (document.getElementById("floatingAiChatFab")) return;
+    let selectedRouteId = "";
+
+    const fab = document.createElement("button");
+    fab.type = "button";
+    fab.id = "floatingAiChatFab";
+    fab.className = "ai-chat-fab";
+    fab.setAttribute("aria-haspopup", "dialog");
+    fab.setAttribute("aria-controls", "aiChatPopupModal");
+    fab.innerHTML = `<span class="ai-fab-dot" aria-hidden="true"></span><span id="floatingAiFabLabel"></span>`;
+
+    const modal = document.createElement("div");
+    modal.id = "aiChatPopupModal";
+    modal.className = "ai-chat-popup-backdrop";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    modal.setAttribute("aria-hidden", "true");
+    modal.innerHTML = `
+      <div class="ai-chat-popup-card">
+        <div class="ai-popup-head">
+          <div>
+            <div class="ai-popup-title" id="aiPopupTitle"></div>
+            <div class="ai-popup-sub" id="aiPopupSub"></div>
+          </div>
+          <div class="ai-popup-head-actions">
+            <a href="tra-cuu.html" class="ai-popup-expand-link" id="aiPopupExpandLink"></a>
+            <button type="button" class="ai-popup-close" id="aiChatPopupCloseBtn" aria-label="Đóng">&times;</button>
+          </div>
+        </div>
+        <div class="ai-popup-topics" id="aiPopupTopicsWrap">
+          <span class="ai-step-label" id="popupStep1Label"></span>
+          <div class="ai-vault-grid" id="popupVaultGrid"></div>
+        </div>
+        <div class="ai-popup-msgs" id="popupChatMessages">
+          <div class="chat-bubble chat-bubble-ai" id="popupWelcomeBubble">
+            <div class="chat-msg-text"><p class="ai-chat-p" id="popupWelcomeText"></p></div>
+          </div>
+        </div>
+        <div class="ai-popup-input-row">
+          <span class="ai-step-label" id="popupStep2Label" style="margin-bottom:2px;"></span>
+          <div class="ai-popup-input-flex">
+            <div class="ai-popup-textarea-wrap">
+              <textarea id="popupAiQueryInput" class="ai-popup-textarea" rows="1" readonly autocomplete="off"></textarea>
+            </div>
+            <button type="button" id="popupAiSendBtn" class="ai-popup-send-btn"></button>
+          </div>
+          <div class="ai-popup-input-hint">
+            <span id="popupInputHintLeft"></span>
+            <span id="popupInputHintRight" style="font-weight:700; color:var(--jade-800);"></span>
+          </div>
+        </div>
+        <div class="ai-popup-disclaimer" id="aiPopupDisclaimer"></div>
+      </div>
+    `;
+
+    document.body.appendChild(fab);
+    document.body.appendChild(modal);
+
+    const topicsWrap = document.getElementById("aiPopupTopicsWrap");
+    const vaultGrid = document.getElementById("popupVaultGrid");
+    const popupInp = document.getElementById("popupAiQueryInput");
+    const popupSendBtn = document.getElementById("popupAiSendBtn");
+    const closeBtn = document.getElementById("aiChatPopupCloseBtn");
+
+    bindAutoExpandTextarea(popupInp, 128, 38);
+
+    const syncInputLockUi = () => {
+      const isEn = state.lang === "en";
+      const meta = FLOATING_VAULT_META.find((v) => v.routeId === selectedRouteId);
+      const hintRight = document.getElementById("popupInputHintRight");
+      if (!meta) {
+        popupInp.setAttribute("readonly", "readonly");
+        popupInp.placeholder = isEn
+          ? "Step 1 required: tap 1 vault above before typing..."
+          : "Vui lòng chạm chọn 1 kho ở Bước 1 để bắt đầu nhập câu hỏi...";
+        if (hintRight) {
+          hintRight.textContent = isEn ? "No vault selected" : "Chưa chọn kho";
+          hintRight.style.color = "var(--orange-700)";
+        }
+      } else {
+        const shortLabel = isEn ? meta.shortEn : meta.shortVi;
+        popupInp.removeAttribute("readonly");
+        popupInp.placeholder = isEn
+          ? `Step 2: Enter or paste a detailed question into ${shortLabel}...`
+          : `Bước 2: Nhập câu hỏi vào ${shortLabel} (có thể dán đoạn văn dài)...`;
+        if (hintRight) {
+          hintRight.textContent = isEn ? `${shortLabel} · Ready` : `${shortLabel} · Sẵn sàng`;
+          hintRight.style.color = "var(--jade-800)";
+        }
+      }
+    };
+
+    const renderPopupCopyAndVaults = () => {
+      const isEn = state.lang === "en";
+      setText("floatingAiFabLabel", isEn ? "Ask AI Customs (4 Vaults)" : "Hỏi AI Hải Quan (4 Kho)");
+      setText("aiPopupTitle", isEn ? "ThuysTalk Legal & Customs AI Assistant" : "Trợ Lý AI Tra Cứu Pháp Lý Hải Quan");
+      setText("aiPopupSub", isEn ? "2-step lookup across 4 specialized vaults" : "Hỏi đáp 2 bước dựa trên 4 kho chuyên ngành");
+      setText("aiPopupExpandLink", isEn ? "Full page" : "Toàn trang");
+      setText("popupStep1Label", isEn ? "STEP 1 · PICK 1 OF 4 KNOWLEDGE VAULTS (REQUIRED)" : "BƯỚC 1 · CHỌN 1 TRONG 4 CHUYÊN ĐỀ KHO TRI THỨC (BẮT BUỘC)");
+      setText("popupStep2Label", isEn ? "STEP 2 · ENTER YOUR QUESTION" : "BƯỚC 2 · NHẬP CÂU HỎI ĐÚNG KHO ĐÃ CHỌN");
+      setText("popupInputHintLeft", isEn ? "Supports multi-line paste · Shift+Enter for new line" : "Hỗ trợ dán đoạn văn dài · Shift+Enter xuống dòng");
+      setText(
+        "popupWelcomeText",
+        isEn
+          ? "Hello! Tap 1 of the 4 knowledge vaults above (Step 1) before entering your question so AI retrieves exact regulations."
+          : "Xin chào! Vui lòng chạm chọn 1 trong 4 Kho tri thức ở Bước 1 phía trên trước khi nhập câu hỏi để AI tra đúng nguồn tài liệu."
+      );
+      if (popupSendBtn) popupSendBtn.textContent = isEn ? "Send" : "Gửi";
+      const discEl = document.getElementById("aiPopupDisclaimer");
+      if (discEl) {
+        discEl.innerHTML = isEn
+          ? 'AI can make mistakes. Contact Thuy at <a href="tel:0767648862" style="color:var(--orange-600);font-weight:700;">0767.648.862</a> for direct consultation.'
+          : 'AI có thể có sai sót, liên hệ Thúy <a href="tel:0767648862" style="color:var(--orange-600);font-weight:700;">0767.648.862</a> để được tư vấn cụ thể.';
+      }
+
+      if (vaultGrid) {
+        vaultGrid.innerHTML = FLOATING_VAULT_META.map((v) => {
+          const isAct = selectedRouteId === v.routeId;
+          const tagText = isEn ? v.tagEn : v.tagVi;
+          const titleText = isEn ? v.titleEn : v.titleVi;
+          return `
+            <button type="button" class="ai-vault-pill ${isAct ? "active" : ""}" data-vault-route="${escapeHtml(v.routeId)}">
+              <strong>${escapeHtml(tagText)}${isAct ? " [Đã chọn]" : ""}</strong>
+              <span>${escapeHtml(titleText)}</span>
+            </button>`;
+        }).join("");
+
+        vaultGrid.querySelectorAll("[data-vault-route]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            selectPopupVault(btn.dataset.vaultRoute, true);
+          });
+        });
+      }
+
+      syncInputLockUi();
+    };
+
+    const selectPopupVault = (routeId, shouldFocusInput = false) => {
+      const meta = FLOATING_VAULT_META.find((v) => v.routeId === routeId);
+      if (!meta) return;
+      selectedRouteId = meta.routeId;
+      state.activeNotebookBranch = meta.routeId;
+      if (topicsWrap) topicsWrap.classList.remove("needs-pick");
+      renderPopupCopyAndVaults();
+      if (shouldFocusInput) {
+        popupInp.focus();
+      }
+    };
+
+    const flashVaultRequirement = () => {
+      if (topicsWrap) {
+        topicsWrap.classList.remove("needs-pick");
+        void topicsWrap.offsetWidth;
+        topicsWrap.classList.add("needs-pick");
+        window.setTimeout(() => topicsWrap.classList.remove("needs-pick"), 1300);
+      }
+      showToast(
+        state.lang === "en"
+          ? "Step 1: Please choose 1 of the 4 knowledge vaults above first."
+          : "Bước 1: Vui lòng chạm chọn 1 trong 4 kho tri thức phía trên trước khi nhập câu hỏi."
+      );
+    };
+
+    const submitPopupAiQuery = async () => {
+      if (!selectedRouteId) {
+        flashVaultRequirement();
+        return;
+      }
+      const route = (window.THUYSTALK_NOTEBOOK_ROUTES || []).find((r) => r.id === selectedRouteId);
+      if (!route) {
+        flashVaultRequirement();
+        return;
+      }
+      const q = popupInp.value.trim();
+      if (!q) {
+        showToast(state.lang === "en" ? "Please enter your lookup question." : "Vui lòng nhập câu hỏi cần tra cứu.");
+        popupInp.focus();
+        return;
+      }
+      appendChatMessage("user", q, null, null, { chatBoxId: "popupChatMessages" });
+      popupInp.value = "";
+      if (typeof popupInp.__resetTextareaHeight === "function") popupInp.__resetTextareaHeight();
+      await runWithGuestQuotaAndExecute(q, false, route, "popupChatMessages");
+    };
+
+    const openAiChatPopup = (preselectRouteId = null) => {
+      renderPopupCopyAndVaults();
+      if (preselectRouteId) selectPopupVault(preselectRouteId, true);
+      modal.classList.add("open");
+      modal.setAttribute("aria-hidden", "false");
+      if (selectedRouteId) {
+        window.setTimeout(() => popupInp.focus(), 80);
+      }
+    };
+
+    const closeAiChatPopup = () => {
+      modal.classList.remove("open");
+      modal.setAttribute("aria-hidden", "true");
+    };
+
+    window.__thuystalkSyncPopupLang = renderPopupCopyAndVaults;
+    window.__thuystalkOpenAiChatPopup = openAiChatPopup;
+
+    fab.addEventListener("click", () => openAiChatPopup());
+    if (closeBtn) closeBtn.addEventListener("click", closeAiChatPopup);
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeAiChatPopup();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && modal.classList.contains("open")) closeAiChatPopup();
+    });
+
+    popupInp.addEventListener("click", () => {
+      if (!selectedRouteId) flashVaultRequirement();
+    });
+    popupInp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        submitPopupAiQuery();
+      }
+    });
+    if (popupSendBtn) popupSendBtn.addEventListener("click", submitPopupAiQuery);
+
+    if (isHomePage()) {
+      const heroLookupBtn = document.getElementById("heroBtnSecondary");
+      if (heroLookupBtn) {
+        heroLookupBtn.addEventListener("click", (e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+          e.preventDefault();
+          openAiChatPopup();
+        });
+      }
+      const triageHs = document.querySelector('.triage-card[data-triage-key="hs"]');
+      if (triageHs) {
+        triageHs.addEventListener("click", (e) => {
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+          e.preventDefault();
+          openAiChatPopup();
+        });
+      }
+    }
+
+    renderPopupCopyAndVaults();
   }
 
   // ==========================================================================
@@ -9828,6 +10174,9 @@
 
     ensureGlobalModals();
     initMobileNavigation();
+    if (((document.body && document.body.dataset.page) || "") !== "lookup") {
+      initFloatingAiChatPopup();
+    }
     updateHeaderLearnerStatus();
     renderAll();
     initConsultForm();
@@ -9892,6 +10241,9 @@
         state.lang = btn.dataset.lang;
         localStorage.setItem(STORAGE_KEYS.LANG, state.lang);
         renderAll();
+        if (typeof window.__thuystalkSyncPopupLang === "function") {
+          window.__thuystalkSyncPopupLang();
+        }
         showToast(
           state.lang === "vi"
             ? "Đã chuyển sang Tiếng Việt"
@@ -9952,11 +10304,22 @@
       });
     });
 
+    const nbInput = document.getElementById("notebookQueryInput");
+    if (nbInput) {
+      bindAutoExpandTextarea(nbInput, 148, 44);
+      nbInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          handleNotebookSearch(true);
+        }
+      });
+    }
+
     // Execute ?q=... query ONCE on tra-cuu.html (cache -> local KB -> quota AI), then clear URL search param
     const initialLookupQuery = (params.get("q") || "").trim();
-    const nbInput = document.getElementById("notebookQueryInput");
     if (initialLookupQuery && nbInput && document.getElementById("notebookChatMessages")) {
       nbInput.value = initialLookupQuery;
+      if (typeof nbInput.__resizeTextarea === "function") nbInput.__resizeTextarea();
       if (window.history && typeof window.history.replaceState === "function") {
         window.history.replaceState(null, "", window.location.pathname + window.location.hash);
       }
